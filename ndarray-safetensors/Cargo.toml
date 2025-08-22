@@ -1,0 +1,11 @@
+[package]
+name = "ndarray-safetensors"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bytemuck = { version = "1.23.2" }
+half = { version = "2.6.0", default-features = false, features = ["bytemuck"] }
+ndarray = { version = "0.16.1", default-features = false, features = ["std"] }
+safetensors = "0.6.2"
+thiserror = "2.0.15"

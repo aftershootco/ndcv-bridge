@@ -1,0 +1,13 @@
+[package]
+name = "bbox"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ndarray.workspace = true
+num = "0.4.3"
+serde = { workspace = true, features = ["derive"], optional = true }
+
+[features]
+serde = ["dep:serde"]
+default = ["serde"]

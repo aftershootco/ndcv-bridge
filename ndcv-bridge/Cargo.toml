@@ -1,0 +1,36 @@
+[package]
+name = "ndcv-bridge"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bounding-box.workspace = true
+nalgebra.workspace = true
+bytemuck.workspace = true
+error-stack.workspace = true
+fast_image_resize.workspace = true
+ndarray = { workspace = true, features = ["rayon"] }
+num.workspace = true
+opencv = { workspace = true, optional = true }
+rayon = "1.10.0"
+thiserror.workspace = true
+tracing = "0.1.41"
+wide = "0.7.32"
+img-parts.workspace = true
+
+[dev-dependencies]
+divan.workspace = true
+ndarray-npy.workspace = true
+
+[features]
+opencv = ["dep:opencv"]
+default = ["opencv"]
+
+
+[[bench]]
+name = "conversions"
+harness = false
+
+[[bench]]
+name = "gaussian"
+harness = false

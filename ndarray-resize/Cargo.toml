@@ -1,0 +1,12 @@
+[package]
+name = "ndarray-resize"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bytemuck = "1.23.1"
+error-stack = "0.5.0"
+fast_image_resize = "5.2.0"
+ndarray = "0.16.1"
+num = "0.4.3"
+thiserror = "2.0.12"

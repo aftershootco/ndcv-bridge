@@ -1,5 +1,5 @@
 use error_stack::*;
-use fast_image_resize::*;
+pub use fast_image_resize::*;
 use images::{Image, ImageRef};
 #[derive(Debug, Clone, thiserror::Error)]
 #[error("NdFirError")]

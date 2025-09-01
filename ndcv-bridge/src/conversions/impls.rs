@@ -128,10 +128,11 @@ pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
     // Since a dims always returns >= 2 we can't use this to check if it's a 1D array
     // So we compare the first axis to the total to see if its a 1D array
     let is_1d = mat.total() as i32 == mat.rows();
-    let dims = is_1d.then_some(1).unwrap_or(mat.dims());
+    // let dims = is_1d.then_some(1).unwrap_or(mat.dims());
+    let dims = if is_1d { 1 } else { mat.dims() };
     let channels = mat.channels();
 
-    let ndarray_size = (channels != 1).then_some(dims + 1).unwrap_or(dims) as usize;
+    let ndarray_size = if channels != 1 { dims + 1 } else { dims } as usize;
     if let Some(ndim) = D::NDIM {
         // When channels is not 1,
         // the last dimension is the channels

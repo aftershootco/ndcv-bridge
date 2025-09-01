@@ -129,22 +129,6 @@ fn bbox_zeros_ndarray_3d<T: num::Zero + Copy>(
     ndarray::Array3::<T>::zeros((height, width, channels))
 }
 
-fn bbox_round_f64(bbox: &bounding_box::Aabb2<f64>) -> bounding_box::Aabb2<f64> {
-    let x1 = bbox.x1().round();
-    let y1 = bbox.y1().round();
-    let x2 = bbox.x2().round();
-    let y2 = bbox.y2().round();
-    bounding_box::Aabb2::from_x1y1x2y2(x1, y1, x2, y2)
-}
-
-fn bbox_cast_f64_to_usize(bbox: &bounding_box::Aabb2<f64>) -> bounding_box::Aabb2<usize> {
-    let x1 = bbox.x1() as usize;
-    let y1 = bbox.y1() as usize;
-    let x2 = bbox.x2() as usize;
-    let y2 = bbox.y2() as usize;
-    bounding_box::Aabb2::from_x1y1x2y2(x1, y1, x2, y2)
-}
-
 pub trait NdRoiZeroPadded<T, D: ndarray::Dimension>: seal::Sealed {
     fn roi_zero_padded(
         &self,
@@ -216,6 +200,23 @@ impl<T: bytemuck::Pod + num::Zero> NdRoiZeroPadded<T, ndarray::Ix3> for ndarray:
     }
 }
 
+#[cfg(test)]
+fn bbox_round_f64(bbox: &bounding_box::Aabb2<f64>) -> bounding_box::Aabb2<f64> {
+    let x1 = bbox.x1().round();
+    let y1 = bbox.y1().round();
+    let x2 = bbox.x2().round();
+    let y2 = bbox.y2().round();
+    bounding_box::Aabb2::from_x1y1x2y2(x1, y1, x2, y2)
+}
+
+#[cfg(test)]
+fn bbox_cast_f64_to_usize(bbox: &bounding_box::Aabb2<f64>) -> bounding_box::Aabb2<usize> {
+    let x1 = bbox.x1() as usize;
+    let y1 = bbox.y1() as usize;
+    let x2 = bbox.x2() as usize;
+    let y2 = bbox.y2() as usize;
+    bounding_box::Aabb2::from_x1y1x2y2(x1, y1, x2, y2)
+}
 #[test]
 fn test_roi_zero_padded() {
     let arr = ndarray::Array2::<u8>::ones((10, 10));

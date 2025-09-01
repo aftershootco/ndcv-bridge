@@ -1,4 +1,5 @@
 use divan::black_box;
+use gaussian::*;
 use ndarray::*;
 use ndcv_bridge::*;
 

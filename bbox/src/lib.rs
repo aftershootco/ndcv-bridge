@@ -638,7 +638,7 @@ mod bbox_padding_tests {
 
     #[test]
     pub fn bbox_clamp_failure() {
-        let og = BBox::new(475.0, 79.625, 37.0, 282.15);
+        let _og = BBox::new(475.0, 79.625, 37.0, 282.15);
         let padded = BBox {
             x: 471.3,
             y: 51.412499999999994,

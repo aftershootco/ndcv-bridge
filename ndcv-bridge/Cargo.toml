@@ -18,6 +18,7 @@ tracing = "0.1.41"
 wide = "0.7.32"
 img-parts.workspace = true
 pretty_assertions = "1.4.1"
+bbox = { workspace = true }
 
 [dev-dependencies]
 divan.workspace = true

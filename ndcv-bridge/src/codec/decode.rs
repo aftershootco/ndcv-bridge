@@ -53,9 +53,10 @@ where
 }
 
 #[test]
+#[ignore = "Files are not included in the repo"]
 fn decode_image() {
     use crate::codec::codecs::*;
-    let img = std::fs::read("/Users/fs0c131y/Projects/face-detector/assets/selfie.jpg").unwrap();
+    let img = std::fs::read("assets/test_image.jpg").unwrap();
     let decoder = CvDecoder::Jpeg(CvJpegDecFlags::new().with_ignore_orientation(true));
     let _out = ndarray::Array3::<u8>::decode(img, &decoder).unwrap();
 }

@@ -1001,6 +1001,7 @@ dependencies = [
 name = "ndcv-bridge"
 version = "0.1.0"
 dependencies = [
+ "bbox",
  "bounding-box",
  "bytemuck",
  "divan",

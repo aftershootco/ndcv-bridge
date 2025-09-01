@@ -697,12 +697,12 @@ mod bbox_scale_tests {
         assert_eq!(bbox, BBox::new(100, 200, 300, 400));
         assert_eq!(scaled, BBox::new(70, 160, 360, 480));
     }
-    #[test]
-    pub fn scale_bboxes() {
-        // let result = scale_bboxes(Rect::new(100, 200, 300, 400), (1000, 1000), (500, 500));
-        // assert_eq!(result[0], Rect::new(200, 400, 600, 800));
-        let bbox = BBox::new(100, 200, 300, 400);
-        let scaled = bbox.scale(2);
-        assert_eq!(scaled, BBox::new(200, 400, 600, 800));
-    }
+    // #[test]
+    // pub fn scale_bboxes() {
+    //     // let result = scale_bboxes(Rect::new(100, 200, 300, 400), (1000, 1000), (500, 500));
+    //     // assert_eq!(result[0], Rect::new(200, 400, 600, 800));
+    //     let bbox = BBox::new(100, 200, 300, 400);
+    //     let scaled = bbox.scale(2);
+    //     assert_eq!(scaled, BBox::new(200, 400, 600, 800));
+    // }
 }

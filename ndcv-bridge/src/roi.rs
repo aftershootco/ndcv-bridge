@@ -1,9 +1,9 @@
 pub trait NdRoi<T, D>: seal::Sealed {
-    fn roi(&self, rect: bounding_box::Aabb2<usize>) -> ndarray::ArrayView<T, D>;
+    fn roi(&self, rect: bounding_box::Aabb2<usize>) -> ndarray::ArrayView<'_, T, D>;
 }
 
 pub trait NdRoiMut<T, D>: seal::Sealed {
-    fn roi_mut(&mut self, rect: bounding_box::Aabb2<usize>) -> ndarray::ArrayViewMut<T, D>;
+    fn roi_mut(&mut self, rect: bounding_box::Aabb2<usize>) -> ndarray::ArrayViewMut<'_, T, D>;
 }
 
 mod seal {
@@ -16,7 +16,7 @@ mod seal {
 impl<T: bytemuck::Pod, S: ndarray::Data<Elem = T>> NdRoi<T, ndarray::Ix3>
     for ndarray::ArrayBase<S, ndarray::Ix3>
 {
-    fn roi(&self, rect: bounding_box::Aabb2<usize>) -> ndarray::ArrayView3<T> {
+    fn roi(&self, rect: bounding_box::Aabb2<usize>) -> ndarray::ArrayView3<'_, T> {
         let y1 = rect.y1();
         let y2 = rect.y2();
         let x1 = rect.x1();
@@ -28,7 +28,7 @@ impl<T: bytemuck::Pod, S: ndarray::Data<Elem = T>> NdRoi<T, ndarray::Ix3>
 impl<T: bytemuck::Pod, S: ndarray::DataMut<Elem = T>> NdRoiMut<T, ndarray::Ix3>
     for ndarray::ArrayBase<S, ndarray::Ix3>
 {
-    fn roi_mut(&mut self, rect: bounding_box::Aabb2<usize>) -> ndarray::ArrayViewMut3<T> {
+    fn roi_mut(&mut self, rect: bounding_box::Aabb2<usize>) -> ndarray::ArrayViewMut3<'_, T> {
         let y1 = rect.y1();
         let y2 = rect.y2();
         let x1 = rect.x1();
@@ -40,7 +40,7 @@ impl<T: bytemuck::Pod, S: ndarray::DataMut<Elem = T>> NdRoiMut<T, ndarray::Ix3>
 impl<T: bytemuck::Pod, S: ndarray::Data<Elem = T>> NdRoi<T, ndarray::Ix2>
     for ndarray::ArrayBase<S, ndarray::Ix2>
 {
-    fn roi(&self, rect: bounding_box::Aabb2<usize>) -> ndarray::ArrayView2<T> {
+    fn roi(&self, rect: bounding_box::Aabb2<usize>) -> ndarray::ArrayView2<'_, T> {
         let y1 = rect.y1();
         let y2 = rect.y2();
         let x1 = rect.x1();
@@ -52,7 +52,7 @@ impl<T: bytemuck::Pod, S: ndarray::Data<Elem = T>> NdRoi<T, ndarray::Ix2>
 impl<T: bytemuck::Pod, S: ndarray::DataMut<Elem = T>> NdRoiMut<T, ndarray::Ix2>
     for ndarray::ArrayBase<S, ndarray::Ix2>
 {
-    fn roi_mut(&mut self, rect: bounding_box::Aabb2<usize>) -> ndarray::ArrayViewMut2<T> {
+    fn roi_mut(&mut self, rect: bounding_box::Aabb2<usize>) -> ndarray::ArrayViewMut2<'_, T> {
         let y1 = rect.y1();
         let y2 = rect.y2();
         let x1 = rect.x1();

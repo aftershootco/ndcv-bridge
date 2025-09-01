@@ -65,11 +65,12 @@
             pname = name;
             stdenv = p: p.clangStdenv;
             doCheck = false;
-            # LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
-            # nativeBuildInputs = with pkgs; [
-            #   cmake
-            #   llvmPackages.libclang.lib
-            # ];
+            LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+            nativeBuildInputs = with pkgs; [
+              llvmPackages.libclang.lib
+              llvmPackages.libllvm.dev
+              pkg-config
+            ];
             buildInputs = with pkgs;
               [
                 opencv

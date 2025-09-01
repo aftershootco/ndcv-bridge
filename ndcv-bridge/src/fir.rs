@@ -147,7 +147,7 @@ impl<S: ndarray::Data<Elem = T>, T: seal::Sealed + bytemuck::Pod, D: ndarray::Di
     NdAsImage<T, D> for ndarray::ArrayBase<S, D>
 {
     /// Clones self and makes a new image
-    fn as_image_ref(&self) -> Result<ImageRef> {
+    fn as_image_ref(&self) -> Result<ImageRef<'_>> {
         let shape = self.shape();
         let rows = *shape
             .first()

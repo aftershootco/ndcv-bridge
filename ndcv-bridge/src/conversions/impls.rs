@@ -32,13 +32,15 @@ pub(crate) unsafe fn ndarray_to_mat_regular<
     let data_ptr = input.as_ptr() as *const c_void;
 
     let typ = opencv::core::CV_MAKETYPE(type_depth::<T>(), 1);
-    let mat = opencv::core::Mat::new_nd_with_data_unsafe(
-        size.as_slice(),
-        typ,
-        data_ptr.cast_mut(),
-        Some(step.as_slice()),
-    )
-    .change_context(NdCvError)?;
+    let mat = unsafe {
+        opencv::core::Mat::new_nd_with_data_unsafe(
+            size.as_slice(),
+            typ,
+            data_ptr.cast_mut(),
+            Some(step.as_slice()),
+        )
+        .change_context(NdCvError)?
+    };
 
     Ok(mat)
 }
@@ -96,13 +98,15 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
 
     let typ = opencv::core::CV_MAKETYPE(type_depth::<T>(), channels as i32);
 
-    let mat = opencv::core::Mat::new_nd_with_data_unsafe(
-        size.as_slice(),
-        typ,
-        data_ptr.cast_mut(),
-        Some(step.as_slice()),
-    )
-    .change_context(NdCvError)?;
+    let mat = unsafe {
+        opencv::core::Mat::new_nd_with_data_unsafe(
+            size.as_slice(),
+            typ,
+            data_ptr.cast_mut(),
+            Some(step.as_slice()),
+        )
+        .change_context(NdCvError)?
+    };
 
     Ok(mat)
 }
@@ -126,6 +130,7 @@ pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
     let is_1d = mat.total() as i32 == mat.rows();
     let dims = is_1d.then_some(1).unwrap_or(mat.dims());
     let channels = mat.channels();
+
     let ndarray_size = (channels != 1).then_some(dims + 1).unwrap_or(dims) as usize;
     if let Some(ndim) = D::NDIM {
         // When channels is not 1,
@@ -136,7 +141,8 @@ pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
         // Array3 -> Mat(ndims = 2, channels = X)
         // Array3 -> Mat(ndims = 3, channels = 1)
         // ...
-        if ndim != dims as usize && channels == 1 {
+        // 1D arrays can alwyas be upcasted to and N-Dimentional matrix with 1 in the other channels
+        if (ndim != dims as usize && channels == 1) && !is_1d {
             return Err(Report::new(NdCvError)
                 .attach_printable(format!("Expected {}D array, got {}D", ndim, ndarray_size)));
         }
@@ -161,8 +167,41 @@ pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
         .change_context(NdCvError)?;
     use ndarray::ShapeBuilder;
     let shape = sizes.strides(strides);
-    let raw_array = ndarray::RawArrayView::from_shape_ptr(shape, mat.data() as *const T)
-        .into_dimensionality()
-        .change_context(NdCvError)?;
+    let raw_array: ndarray::RawArrayView<T, D> = unsafe {
+        if is_1d
+            && let Some(ndims) = D::NDIM
+            && ndims > 1
+        {
+            // if we compute the size and it turns out to be 1D but the target dimension is more than 1D
+            // we need to insert extra axis at the front
+            // let arr = ndarray::RawArrayView::from_shape_ptr(shape, mat.data() as *const T)
+            //     .into_dimensionality::<ndarray::Ix1>()
+            //     .change_context(NdCvError)?;
+
+            // for _ in 1..ndims {
+            //     let arr = arr.insert_axis(ndarray::Axis(0));
+            // }
+            // arr.insert_axis(ndarray::Axis(0));
+            let sizes: Vec<_> = [mat_size.get(0).change_context(NdCvError)? as usize]
+                .into_iter()
+                .chain(core::iter::repeat(1))
+                .take(ndims)
+                .collect();
+            let strides: Vec<_> = [mat.step1(0).change_context(NdCvError)?]
+                .into_iter()
+                .chain(core::iter::repeat(0))
+                .take(ndims)
+                .collect();
+            use ndarray::ShapeBuilder;
+            let shape = sizes.strides(strides);
+            ndarray::RawArrayView::from_shape_ptr(shape, mat.data() as *const T)
+                .into_dimensionality()
+                .change_context(NdCvError)?
+        } else {
+            ndarray::RawArrayView::from_shape_ptr(shape, mat.data() as *const T)
+                .into_dimensionality()
+                .change_context(NdCvError)?
+        }
+    };
     Ok(unsafe { raw_array.deref_into_view() })
 }

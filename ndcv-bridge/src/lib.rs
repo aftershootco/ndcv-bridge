@@ -17,8 +17,8 @@ pub mod connected_components;
 pub mod contours;
 #[cfg(feature = "opencv")]
 pub mod conversions;
-// #[cfg(feature = "opencv")]
-// pub mod gaussian;
+#[cfg(feature = "opencv")]
+pub mod gaussian;
 #[cfg(feature = "opencv")]
 pub mod resize;
 

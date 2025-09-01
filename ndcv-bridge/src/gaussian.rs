@@ -205,7 +205,7 @@ where
         let mut cv_self = self.as_image_mat_mut()?;
 
         unsafe {
-            crate::inplace::op_inplace(&mut *cv_self, |this, out| {
+            crate::inplace::op_inplace(&mut cv_self, |this, out| {
                 opencv::imgproc::gaussian_blur(
                     this,
                     out,

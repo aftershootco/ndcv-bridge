@@ -158,10 +158,7 @@ pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
         .change_context(NdCvError)?;
     let strides = (0..(dims - 1))
         .map(|i| mat.step1(i).change_context(NdCvError))
-        .chain([
-            Ok(channels as usize),
-            Ok((channels == 1).then_some(0).unwrap_or(1)),
-        ])
+        .chain([Ok(channels as usize), Ok(if channels == 1 { 0 } else { 1 })])
         .take(ndarray_size)
         .collect::<Result<Vec<_>, NdCvError>>()
         .change_context(NdCvError)?;

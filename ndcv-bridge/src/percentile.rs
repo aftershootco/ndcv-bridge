@@ -12,7 +12,7 @@ impl<T: std::cmp::Ord + Clone + AsPrimitive<f64>, S: ndarray::Data<Elem = T>> Pe
     for ArrayBase<S, Ix1>
 {
     fn percentile(&self, qth_percentile: f64) -> Result<f64, NdCvError> {
-        if self.len() == 0 {
+        if self.is_empty() {
             return Err(error_stack::Report::new(NdCvError).attach_printable("Empty Input"));
         }
 
@@ -22,7 +22,7 @@ impl<T: std::cmp::Ord + Clone + AsPrimitive<f64>, S: ndarray::Data<Elem = T>> Pe
         }
 
         let mut standard_array = self.as_standard_layout();
-        let mut raw_data = standard_array
+        let raw_data = standard_array
             .as_slice_mut()
             .expect("An array in standard layout will always return its inner slice");
 

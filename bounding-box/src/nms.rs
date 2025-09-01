@@ -55,7 +55,7 @@ where
 
     for i in 0..combined.len() {
         let first = combined[i];
-        if first.3 == false {
+        if !first.3 {
             continue;
         }
         let bbox = first.1;

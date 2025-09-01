@@ -1,4 +1,4 @@
-use ndarray::{Array, ArrayBase, ArrayView};
+use ndarray::{Array, ArrayBase};
 
 #[derive(Clone, Copy)]
 pub enum Orientation {

@@ -82,10 +82,10 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         // find the closest and farthest points from the origin
         let min = points
             .iter()
-            .reduce(|acc, p| (acc > p).then_some(p).unwrap_or(acc))?;
+            .reduce(|acc, p| if acc > p { p } else { acc })?;
         let max = points
             .iter()
-            .reduce(|acc, p| (acc < p).then_some(p).unwrap_or(acc))?;
+            .reduce(|acc, p| if acc < p { p } else { acc })?;
         Some(Self::from_min_max_vertices(*min, *max))
     }
 
@@ -306,7 +306,7 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
             let intersection = Aabb::new(inter_min, inter_max).measure();
             intersection / (self.measure() + other.measure() - intersection)
         } else {
-            return T::zero();
+            T::zero()
         }
     }
 }

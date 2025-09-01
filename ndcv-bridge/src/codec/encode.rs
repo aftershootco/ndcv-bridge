@@ -1,7 +1,7 @@
 use super::codecs::CvEncoder;
 use super::error::ErrorReason;
-use crate::conversions::NdAsImage;
 use crate::NdCvError;
+use crate::conversions::NdAsImage;
 use error_stack::*;
 use ndarray::ArrayBase;
 use std::path::Path;

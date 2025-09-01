@@ -69,7 +69,7 @@ pub fn type_depth<T>() -> i32 {
 }
 
 #[cfg(feature = "opencv")]
-pub fn depth_type(depth: i32) -> &'static str {
+pub const fn depth_type(depth: i32) -> &'static str {
     match depth {
         opencv::core::CV_8U => "u8",
         opencv::core::CV_8S => "i8",

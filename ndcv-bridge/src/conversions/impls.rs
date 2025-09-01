@@ -166,6 +166,7 @@ pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
     let shape = sizes.strides(strides);
     let raw_array: ndarray::RawArrayView<T, D> = unsafe {
         if is_1d
+            && channels == 1
             && let Some(ndims) = D::NDIM
             && ndims > 1
         {

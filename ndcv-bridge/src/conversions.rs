@@ -302,6 +302,7 @@ pub fn test_2d_array() {
     let array = ndarray::Array2::<f32>::ones((23, 31));
     let mat = unsafe { impls::ndarray_to_mat_consolidated(&array) }.unwrap();
     let arr = unsafe { impls::mat_to_ndarray::<f32, ndarray::Ix2>(&mat).unwrap() };
+    dbg!(arr.shape());
     assert_eq!(array, arr);
 }
 
@@ -337,14 +338,17 @@ pub fn test_ndcv_1024_1024_to_mat() {
 }
 
 #[test]
-fn test_3d_mat_to_ndarray_pigma() {
-    let mat = opencv::core::Mat::new_nd_with_default(&[10, 1], opencv::core::CV_8UC1, (200).into())
-        .expect("failed");
-    // let mat2 =
-    //     opencv::core::Mat::new_nd_with_default(&[10, 1], opencv::core::CV_8UC1, (200).into())
-    //         .expect("failed");
+fn test_3d_mat_to_ndarray_with_broadcasted_1d() {
+    let mat1 =
+        opencv::core::Mat::new_nd_with_default(&[10, 1], opencv::core::CV_8UC1, (200).into())
+            .expect("failed");
+    let mat2 =
+        opencv::core::Mat::new_nd_with_default(&[10, 1, 1], opencv::core::CV_8UC1, (200).into())
+            .expect("failed");
 
-    let array2: ndarray::ArrayView3<u8> = mat.as_ndarray().expect("failed");
+    let array1: ndarray::ArrayView2<u8> = mat1.as_ndarray().expect("failed");
+    let array2: ndarray::ArrayView3<u8> = mat2.as_ndarray().expect("failed");
+    dbg!(array1.shape());
     dbg!(array2.shape());
     array2.into_iter().for_each(|&x| {
         assert_eq!(x, 200u8);

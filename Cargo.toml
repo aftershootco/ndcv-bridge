@@ -21,7 +21,7 @@ serde = { version = "1.0", features = ["derive"] }
 ndarray-image = { path = "ndarray-image" }
 ndarray-resize = { path = "ndarray-resize" }
 nalgebra = { version = "0.34.0", default-features = false, features = ["std"] }
-opencv = { version = "0.95.1" }
+opencv = { version = "0.95.1", default-features = false }
 bounding-box = { path = "bounding-box" }
 ndarray-safetensors = { path = "ndarray-safetensors" }
 wide = "0.7.33"

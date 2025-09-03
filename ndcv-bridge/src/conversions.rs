@@ -353,3 +353,25 @@ fn test_3d_mat_to_ndarray_with_broadcasted_1d() {
         assert_eq!(x, 200u8);
     });
 }
+
+#[test]
+fn test_3d_2x1_with_3_channels() {
+    // let mat1 =
+    //     opencv::core::Mat::new_nd_with_default(&[10, 1], opencv::core::CV_8UC1, (200).into())
+    //         .expect("failed");
+    let mat2 = opencv::core::Mat::new_nd_with_default(
+        &[2, 1],
+        opencv::core::CV_8UC3,
+        (129, 74, 50).into(),
+    )
+    .expect("failed");
+
+    dbg!(&mat2);
+
+    // let array1: ndarray::ArrayView2<u8> = mat1.as_ndarray().expect("failed");
+    let array2: ndarray::ArrayView3<u8> = mat2.as_ndarray().expect("failed");
+    dbg!(array2.shape());
+    // array2.into_iter().for_each(|&x| {
+    //     assert_eq!(x, 200u8);
+    // });
+}

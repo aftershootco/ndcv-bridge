@@ -147,9 +147,7 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
     where
         T: core::ops::SubAssign,
     {
-        let current_origin = self.min_vertex();
-        let translation = origin - current_origin;
-        self.point += translation;
+        self.point -= origin.coords;
         self
     }
 
@@ -681,5 +679,16 @@ mod boudning_box_tests {
         let box1 = Aabb2::from_xywh(0.69482, 0.6716774, 0.07493961, 0.14968264);
         let box2 = Aabb2::from_xywh(0.41546485, 0.70290875, 0.06197411, 0.08818436);
         assert!(box1.iou(&box2) >= 0.0);
+    }
+
+    #[test]
+    fn test_move_origin() {
+        let bbox = Aabb2::from_xywh(2, 3, 4, 5);
+        let moved = bbox.move_origin(Point2::new(0, 0));
+        assert_eq!(moved.min_vertex(), Point2::new(2, 3));
+        assert_eq!(moved.size(), Vector2::new(4, 5));
+        let moved = bbox.move_origin(Point2::new(2, 3));
+        let expected = Aabb2::from_xywh(0, 0, 4, 5);
+        assert_eq!(moved, expected);
     }
 }

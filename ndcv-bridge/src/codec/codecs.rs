@@ -2,7 +2,7 @@ use super::decode::Decoder;
 use super::encode::Encoder;
 use crate::NdCvError;
 use crate::conversions::matref::MatRef;
-use error_stack::*;
+use crate::prelude_::*;
 use img_parts::{
     Bytes,
     jpeg::{Jpeg, markers},

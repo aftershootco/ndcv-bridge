@@ -3,8 +3,8 @@
 use super::codecs::CvDecoder;
 use super::error::ErrorReason;
 use crate::NdCvError;
+use crate::prelude_::*;
 use crate::{NdAsImage, conversions::NdCvConversion};
-use error_stack::*;
 use ndarray::Array;
 use std::path::Path;
 
@@ -18,18 +18,14 @@ pub trait Decodable<D: Decoder>: Sized {
         let buf = std::fs::read(path)
             .map_err(|e| match e.kind() {
                 std::io::ErrorKind::NotFound => {
-                    Report::new(e).attach_printable(ErrorReason::ImageWriteFileNotFound)
+                    Report::new(e).attach(ErrorReason::ImageWriteFileNotFound)
                 }
                 std::io::ErrorKind::PermissionDenied => {
-                    Report::new(e).attach_printable(ErrorReason::ImageWritePermissionDenied)
+                    Report::new(e).attach(ErrorReason::ImageWritePermissionDenied)
                 }
-                std::io::ErrorKind::OutOfMemory => {
-                    Report::new(e).attach_printable(ErrorReason::OutOfMemory)
-                }
-                std::io::ErrorKind::StorageFull => {
-                    Report::new(e).attach_printable(ErrorReason::OutOfStorage)
-                }
-                _ => Report::new(e).attach_printable(ErrorReason::ImageWriteOtherError),
+                std::io::ErrorKind::OutOfMemory => Report::new(e).attach(ErrorReason::OutOfMemory),
+                std::io::ErrorKind::StorageFull => Report::new(e).attach(ErrorReason::OutOfStorage),
+                _ => Report::new(e).attach(ErrorReason::ImageWriteOtherError),
             })
             .change_context(NdCvError)?;
         Self::decode(buf, decoder)

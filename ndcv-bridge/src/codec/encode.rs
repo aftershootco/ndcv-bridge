@@ -2,7 +2,7 @@ use super::codecs::CvEncoder;
 use super::error::ErrorReason;
 use crate::NdCvError;
 use crate::conversions::NdAsImage;
-use error_stack::*;
+use crate::prelude_::*;
 use ndarray::ArrayBase;
 use std::path::Path;
 
@@ -18,18 +18,14 @@ pub trait Encodable<E: Encoder> {
         std::fs::write(path, buf)
             .map_err(|e| match e.kind() {
                 std::io::ErrorKind::NotFound => {
-                    Report::new(e).attach_printable(ErrorReason::ImageWriteFileNotFound)
+                    Report::new(e).attach(ErrorReason::ImageWriteFileNotFound)
                 }
                 std::io::ErrorKind::PermissionDenied => {
-                    Report::new(e).attach_printable(ErrorReason::ImageWritePermissionDenied)
+                    Report::new(e).attach(ErrorReason::ImageWritePermissionDenied)
                 }
-                std::io::ErrorKind::OutOfMemory => {
-                    Report::new(e).attach_printable(ErrorReason::OutOfMemory)
-                }
-                std::io::ErrorKind::StorageFull => {
-                    Report::new(e).attach_printable(ErrorReason::OutOfStorage)
-                }
-                _ => Report::new(e).attach_printable(ErrorReason::ImageWriteOtherError),
+                std::io::ErrorKind::OutOfMemory => Report::new(e).attach(ErrorReason::OutOfMemory),
+                std::io::ErrorKind::StorageFull => Report::new(e).attach(ErrorReason::OutOfStorage),
+                _ => Report::new(e).attach(ErrorReason::ImageWriteOtherError),
             })
             .change_context(NdCvError)
     }

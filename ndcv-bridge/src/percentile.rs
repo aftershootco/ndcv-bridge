@@ -1,4 +1,4 @@
-use error_stack::*;
+use crate::prelude_::*;
 use ndarray::{ArrayBase, Ix1};
 use num::cast::AsPrimitive;
 
@@ -13,12 +13,12 @@ impl<T: std::cmp::Ord + Clone + AsPrimitive<f64>, S: ndarray::Data<Elem = T>> Pe
 {
     fn percentile(&self, qth_percentile: f64) -> Result<f64, NdCvError> {
         if self.is_empty() {
-            return Err(error_stack::Report::new(NdCvError).attach_printable("Empty Input"));
+            return Err(error_stack::Report::new(NdCvError).attach("Empty Input"));
         }
 
         if !(0_f64..1_f64).contains(&qth_percentile) {
             return Err(error_stack::Report::new(NdCvError)
-                .attach_printable("Qth percentile must be between 0 and 1"));
+                .attach("Qth percentile must be between 0 and 1"));
         }
 
         let mut standard_array = self.as_standard_layout();

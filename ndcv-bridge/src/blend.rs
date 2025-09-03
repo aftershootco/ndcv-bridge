@@ -34,10 +34,10 @@ where
     ) -> Result<ndarray::Array<f32, Ix3>> {
         if self.shape() != other.shape() {
             return Err(NdCvError)
-                .attach_printable("Shapes of image and other imagge do not match");
+                .attach("Shapes of image and other imagge do not match");
         }
         if self.shape()[0] != mask.shape()[0] || self.shape()[1] != mask.shape()[1] {
-            return Err(NdCvError).attach_printable("Shapes of image and mask do not match");
+            return Err(NdCvError).attach("Shapes of image and mask do not match");
         }
 
         let mut output = ndarray::Array3::zeros(self.dim());
@@ -68,10 +68,10 @@ where
     ) -> Result<()> {
         if self.shape() != other.shape() {
             return Err(NdCvError)
-                .attach_printable("Shapes of image and other imagge do not match");
+                .attach("Shapes of image and other imagge do not match");
         }
         if self.shape()[0] != mask.shape()[0] || self.shape()[1] != mask.shape()[1] {
-            return Err(NdCvError).attach_printable("Shapes of image and mask do not match");
+            return Err(NdCvError).attach("Shapes of image and mask do not match");
         }
 
         let (_height, _width, channels) = self.dim();
@@ -91,15 +91,15 @@ where
         let this = self
             .as_slice_mut()
             .ok_or(NdCvError)
-            .attach_printable("Failed to get source image as a continuous slice")?;
+            .attach("Failed to get source image as a continuous slice")?;
         let other = other
             .as_slice()
             .ok_or(NdCvError)
-            .attach_printable("Failed to get other image as a continuous slice")?;
+            .attach("Failed to get other image as a continuous slice")?;
         let mask = mask
             .as_slice()
             .ok_or(NdCvError)
-            .attach_printable("Failed to get mask as a continuous slice")?;
+            .attach("Failed to get mask as a continuous slice")?;
 
         use rayon::prelude::*;
         this.par_chunks_exact_mut(channels)

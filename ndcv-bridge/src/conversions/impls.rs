@@ -1,4 +1,5 @@
-use super::*;
+use super::type_depth;
+use crate::prelude_::*;
 use core::ffi::*;
 use opencv::core::prelude::*;
 pub(crate) unsafe fn ndarray_to_mat_regular<
@@ -13,7 +14,7 @@ pub(crate) unsafe fn ndarray_to_mat_regular<
 
     // let channels = shape.last().copied().unwrap_or(1);
     // if channels > opencv::core::CV_CN_MAX as usize {
-    //     Err(Report::new(NdCvError).attach_printable(format!(
+    //     Err(Report::new(NdCvError).attach(format!(
     //             "Number of channels({channels}) exceeds CV_CN_MAX({}) use the regular version of the function", opencv::core::CV_CN_MAX
     //         )))?;
     // }
@@ -57,7 +58,7 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
 
     let channels = shape.last().copied().unwrap_or(1);
     if channels > opencv::core::CV_CN_MAX as usize {
-        Err(Report::new(NdCvError).attach_printable(format!(
+        Err(Report::new(NdCvError).attach(format!(
                 "Number of channels({channels}) exceeds CV_CN_MAX({}) use the regular version of the function", opencv::core::CV_CN_MAX
             )))?;
     }
@@ -67,12 +68,11 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
         // But opencv only keeps ndims - 1 strides so we can't have the column stride as that
         // will be lost
         if shape.last() != strides.get(strides.len() - 2).map(|x| *x as usize).as_ref() {
-            Err(Report::new(NdCvError).attach_printable(
-                "You cannot slice into the last axis in ndarray when converting to mat",
-            ))?;
+            Err(Report::new(NdCvError)
+                .attach("You cannot slice into the last axis in ndarray when converting to mat"))?;
         }
     } else if shape.len() == 1 {
-        return Err(Report::new(NdCvError).attach_printable(
+        return Err(Report::new(NdCvError).attach(
             "You cannot convert a 1D array to a Mat while using the consolidated version",
         ));
     }
@@ -116,7 +116,7 @@ pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
 ) -> Result<ndarray::ArrayView<'_, T, D>, NdCvError> {
     let depth = mat.depth();
     if type_depth::<T>() != depth {
-        return Err(Report::new(NdCvError).attach_printable(format!(
+        return Err(Report::new(NdCvError).attach(format!(
             "Expected type Mat<{}> ({}), got Mat<{}> ({})",
             std::any::type_name::<T>(),
             type_depth::<T>(),
@@ -144,7 +144,7 @@ pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
         // 1D arrays can alwyas be upcasted to and N-Dimentional matrix with 1 in the other channels
         if (ndim != dims as usize && channels == 1) && !is_1d {
             return Err(Report::new(NdCvError)
-                .attach_printable(format!("Expected {}D array, got {}D", ndim, ndarray_size)));
+                .attach(format!("Expected {}D array, got {}D", ndim, ndarray_size)));
         }
     }
 

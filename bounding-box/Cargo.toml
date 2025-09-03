@@ -17,5 +17,6 @@ tracing = { version = "0.1.41", optional = true, default-features = false }
 [features]
 ndarray = ["dep:ndarray"]
 tracing = ["dep:tracing"]
+compat-bbox = []
 
-default = ["ndarray", "tracing"]
+default = ["ndarray", "tracing", "compat-bbox"]

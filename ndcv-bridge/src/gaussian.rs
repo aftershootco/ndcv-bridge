@@ -97,7 +97,7 @@ where
             OpencvAlgorithmHint::ALGO_HINT_DEFAULT,
         )
         .change_context(NdCvError)
-        .attach_printable("Failed to apply gaussian blur")?;
+        .attach("Failed to apply gaussian blur")?;
         Ok(dst)
     }
 }
@@ -129,7 +129,7 @@ where
 //             border_type as i32,
 //         )
 //         .change_context(NdCvError)
-//         .attach_printable("Failed to apply gaussian blur")?;
+//         .attach("Failed to apply gaussian blur")?;
 //         Ok(dst)
 //     }
 // }
@@ -161,7 +161,7 @@ where
 //             border_type as i32,
 //         )
 //         .change_context(NdCvError)
-//         .attach_printable("Failed to apply gaussian blur")?;
+//         .attach("Failed to apply gaussian blur")?;
 //         Ok(dst)
 //     }
 // }
@@ -221,7 +221,7 @@ where
             })
         }
         .change_context(NdCvError)
-        .attach_printable("Failed to apply gaussian blur")?;
+        .attach("Failed to apply gaussian blur")?;
         Ok(self)
     }
 }

@@ -18,10 +18,9 @@
 //!
 //! // X is the last dimension
 use crate::NdCvError;
+use crate::prelude_::*;
 use crate::type_depth;
-use error_stack::*;
 use ndarray::{Ix2, Ix3};
-use opencv::core::MatTraitConst;
 mod impls;
 pub(crate) mod matref;
 use matref::{MatRef, MatRefMut};

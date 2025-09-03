@@ -28,7 +28,7 @@ pub use blend::NdBlend;
 pub use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 pub use fir::NdFir;
 // pub use gaussian::{BorderType, NdCvGaussianBlur, NdCvGaussianBlurInPlace};
-pub use roi::{NdRoi, NdRoiMut, NdRoiZeroPadded};
+pub use roi::{NdRoiZeroPadded, Roi as NdRoi, RoiMut as NdRoiMut};
 
 #[cfg(feature = "opencv")]
 pub use contours::{
@@ -48,6 +48,7 @@ pub use resize::{Interpolation, NdCvResize};
 pub(crate) mod prelude_ {
     pub use crate::NdCvError;
     pub use error_stack::*;
+    pub type Result<T, C> = core::result::Result<T, Report<C>>;
 }
 
 #[derive(Debug, thiserror::Error)]

@@ -21,15 +21,16 @@ serde = { version = "1.0", features = ["derive"] }
 ndarray-image = { path = "ndarray-image" }
 ndarray-resize = { path = "ndarray-resize" }
 nalgebra = { version = "0.34.0", default-features = false, features = ["std"] }
-opencv = { version = "0.95.1" }
+opencv = { version = "0.95.1", features = ["clang-runtime"] }
 bounding-box = { path = "bounding-box" }
 ndarray-safetensors = { path = "ndarray-safetensors" }
 wide = "0.7.33"
 rayon = "1.11.0"
 bytemuck = "1.23.2"
-error-stack = "0.5.0"
+error-stack = "0.6.0"
 thiserror = "2.0"
 fast_image_resize = "5.2.0"
 img-parts = "0.4.0"
 ndarray = { version = "0.16.1", features = ["rayon"] }
 num = "0.4"
+tap = "1.0.1"

@@ -1,3 +1,5 @@
+#[cfg(feature = "compat-bbox")]
+pub mod bbox;
 pub mod draw;
 pub mod nms;
 pub mod roi;
@@ -47,6 +49,9 @@ pub struct AxisAlignedBoundingBox<T: Num, const D: usize> {
 pub type Aabb<T, const D: usize> = AxisAlignedBoundingBox<T, D>;
 pub type Aabb2<T> = AxisAlignedBoundingBox<T, 2>;
 pub type Aabb3<T> = AxisAlignedBoundingBox<T, 3>;
+pub type BBox<T, const D: usize> = AxisAlignedBoundingBox<T, D>;
+pub type BBox2<T> = AxisAlignedBoundingBox<T, 2>;
+pub type BBox3<T> = AxisAlignedBoundingBox<T, 3>;
 
 impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
     // Panics if max < min
@@ -118,15 +123,34 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         self
     }
 
-    pub fn translate(&mut self, translation: SVector<T, D>)
+    pub fn translate(mut self, translation: SVector<T, D>) -> Self
     where
         T: core::ops::AddAssign,
     {
         self.point += translation;
+        self
     }
 
     pub fn min_vertex(&self) -> Point<T, D> {
         self.point
+    }
+
+    pub fn move_to(mut self, point: Point<T, D>) -> Self
+    where
+        T: core::ops::SubAssign,
+    {
+        self.point = point;
+        self
+    }
+
+    pub fn move_origin(mut self, origin: Point<T, D>) -> Self
+    where
+        T: core::ops::SubAssign,
+    {
+        let current_origin = self.min_vertex();
+        let translation = origin - current_origin;
+        self.point += translation;
+        self
     }
 
     pub fn max_vertex(&self) -> Point<T, D>
@@ -270,6 +294,15 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         })
     }
 
+    pub fn cast<T2>(&self) -> Aabb<T2, D>
+    where
+        // T: num::NumCast,
+        T2: Num + simba::scalar::SubsetOf<T>,
+    {
+        Self::try_cast(self)
+            .expect(format!("Failed to cast to Aabb<{}>", std::any::type_name::<T2>()).as_str())
+    }
+
     // pub fn as_<T2>(&self) -> Option<Aabb<T2, D>>
     // where
     //     T2: Num + simba::scalar::SubsetOf<T>,
@@ -309,6 +342,28 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
             T::zero()
         }
     }
+
+    pub fn is_positive(&self) -> bool
+    where
+        T: PartialOrd,
+        T: core::ops::AddAssign,
+    {
+        self.point >= Point::origin()
+    }
+}
+
+#[test]
+fn test_is_positive() {
+    let bbox = Aabb2::from_xywh(1, 1, 2, 2);
+    assert!(bbox.is_positive());
+    let bbox = Aabb2::from_xywh(0, 0, 2, 2);
+    assert!(bbox.is_positive());
+    let bbox = Aabb2::from_xywh(-1, -1, 2, 2);
+    assert!(!bbox.is_positive());
+    let bbox = Aabb2::from_xywh(-1, 1, 2, 2);
+    assert!(!bbox.is_positive());
+    let bbox = Aabb2::from_xywh(1, -1, 2, 2);
+    assert!(!bbox.is_positive());
 }
 
 impl<T: Num> Aabb2<T> {
@@ -387,6 +442,14 @@ impl<T: Num> Aabb2<T> {
     {
         self.measure()
     }
+
+    pub fn width(&self) -> T {
+        self.size.x
+    }
+
+    pub fn height(&self) -> T {
+        self.size.y
+    }
 }
 
 impl<T: Num> Aabb3<T> {
@@ -395,6 +458,15 @@ impl<T: Num> Aabb3<T> {
         T: core::ops::MulAssign,
     {
         self.measure()
+    }
+}
+
+impl<T: core::fmt::Display, const D: usize> core::fmt::Display for Aabb<T, D>
+where
+    T: Num,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Aabb(point: {}, size: {})", self.point, self.size)
     }
 }
 

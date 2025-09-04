@@ -297,9 +297,10 @@ pub fn test_3d_array() {
 }
 
 #[test]
-pub fn test_2d_array() {
+pub fn test_2d_array_consolidated() {
     let array = ndarray::Array2::<f32>::ones((23, 31));
     let mat = unsafe { impls::ndarray_to_mat_consolidated(&array) }.unwrap();
+    dbg!(&mat);
     let arr = unsafe { impls::mat_to_ndarray::<f32, ndarray::Ix2>(&mat).unwrap() };
     dbg!(arr.shape());
     assert_eq!(array, arr);

@@ -196,7 +196,11 @@ pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
                 .into_dimensionality()
                 .change_context(NdCvError)?
         } else {
+            use ::tap::*;
             ndarray::RawArrayView::from_shape_ptr(shape, mat.data() as *const T)
+                .tap(|d| {
+                    dbg!(d.shape());
+                })
                 .into_dimensionality()
                 .change_context(NdCvError)?
         }

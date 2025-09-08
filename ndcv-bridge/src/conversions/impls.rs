@@ -125,85 +125,127 @@ pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
         )));
     }
 
-    // Since a dims always returns >= 2 we can't use this to check if it's a 1D array
-    // So we compare the first axis to the total to see if its a 1D array
     let channels = mat.channels();
-    let is_1d = mat.total() as i32 == mat.rows() && channels == 1;
-    let dims = is_1d.then_some(1).unwrap_or(mat.dims());
+    let multi_channel = channels > 1;
 
-    let ndarray_size = (channels != 1).then_some(dims + 1).unwrap_or(dims) as usize;
-    if let Some(ndim) = D::NDIM {
-        // When channels is not 1,
-        // the last dimension is the channels
-        // Array1 -> Mat(ndims = 1, channels = 1)
-        // Array2 -> Mat(ndims = 1, channels = X)
-        // Array2 -> Mat(ndims = 2, channels = 1)
-        // Array3 -> Mat(ndims = 2, channels = X)
-        // Array3 -> Mat(ndims = 3, channels = 1)
-        // ...
-        // 1D arrays can alwyas be upcasted to and N-Dimentional matrix with 1 in the other channels
-        if (ndim != dims as usize && channels == 1) && !is_1d {
-            return Err(Report::new(NdCvError)
-                .attach(format!("Expected {}D array, got {}D", ndim, ndarray_size)));
-        }
-    }
+    let mat_dims = mat.dims(); // dims is always >= 2
+    let maybe_1d = mat_dims == 2
+        && ((mat.rows() == mat.total() as i32 && mat.cols() == 1)
+            || (mat.cols() == mat.total() as i32 && mat.rows() == 1));
 
-    let mat_size = mat.mat_size();
-    let sizes = (0..dims)
-        .map(|i| mat_size.get(i).change_context(NdCvError))
-        .chain([Ok(channels)])
-        .map(|x| x.map(|x| x as usize))
-        .take(ndarray_size)
-        .collect::<Result<Vec<_>, NdCvError>>()
-        .change_context(NdCvError)?;
-    let strides = (0..(dims - 1))
-        .map(|i| mat.step1(i).change_context(NdCvError))
-        .chain([Ok(channels as usize), Ok(if channels == 1 { 0 } else { 1 })])
-        .take(ndarray_size)
-        .collect::<Result<Vec<_>, NdCvError>>()
-        .change_context(NdCvError)?;
+    // if we don't have any expected dims we'll just convert the
+    let expected_mat_dims = D::NDIM.map(|d| d - multi_channel.then_some(1).unwrap_or(0));
+    let are_dims_compatible = expected_mat_dims.map_or(true, |expected| {});
+
+    let mat_actual_dims = if maybe_1d { 1 } else { mat_dims };
+
+    // If the mat is multi channel we add an extra dimension at the end for channels in ndarray
+    let final_dims = if multi_channel {
+        mat_actual_dims + 1
+    } else {
+        mat_actual_dims
+    } as usize;
+
     use ndarray::ShapeBuilder;
-    let shape = sizes.strides(strides);
-    let raw_array: ndarray::RawArrayView<T, D> = unsafe {
-        if is_1d
-            && channels == 1
-            && let Some(ndims) = D::NDIM
-            && ndims > 1
-        {
-            // if we compute the size and it turns out to be 1D but the target dimension is more than 1D
-            // we need to insert extra axis at the front
-            // let arr = ndarray::RawArrayView::from_shape_ptr(shape, mat.data() as *const T)
-            //     .into_dimensionality::<ndarray::Ix1>()
-            //     .change_context(NdCvError)?;
+    let mat_size = mat.mat_size();
+    let shape = if multi_channel {
+        let sizes = (0..mat_actual_dims)
+            .map(|i| mat_size.get(i as i32).change_context(NdCvError))
+            .chain([Ok(channels)])
+            .map(|x| x.map(|x| x as usize))
+            .take(final_dims)
+            .collect::<Result<Vec<_>, NdCvError>>()
+            .change_context(NdCvError)?;
+        let strides = (0..(mat_actual_dims - 1))
+            .map(|i| mat.step1(i as i32).change_context(NdCvError))
+            .chain([Ok(channels as usize), Ok(if channels == 1 { 0 } else { 1 })])
+            .take(final_dims)
+            .collect::<Result<Vec<_>, NdCvError>>()
+            .change_context(NdCvError)?;
+        sizes.strides(strides)
+    } else {
+        let sizes: Vec<_> = [mat_size.get(0).change_context(NdCvError)? as usize]
+            .into_iter()
+            .chain(core::iter::repeat(1))
+            .take(final_dims)
+            .collect();
+        let strides: Vec<_> = [mat.step1(0).change_context(NdCvError)?]
+            .into_iter()
+            .chain(core::iter::repeat(0))
+            .take(final_dims)
+            .collect();
+        sizes.strides(strides)
+    };
 
-            // for _ in 1..ndims {
-            //     let arr = arr.insert_axis(ndarray::Axis(0));
-            // }
-            // arr.insert_axis(ndarray::Axis(0));
-            let sizes: Vec<_> = [mat_size.get(0).change_context(NdCvError)? as usize]
-                .into_iter()
-                .chain(core::iter::repeat(1))
-                .take(ndims)
-                .collect();
-            let strides: Vec<_> = [mat.step1(0).change_context(NdCvError)?]
-                .into_iter()
-                .chain(core::iter::repeat(0))
-                .take(ndims)
-                .collect();
-            use ndarray::ShapeBuilder;
-            let shape = sizes.strides(strides);
-            ndarray::RawArrayView::from_shape_ptr(shape, mat.data() as *const T)
-                .into_dimensionality()
-                .change_context(NdCvError)?
-        } else {
-            use ::tap::*;
-            ndarray::RawArrayView::from_shape_ptr(shape, mat.data() as *const T)
-                .tap(|d| {
-                    dbg!(d.shape());
-                })
-                .into_dimensionality()
-                .change_context(NdCvError)?
-        }
+    use ::tap::*;
+    let raw_array = unsafe {
+        ndarray::RawArrayView::from_shape_ptr(shape, mat.data() as *const T)
+            .tap(|d| {
+                dbg!(d.shape());
+            })
+            .into_dimensionality()
+            .change_context(NdCvError)?
     };
     Ok(unsafe { raw_array.deref_into_view() })
+}
+
+#[test]
+fn mat_test_all_types() {
+    fn print_all_mat<T: opencv::core::MatTraitConst>(mat: &T, name: impl AsRef<str>) {
+        println!(
+            "Mat({:^10}): dims {} rows {:>3}, cols {:>3}, total {:>3}, channels {}, depth {}",
+            name.as_ref(),
+            mat.dims(),
+            mat.rows(),
+            mat.cols(),
+            mat.total(),
+            mat.channels(),
+            mat.depth()
+        );
+    }
+    let mat1 = opencv::core::Mat::from_slice(&[1u8, 2, 3, 4, 5, 6, 7, 8]).unwrap();
+    let mat1a =
+        opencv::core::Mat::new_nd_with_default(&[8], opencv::core::CV_8UC1, (10).into()).unwrap();
+
+    let mat2 = opencv::core::Mat::from_slice_2d(&[[1u8, 2, 3, 4], [5, 6, 7, 8]]).unwrap();
+    let mat2a = opencv::core::Mat::new_nd_with_default(&[8, 1], opencv::core::CV_8UC1, (10).into())
+        .unwrap();
+    let mat2b = opencv::core::Mat::new_nd_with_default(&[1, 8], opencv::core::CV_8UC1, (10).into())
+        .unwrap();
+    let mat2c = opencv::core::Mat::new_nd_with_default(&[2, 4], opencv::core::CV_8UC1, (10).into())
+        .unwrap();
+    let mat3 =
+        opencv::core::Mat::new_nd_with_default(&[2, 2, 2], opencv::core::CV_8UC1, (10).into())
+            .unwrap();
+    let mat3a =
+        opencv::core::Mat::new_nd_with_default(&[2, 2], opencv::core::CV_8UC3, (10, 10, 10).into())
+            .unwrap();
+    let mat3b = opencv::core::Mat::new_nd_with_default(
+        &[3, 1, 1],
+        opencv::core::CV_8UC1,
+        (10, 10, 10).into(),
+    )
+    .unwrap();
+    let mat4 =
+        opencv::core::Mat::new_nd_with_default(&[2, 2, 2, 2], opencv::core::CV_8UC1, (10).into())
+            .unwrap();
+    let mat4a = opencv::core::Mat::new_nd_with_default(
+        &[2, 2, 2],
+        opencv::core::CV_8UC3,
+        (10, 10, 10).into(),
+    )
+    .unwrap();
+    print_all_mat(&mat1, "mat1");
+    print_all_mat(&mat1a, "mat1a");
+    // print_all_mat(&mat2, "mat2");
+    print_all_mat(&mat2a, "mat2a");
+    // print_all_mat(&mat2b, "mat2b");
+    // print_all_mat(&mat2c, "mat2c");
+    // print_all_mat(&mat3, "mat3");
+    // print_all_mat(&mat3a, "mat3a");
+    // print_all_mat(&mat3b, "mat3b");
+    // print_all_mat(&mat4, "mat4");
+    // print_all_mat(&mat4a, "mat4a");
+    dbg!(&mat1a);
+    dbg!(mat2a);
 }

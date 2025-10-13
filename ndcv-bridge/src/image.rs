@@ -1,3 +1,15 @@
+/// Trait for converting images to ndarray
+///
+/// ```rust
+/// use ndcv_bridge::NdImage;
+/// use ndarray::Array3;
+/// use image::{DynamicImage, GrayImage, RgbImage};
+/// let rgb: RgbImage = RgbImage::new(10, 10);
+/// let luma: GrayImage = DynamicImage::ImageRgb8(rgb).into_luma8();
+/// let ndarray: Array3<u8> = rgb.to_ndarray();
+/// let ndarray: Array2<u8> = luma.to_ndarray();
+/// let ndarray: Array3<u8> = DynamicImage::ImageRgb8(rgb).to_ndarray();
+/// ```
 use ndarray::*;
 pub trait NdImage {
     fn width(&self) -> usize;

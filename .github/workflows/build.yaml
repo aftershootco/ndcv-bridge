@@ -17,7 +17,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
       - id: set-matrix
         name: Generate Nix Matrix
         run: |
@@ -33,7 +32,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
       - run: nix build -L '.#${{ matrix.attr }}'
 
   codecov:
@@ -45,7 +43,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: DeterminateSystems/nix-installer-action@main
-    - uses: DeterminateSystems/magic-nix-cache-action@main
 
     - name: Run codecov
       run: nix build .#checks.x86_64-linux.hello-llvm-cov

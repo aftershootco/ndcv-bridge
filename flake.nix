@@ -38,7 +38,7 @@
           ];
         };
         inherit (pkgs) lib;
-        cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
+        # cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         name = "ndcv-bridge";
 
         stableToolchain = pkgs.rust-bin.stable.latest.default;

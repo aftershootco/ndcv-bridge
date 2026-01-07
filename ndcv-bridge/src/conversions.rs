@@ -21,7 +21,7 @@ use crate::NdCvError;
 use crate::prelude_::*;
 use crate::type_depth;
 use ndarray::{Ix2, Ix3};
-mod impls;
+pub mod impls;
 pub(crate) mod matref;
 use matref::{MatRef, MatRefMut};
 
@@ -178,6 +178,11 @@ fn test_2d_mat_to_ndarray() {
     .expect("failed");
     let array2: ndarray::ArrayView2<i16> = mat.as_ndarray().expect("failed");
     assert_eq!(array2.shape(), [10, 3]);
+    array2.into_iter().for_each(|&x| {
+        assert_eq!(x, 200);
+    });
+    let array2: ndarray::ArrayView3<i16> = mat.as_ndarray().expect("failed");
+    assert_eq!(array2.shape(), [10, 1, 3]);
     array2.into_iter().for_each(|&x| {
         assert_eq!(x, 200);
     });

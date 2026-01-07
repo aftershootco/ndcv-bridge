@@ -68,6 +68,7 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         }
         Some(Self::from_min_max_vertices(min_point, max_point))
     }
+
     pub fn new_point_size(point: Point<T, D>, size: SVector<T, D>) -> Self {
         Self { point, size }
     }

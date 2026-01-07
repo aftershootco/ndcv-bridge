@@ -33,8 +33,7 @@ where
         alpha: f32,
     ) -> Result<ndarray::Array<f32, Ix3>> {
         if self.shape() != other.shape() {
-            return Err(NdCvError)
-                .attach("Shapes of image and other imagge do not match");
+            return Err(NdCvError).attach("Shapes of image and other imagge do not match");
         }
         if self.shape()[0] != mask.shape()[0] || self.shape()[1] != mask.shape()[1] {
             return Err(NdCvError).attach("Shapes of image and mask do not match");
@@ -54,7 +53,7 @@ where
                 let o = this * (1.0 - mask) + other * mask;
                 out.as_slice_mut()
                     .expect("Failed to get mutable slice")
-                    .copy_from_slice(&o.as_array_ref()[..channels]);
+                    .copy_from_slice(&o.as_array()[..channels]);
             });
 
         Ok(output)
@@ -67,8 +66,7 @@ where
         alpha: f32,
     ) -> Result<()> {
         if self.shape() != other.shape() {
-            return Err(NdCvError)
-                .attach("Shapes of image and other imagge do not match");
+            return Err(NdCvError).attach("Shapes of image and other imagge do not match");
         }
         if self.shape()[0] != mask.shape()[0] || self.shape()[1] != mask.shape()[1] {
             return Err(NdCvError).attach("Shapes of image and mask do not match");
@@ -86,7 +84,7 @@ where
         //         let o = this_wide * (1.0 - mask) + other * mask;
         //         this.as_slice_mut()
         //             .expect("Failed to get mutable slice")
-        //             .copy_from_slice(&o.as_array_ref()[..channels]);
+        //             .copy_from_slice(&o.as_array()[..channels]);
         //     });
         let this = self
             .as_slice_mut()
@@ -110,7 +108,7 @@ where
                 let other = wide::f32x4::from(other);
                 let mask = wide::f32x4::splat(mask * alpha);
                 this.copy_from_slice(
-                    &(this_wide * (1.0 - mask) + other * mask).as_array_ref()[..channels],
+                    &(this_wide * (1.0 - mask) + other * mask).as_array()[..channels],
                 );
             });
 
@@ -124,7 +122,7 @@ where
         //         let this_wide = wide::f32x4::from(&*this);
         //         let other = wide::f32x4::from(other);
         //         let o = this_wide * (1.0 - mask) + other * mask;
-        //         this.copy_from_slice(&o.as_array_ref()[..channels]);
+        //         this.copy_from_slice(&o.as_array()[..channels]);
         //     }
         // }
         Ok(())

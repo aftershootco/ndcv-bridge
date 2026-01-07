@@ -77,7 +77,7 @@
               ]
               ++ (lib.optionals pkgs.stdenv.isDarwin [
                 libiconv
-                apple-sdk_13
+                apple-sdk_26
               ]);
           }
           // (lib.optionalAttrs pkgs.stdenv.isLinux {
@@ -146,7 +146,7 @@
                   cargo-deny
                 ]
                 ++ (lib.optionals pkgs.stdenv.isDarwin [
-                  apple-sdk_13
+                  apple-sdk_26
                 ]);
             });
         };

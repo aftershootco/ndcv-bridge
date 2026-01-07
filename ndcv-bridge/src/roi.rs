@@ -9,13 +9,13 @@ mod seal {
 
 /// ```text
 ///    ┌──────────────────┐
-///    │      padded                  │
-///    │    ┌────────┐         │
-///    │    │             │          │
-///    │    │original     │          │
-///    │    │             │          │
-///    │    └────────┘         │
-///    │      zeroed                  │
+///    │      padded      │
+///    │    ┌────────┐    │
+///    │    │        │    │
+///    │    │original│    │
+///    │    │        │    │
+///    │    └────────┘    │
+///    │      zeroed      │
 ///    └──────────────────┘
 /// ```
 ///
@@ -56,11 +56,6 @@ impl<T: bytemuck::Pod + num::Zero + bounding_box::Num> NdRoiZeroPadded<T, ndarra
         use bounding_box::roi::Roi;
         let original_segment = self.roi(original).expect("original roi should be valid");
         let mut padded_segment = ndarray::Array2::<T>::zeros((padded.height(), padded.width()));
-        dbg!(padded_segment.shape());
-        dbg!(
-            original_roi_in_padded.min_vertex(),
-            original_roi_in_padded.max_vertex()
-        );
 
         padded_segment
             .roi_mut(original_roi_in_padded)

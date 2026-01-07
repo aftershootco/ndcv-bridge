@@ -1,7 +1,7 @@
 #[derive(Debug, Clone)]
 pub struct MatRef<'a> {
     pub(crate) mat: opencv::core::Mat,
-    pub(crate) _marker: core::marker::PhantomData<&'a ()>,
+    pub(crate) _marker: core::marker::PhantomData<&'a opencv::core::Mat>,
 }
 
 impl MatRef<'_> {
@@ -40,7 +40,7 @@ impl AsMut<opencv::core::Mat> for MatRefMut<'_> {
 #[derive(Debug, Clone)]
 pub struct MatRefMut<'a> {
     pub(crate) mat: opencv::core::Mat,
-    pub(crate) _marker: core::marker::PhantomData<&'a mut ()>,
+    pub(crate) _marker: core::marker::PhantomData<&'a mut opencv::core::Mat>,
 }
 
 impl MatRefMut<'_> {

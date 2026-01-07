@@ -111,7 +111,7 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
     Ok(mat)
 }
 
-pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
+pub unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
     mat: &opencv::core::Mat,
 ) -> Result<ndarray::ArrayView<'_, T, D>, NdCvError> {
     let depth = mat.depth();
@@ -133,49 +133,78 @@ pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
         && ((mat.rows() == mat.total() as i32 && mat.cols() == 1)
             || (mat.cols() == mat.total() as i32 && mat.rows() == 1));
 
-    // if we don't have any expected dims we'll just convert the
-    let expected_mat_dims = D::NDIM.map(|d| d - multi_channel.then_some(1).unwrap_or(0));
-    let are_dims_compatible = expected_mat_dims.map_or(true, |expected| {});
+    let (are_dims_compatible, dim) = match (D::NDIM, maybe_1d, multi_channel) {
+        (Some(ndim), false, false) => {
+            // for example a 3d mat with shape (2,3,4) and data type CV_8UC1 maps to a ndarray with
+            // the same shape (2,3,4)
+            (ndim == mat_dims as usize, ndim)
+        }
+        (Some(ndim), false, true) => {
+            // for example a 3d mat with shape (2,3,4) and data type CV_8UC3 maps to a ndarray with
+            // shape (2,3,4,3)
+            (ndim == (mat_dims as usize + 1), ndim)
+        }
+        (Some(ndim), true, false) => {
+            // for example a 2d mat with shape (1,12) and data type CV_8UC1 can map to ndarray with
+            // shapes (12) or (1,12) or (12,1)
+            // So either a 1d or 2d ndarray is compatible
+            (ndim == 1 || ndim == 2, ndim)
+        }
+        (Some(ndim), true, true) => {
+            // for example a 2d mat with shape (1,12) and data type CV_8UC3 can map to ndarray with
+            // shapes (12,3) or (1,12,3) or (12,1,3)
+            // So either a 2d or 3d ndarray is compatible
+            (ndim == 2 || ndim == 3, ndim)
+        }
+        (None, false, false) => {
+            // Dynamic dimension ndarray is always compatible but we need to determine the final dims
+            (true, mat_dims as usize)
+        }
+        (None, false, true) => {
+            // if multi channel we need to add an extra dim
+            (true, mat_dims as usize + 1)
+        }
+        (None, true, false) => {
+            // It's probably better to return 1d and let the user upcast to 2d if they want to
+            (true, 1)
+        }
+        (None, true, true) => {
+            // if multi channel we need to add an extra dim It's probably better to return 2d and let the user upcast to 3d if they want to
+            (true, 2)
+        }
+        _ => (false, 0),
+    };
 
-    let mat_actual_dims = if maybe_1d { 1 } else { mat_dims };
+    let multi_channel_1d = maybe_1d && multi_channel && D::NDIM.is_some_and(|d| d == 2);
 
-    // If the mat is multi channel we add an extra dimension at the end for channels in ndarray
-    let final_dims = if multi_channel {
-        mat_actual_dims + 1
-    } else {
-        mat_actual_dims
-    } as usize;
+    if !are_dims_compatible {
+        return Err(Report::new(NdCvError).attach(format!(
+            "Incompatible dimensions: Mat with dims {} (rows {}, cols {}, channels {}) cannot be converted to ndarray with dims {:?}",
+            mat_dims,
+            mat.rows(),
+            mat.cols(),
+            channels,
+            D::NDIM,
+        )));
+    }
+
+    let mat_size = mat.mat_size();
 
     use ndarray::ShapeBuilder;
-    let mat_size = mat.mat_size();
-    let shape = if multi_channel {
-        let sizes = (0..mat_actual_dims)
-            .map(|i| mat_size.get(i as i32).change_context(NdCvError))
-            .chain([Ok(channels)])
-            .map(|x| x.map(|x| x as usize))
-            .take(final_dims)
-            .collect::<Result<Vec<_>, NdCvError>>()
-            .change_context(NdCvError)?;
-        let strides = (0..(mat_actual_dims - 1))
-            .map(|i| mat.step1(i as i32).change_context(NdCvError))
-            .chain([Ok(channels as usize), Ok(if channels == 1 { 0 } else { 1 })])
-            .take(final_dims)
-            .collect::<Result<Vec<_>, NdCvError>>()
-            .change_context(NdCvError)?;
-        sizes.strides(strides)
-    } else {
-        let sizes: Vec<_> = [mat_size.get(0).change_context(NdCvError)? as usize]
-            .into_iter()
-            .chain(core::iter::repeat(1))
-            .take(final_dims)
-            .collect();
-        let strides: Vec<_> = [mat.step1(0).change_context(NdCvError)?]
-            .into_iter()
-            .chain(core::iter::repeat(0))
-            .take(final_dims)
-            .collect();
-        sizes.strides(strides)
-    };
+    let sizes = (0..(mat.dims() - multi_channel_1d as i32))
+        .map(|i| mat_size.get(i).change_context(NdCvError))
+        .chain([Ok(channels)])
+        .map(|x| x.map(|x| x as usize))
+        .take(dim)
+        .collect::<Result<Vec<_>, NdCvError>>()
+        .change_context(NdCvError)?;
+    let strides = (0..(mat.dims() - 1 - multi_channel_1d as i32))
+        .map(|i| mat.step1(i as i32).change_context(NdCvError))
+        .chain([Ok(channels as usize), Ok(1)])
+        .take(dim)
+        .collect::<Result<Vec<_>, NdCvError>>()
+        .change_context(NdCvError)?;
+    let shape = sizes.strides(strides);
 
     use ::tap::*;
     let raw_array = unsafe {

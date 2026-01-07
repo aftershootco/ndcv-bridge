@@ -1,4 +1,4 @@
-# ndcv-brdige
+# ndcv-bridge
 
 Ndarray - Opencv Bridge
 

@@ -106,7 +106,7 @@ fn test_roi_zero_padded() {
     let arr = ndarray::Array2::<u8>::ones((10, 10));
     let original = Aabb2::from_xywh(1.0, 1.0, 3.0, 3.0);
     let clamp = Aabb2::from_xywh(0.0, 0.0, 10.0, 10.0);
-    let padded = original.padding(2.0).clamp(&clamp).unwrap();
+    let padded = original.padding(2.0).clamp(clamp).unwrap();
     let (padded_result, padded_segment) = arr.roi_zero_padded(original.cast(), padded.cast());
     assert_eq!(padded_result, bounding_box::Aabb2::from_xywh(0, 0, 6, 6));
     assert_eq!(padded_segment.shape(), &[6, 6]);
@@ -126,7 +126,7 @@ pub fn bbox_clamp_failure_preload() {
         .tap(|bbox| {
             println!("Scaled bbox: {:?}", bbox);
         })
-        .clamp(&clamp)
+        .clamp(clamp)
         .tap(|bbox| {
             println!("Clamped bbox: {:?}", bbox);
         })
@@ -142,7 +142,7 @@ pub fn bbox_clamp_failure_preload_2() {
     let clamp = Aabb2::from_xywh(0.0, 0.0, 512.0, 512.0);
     let padded = bbox
         .scale(nalgebra::Vector2::new(1.2, 1.2))
-        .clamp(&clamp)
+        .clamp(clamp)
         .unwrap();
     let (_bbox, _segment) = segment_mask.roi_zero_padded(bbox.cast(), padded.cast());
 }
@@ -152,7 +152,7 @@ fn test_roi_zero_padded_3d() {
     let arr = ndarray::Array3::<u8>::ones((10, 10, 3));
     let original = Aabb2::from_xywh(1.0, 1.0, 3.0, 3.0);
     let clamp = Aabb2::from_xywh(0.0, 0.0, 10.0, 10.0);
-    let padded = original.padding(2.0).clamp(&clamp).unwrap();
+    let padded = original.padding(2.0).clamp(clamp).unwrap();
     let (padded_result, padded_segment) = arr.roi_zero_padded(original.cast(), padded.cast());
     assert_eq!(padded_result, bounding_box::Aabb2::from_xywh(0, 0, 6, 6));
     assert_eq!(padded_segment.shape(), &[6, 6, 3]);

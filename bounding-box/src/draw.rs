@@ -54,7 +54,7 @@ impl Drawable<Array3<u8>> for Aabb2<usize> {
         let left = Aabb2::from_x1y1x2y2(x1y1.x, x1y1.y, x1y2.x + thickness, x1y2.y);
         let right = Aabb2::from_x1y1x2y2(x2y1.x, x2y1.y, x2y2.x + thickness, x2y2.y + thickness);
         let canvas_bbox = Aabb2::from_x1y1x2y2(0, 0, canvas.dim().1 - 1, canvas.dim().0 - 1);
-        let lines = [top, bottom, left, right].map(|bbox| bbox.clamp(&canvas_bbox));
+        let lines = [top, bottom, left, right].map(|bbox| bbox.clamp(canvas_bbox));
         lines.into_iter().flatten().for_each(|line| {
             canvas
                 .roi_mut(line)

@@ -60,7 +60,7 @@ where
         }
         let bbox = first.1;
         for item in combined.iter_mut().skip(i + 1) {
-            if bbox.iou(&item.1) > nms_threshold {
+            if bbox.iou(item.1) > nms_threshold {
                 item.3 = false
             }
         }

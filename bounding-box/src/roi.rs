@@ -217,7 +217,7 @@ impl<'a> MultiRoi<'a, Vec<ArrayView3<'a, u8>>> for Array3<u8> {
             .iter()
             .map(|aabb| {
                 let slice_arg =
-                    bbox_to_slice_arg(aabb.clamp(&outer_aabb).ok_or(RoiError::RoiOutOfBounds {
+                    bbox_to_slice_arg(aabb.clamp(outer_aabb).ok_or(RoiError::RoiOutOfBounds {
                         max: outer_aabb,
                         got: *aabb,
                     })?);
@@ -236,7 +236,7 @@ impl<'a, 'b> MultiRoi<'a, Vec<ArrayView3<'b, u8>>> for ArrayView3<'b, u8> {
             .iter()
             .map(|aabb| {
                 let slice_arg =
-                    bbox_to_slice_arg(aabb.clamp(&outer_aabb).ok_or(RoiError::RoiOutOfBounds {
+                    bbox_to_slice_arg(aabb.clamp(outer_aabb).ok_or(RoiError::RoiOutOfBounds {
                         max: outer_aabb,
                         got: *aabb,
                     })?);

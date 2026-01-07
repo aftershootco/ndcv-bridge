@@ -86,7 +86,6 @@ impl<T: bytemuck::Pod + num::Zero + bounding_box::Num> NdRoiZeroPadded<T, ndarra
         let original_roi_in_padded = original.move_origin(padded_top_left);
 
         let original_segment = self.roi(original).expect("original roi should be valid");
-        // let mut padded_segment = bbox_zeros_ndarray_3d::<T>(&padded, self.len_of(ndarray::Axis(2)));
         let mut padded_segment = ndarray::Array3::<T>::zeros((
             padded.height(),
             padded.width(),

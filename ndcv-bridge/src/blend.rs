@@ -33,7 +33,7 @@ where
         alpha: f32,
     ) -> Result<ndarray::Array<f32, Ix3>> {
         if self.shape() != other.shape() {
-            return Err(NdCvError).attach("Shapes of image and other imagge do not match");
+            return Err(NdCvError).attach("Shapes of image and other image do not match");
         }
         if self.shape()[0] != mask.shape()[0] || self.shape()[1] != mask.shape()[1] {
             return Err(NdCvError).attach("Shapes of image and mask do not match");

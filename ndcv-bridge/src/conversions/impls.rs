@@ -208,9 +208,6 @@ pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
     use ::tap::*;
     let raw_array = unsafe {
         ndarray::RawArrayView::from_shape_ptr(shape, mat.data() as *const T)
-            .tap(|d| {
-                dbg!(d.shape());
-            })
             .into_dimensionality()
             .change_context(NdCvError)?
     };

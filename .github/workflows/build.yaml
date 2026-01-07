@@ -45,13 +45,13 @@ jobs:
     - uses: DeterminateSystems/nix-installer-action@main
 
     - name: Run codecov
-      run: nix build .#checks.x86_64-linux.hello-llvm-cov
+      run: nix build .#checks.x86_64-linux.ndcv-bridge-llvm-cov
 
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v4.0.1
       with:
         flags: unittests
-        name: codecov-hello
+        name: codecov-ndcv-bridge
         fail_ci_if_error: true
         token: ${{ secrets.CODECOV_TOKEN }}
         files: ./result

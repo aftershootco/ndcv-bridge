@@ -1,5 +1,3 @@
-#[cfg(feature = "compat-bbox")]
-pub mod bbox;
 pub mod draw;
 pub mod nms;
 pub mod roi;
@@ -299,7 +297,7 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         T2: Num + simba::scalar::SubsetOf<T>,
     {
         Self::try_cast(self)
-            .expect(format!("Failed to cast to Aabb<{}>", std::any::type_name::<T2>()).as_str())
+            .unwrap_or_else(|| panic!("Failed to cast to Aabb<{}>", std::any::type_name::<T2>()))
     }
 
     // pub fn as_<T2>(&self) -> Option<Aabb<T2, D>>
@@ -597,13 +595,11 @@ mod boudning_box_tests {
                         i, j
                     );
                 }
-            } else {
-                if (2..=5).contains(&i) && (3..=4).contains(&j) {
-                    panic!(
-                        "Point ({}, {}) should be contained in the bounding box",
-                        i, j
-                    );
-                }
+            } else if (2..=5).contains(&i) && (3..=4).contains(&j) {
+                panic!(
+                    "Point ({}, {}) should be contained in the bounding box",
+                    i, j
+                );
             }
         }
     }

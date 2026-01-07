@@ -111,7 +111,7 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
     Ok(mat)
 }
 
-pub unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
+pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
     mat: &opencv::core::Mat,
 ) -> Result<ndarray::ArrayView<'_, T, D>, NdCvError> {
     let depth = mat.depth();
@@ -172,7 +172,6 @@ pub unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
             // if multi channel we need to add an extra dim It's probably better to return 2d and let the user upcast to 3d if they want to
             (true, 2)
         }
-        _ => (false, 0),
     };
 
     let multi_channel_1d = maybe_1d && multi_channel && D::NDIM.is_some_and(|d| d == 2);
@@ -199,7 +198,7 @@ pub unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
         .collect::<Result<Vec<_>, NdCvError>>()
         .change_context(NdCvError)?;
     let strides = (0..(mat.dims() - 1 - multi_channel_1d as i32))
-        .map(|i| mat.step1(i as i32).change_context(NdCvError))
+        .map(|i| mat.step1(i).change_context(NdCvError))
         .chain([Ok(channels as usize), Ok(1)])
         .take(dim)
         .collect::<Result<Vec<_>, NdCvError>>()
@@ -266,15 +265,13 @@ fn mat_test_all_types() {
     .unwrap();
     print_all_mat(&mat1, "mat1");
     print_all_mat(&mat1a, "mat1a");
-    // print_all_mat(&mat2, "mat2");
+    print_all_mat(&mat2, "mat2");
     print_all_mat(&mat2a, "mat2a");
-    // print_all_mat(&mat2b, "mat2b");
-    // print_all_mat(&mat2c, "mat2c");
-    // print_all_mat(&mat3, "mat3");
-    // print_all_mat(&mat3a, "mat3a");
-    // print_all_mat(&mat3b, "mat3b");
-    // print_all_mat(&mat4, "mat4");
-    // print_all_mat(&mat4a, "mat4a");
-    dbg!(&mat1a);
-    dbg!(mat2a);
+    print_all_mat(&mat2b, "mat2b");
+    print_all_mat(&mat2c, "mat2c");
+    print_all_mat(&mat3, "mat3");
+    print_all_mat(&mat3a, "mat3a");
+    print_all_mat(&mat3b, "mat3b");
+    print_all_mat(&mat4, "mat4");
+    print_all_mat(&mat4a, "mat4a");
 }

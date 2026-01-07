@@ -267,7 +267,6 @@ impl<'a> SafeArrays<'a> {
     ///     ("test_tensor2", array.view()),
     /// ]).unwrap();
     /// ```
-
     pub fn from_ndarrays<
         K: AsRef<str>,
         T: STDtype,

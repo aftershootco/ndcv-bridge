@@ -27,7 +27,7 @@ pub mod orient;
 pub use blend::NdBlend;
 pub use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 pub use fir::NdFir;
-// pub use gaussian::{BorderType, NdCvGaussianBlur, NdCvGaussianBlurInPlace};
+pub use gaussian::{BorderType, NdCvGaussianBlur, NdCvGaussianBlurInPlace};
 pub use roi::{NdRoiZeroPadded, Roi as NdRoi, RoiMut as NdRoiMut};
 
 #[cfg(feature = "opencv")]

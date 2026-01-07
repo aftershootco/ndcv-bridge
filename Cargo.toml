@@ -5,13 +5,14 @@ members = [
   "ndarray-resize",
   "ndarray-safetensors",
   "ndcv-bridge",
-  "bbox",
 ]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
 
+# [patch.crates-io]
+# paste = { package = "pastey", version = "*" }
 
 [workspace.dependencies]
 divan = { version = "0.1.21" }

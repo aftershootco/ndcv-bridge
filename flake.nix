@@ -38,7 +38,7 @@
           ];
         };
         inherit (pkgs) lib;
-        cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
+        # cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         name = "ndcv-bridge";
 
         stableToolchain = pkgs.rust-bin.stable.latest.default;
@@ -65,18 +65,19 @@
             pname = name;
             stdenv = p: p.clangStdenv;
             doCheck = false;
-            # LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
-            # nativeBuildInputs = with pkgs; [
-            #   cmake
-            #   llvmPackages.libclang.lib
-            # ];
+            LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+            nativeBuildInputs = with pkgs; [
+              llvmPackages.libclang.lib
+              llvmPackages.libllvm.dev
+              pkg-config
+            ];
             buildInputs = with pkgs;
               [
                 opencv
               ]
               ++ (lib.optionals pkgs.stdenv.isDarwin [
                 libiconv
-                apple-sdk_13
+                apple-sdk_26
               ]);
           }
           // (lib.optionalAttrs pkgs.stdenv.isLinux {
@@ -145,7 +146,7 @@
                   cargo-deny
                 ]
                 ++ (lib.optionals pkgs.stdenv.isDarwin [
-                  apple-sdk_13
+                  apple-sdk_26
                 ]);
             });
         };

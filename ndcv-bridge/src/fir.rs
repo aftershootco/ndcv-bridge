@@ -131,7 +131,7 @@ pub fn to_pixel_type<T: seal::Sealed>(u: usize) -> Result<PixelType> {
         ("f32", 2) => Ok(PixelType::F32x2),
         ("f32", 3) => Ok(PixelType::F32x3),
         ("f32", 4) => Ok(PixelType::F32x4),
-        _ => Err(Report::new(NdFirError).attach_printable("Unsupported pixel type")),
+        _ => Err(Report::new(NdFirError).attach("Unsupported pixel type")),
     }
 }
 
@@ -147,24 +147,24 @@ impl<S: ndarray::Data<Elem = T>, T: seal::Sealed + bytemuck::Pod, D: ndarray::Di
     NdAsImage<T, D> for ndarray::ArrayBase<S, D>
 {
     /// Clones self and makes a new image
-    fn as_image_ref(&self) -> Result<ImageRef> {
+    fn as_image_ref(&self) -> Result<ImageRef<'_>> {
         let shape = self.shape();
         let rows = *shape
             .first()
-            .ok_or_else(|| Report::new(NdFirError).attach_printable("Failed to get rows"))?
+            .ok_or_else(|| Report::new(NdFirError).attach("Failed to get rows"))?
             as u32;
         let cols = *shape.get(1).unwrap_or(&1) as u32;
         let channels = *shape.get(2).unwrap_or(&1);
         let data = self
             .as_slice()
             .ok_or(NdFirError)
-            .attach_printable("The ndarray is non continuous")?;
+            .attach("The ndarray is non continuous")?;
         let data_bytes: &[u8] = bytemuck::cast_slice(data);
 
         let pixel_type = to_pixel_type::<T>(channels)?;
         ImageRef::new(cols, rows, data_bytes, pixel_type)
             .change_context(NdFirError)
-            .attach_printable("Failed to create Image from ndarray")
+            .attach("Failed to create Image from ndarray")
     }
 }
 
@@ -178,20 +178,20 @@ impl<S: ndarray::DataMut<Elem = T>, T: seal::Sealed + bytemuck::Pod, D: ndarray:
         let shape = self.shape();
         let rows = *shape
             .first()
-            .ok_or_else(|| Report::new(NdFirError).attach_printable("Failed to get rows"))?
+            .ok_or_else(|| Report::new(NdFirError).attach("Failed to get rows"))?
             as u32;
         let cols = *shape.get(1).unwrap_or(&1) as u32;
         let channels = *shape.get(2).unwrap_or(&1);
         let data = self
             .as_slice_mut()
             .ok_or(NdFirError)
-            .attach_printable("The ndarray is non continuous")?;
+            .attach("The ndarray is non continuous")?;
         let data_bytes: &mut [u8] = bytemuck::cast_slice_mut(data);
 
         let pixel_type = to_pixel_type::<T>(channels)?;
         Image::from_slice_u8(cols, rows, data_bytes, pixel_type)
             .change_context(NdFirError)
-            .attach_printable("Failed to create Image from ndarray")
+            .attach("Failed to create Image from ndarray")
     }
 }
 

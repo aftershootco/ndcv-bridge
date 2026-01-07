@@ -1,4 +1,4 @@
-use crate::{prelude_::*, NdAsImage, NdAsImageMut};
+use crate::{NdAsImage, NdAsImageMut, prelude_::*};
 
 /// Resize ndarray using OpenCV resize functions
 pub trait NdCvResize<T, D>: seal::SealedInternal {

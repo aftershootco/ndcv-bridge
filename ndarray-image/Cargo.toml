@@ -2,7 +2,8 @@
 name = "ndarray-image"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
 
 [dependencies]
 image = "0.25.6"
-ndarray = "0.16.1"
+ndarray = { workspace = true }

@@ -2,6 +2,7 @@
 name = "ndcv-bridge"
 version.workspace = true
 edition.workspace = true
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 bounding-box.workspace = true
@@ -15,8 +16,11 @@ opencv = { workspace = true, optional = true }
 rayon = "1.10.0"
 thiserror.workspace = true
 tracing = "0.1.41"
-wide = "0.7.32"
+wide = "1.1.1"
+tap = { workspace = true }
 img-parts.workspace = true
+pretty_assertions = "1.4.1"
+aquamarine = "0.6.0"
 
 [dev-dependencies]
 divan.workspace = true

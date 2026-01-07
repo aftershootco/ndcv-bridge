@@ -102,7 +102,7 @@ impl<T: ndarray::RawData + ndarray::Data<Elem = u8>> NdCvFindContours<u8> for Ar
             opencv::core::Point::new(0, 0),
         )
         .change_context(NdCvError)
-        .attach_printable("Failed to find contours")?;
+        .attach("Failed to find contours")?;
         let mut result: Vec<Vec<Point2<i32>>> = Vec::new();
 
         for i in 0..contours.len() {
@@ -133,7 +133,7 @@ impl<T: ndarray::RawData + ndarray::Data<Elem = u8>> NdCvFindContours<u8> for Ar
             opencv::core::Point::new(0, 0),
         )
         .change_context(NdCvError)
-        .attach_printable("Failed to find contours with hierarchy")?;
+        .attach("Failed to find contours with hierarchy")?;
         let mut contour_list: Vec<Vec<Point2<i32>>> = Vec::new();
 
         for i in 0..contours.len() {
@@ -180,7 +180,7 @@ where
 
         opencv::imgproc::contour_area(&cv_contour, oriented)
             .change_context(NdCvError)
-            .attach_printable("Failed to calculate contour area")
+            .attach("Failed to calculate contour area")
     }
 }
 

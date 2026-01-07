@@ -18,11 +18,10 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: DeterminateSystems/nix-installer-action@main
-    - uses: DeterminateSystems/magic-nix-cache-action@main
     - uses: DeterminateSystems/flake-checker-action@main
 
     - name: Generate docs
-      run: nix build .#checks.x86_64-linux.hello-docs
+      run: nix build .#checks.x86_64-linux.ndcv-bridge-docs
 
     - name: Setup Pages
       uses: actions/configure-pages@v5

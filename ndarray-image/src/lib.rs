@@ -21,10 +21,8 @@ mod rgb8 {
         if channels != 3 {
             return Err(super::shape_error());
         }
-        Ok(
-            image::RgbImage::from_raw(width as u32, height as u32, data.to_vec()).ok_or(
-                ndarray::ShapeError::from_kind(ndarray::ErrorKind::IncompatibleShape),
-            )?,
+        image::RgbImage::from_raw(width as u32, height as u32, data.to_vec()).ok_or(
+            ndarray::ShapeError::from_kind(ndarray::ErrorKind::IncompatibleShape),
         )
     }
 }
@@ -49,10 +47,8 @@ mod rgba8 {
         if channels != 4 {
             return Err(super::shape_error());
         }
-        Ok(
-            image::RgbaImage::from_raw(width as u32, height as u32, data.to_vec()).ok_or(
-                ndarray::ShapeError::from_kind(ndarray::ErrorKind::IncompatibleShape),
-            )?,
+        image::RgbaImage::from_raw(width as u32, height as u32, data.to_vec()).ok_or(
+            ndarray::ShapeError::from_kind(ndarray::ErrorKind::IncompatibleShape),
         )
     }
 }
@@ -74,10 +70,8 @@ mod gray8 {
     pub(super) fn ndarray_to_image(array: &ndarray::ArrayView2<u8>) -> Result<image::GrayImage> {
         let (height, width) = array.dim();
         let data = array.as_slice().ok_or_else(super::shape_error)?;
-        Ok(
-            image::GrayImage::from_raw(width as u32, height as u32, data.to_vec()).ok_or(
-                ndarray::ShapeError::from_kind(ndarray::ErrorKind::IncompatibleShape),
-            )?,
+        image::GrayImage::from_raw(width as u32, height as u32, data.to_vec()).ok_or(
+            ndarray::ShapeError::from_kind(ndarray::ErrorKind::IncompatibleShape),
         )
     }
 }
@@ -104,10 +98,8 @@ mod gray_alpha8 {
         if channels != 2 {
             return Err(super::shape_error());
         }
-        Ok(
-            image::GrayAlphaImage::from_raw(width as u32, height as u32, data.to_vec()).ok_or(
-                ndarray::ShapeError::from_kind(ndarray::ErrorKind::IncompatibleShape),
-            )?,
+        image::GrayAlphaImage::from_raw(width as u32, height as u32, data.to_vec()).ok_or(
+            ndarray::ShapeError::from_kind(ndarray::ErrorKind::IncompatibleShape),
         )
     }
 }

@@ -17,8 +17,8 @@ pub mod connected_components;
 pub mod contours;
 #[cfg(feature = "opencv")]
 pub mod conversions;
-// #[cfg(feature = "opencv")]
-// pub mod gaussian;
+#[cfg(feature = "opencv")]
+pub mod gaussian;
 #[cfg(feature = "opencv")]
 pub mod resize;
 
@@ -27,8 +27,8 @@ pub mod orient;
 pub use blend::NdBlend;
 pub use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 pub use fir::NdFir;
-// pub use gaussian::{BorderType, NdCvGaussianBlur, NdCvGaussianBlurInPlace};
-pub use roi::{NdRoi, NdRoiMut, NdRoiZeroPadded};
+pub use gaussian::{BorderType, NdCvGaussianBlur, NdCvGaussianBlurInPlace};
+pub use roi::{NdRoiZeroPadded, Roi as NdRoi, RoiMut as NdRoiMut};
 
 #[cfg(feature = "opencv")]
 pub use contours::{
@@ -48,6 +48,7 @@ pub use resize::{Interpolation, NdCvResize};
 pub(crate) mod prelude_ {
     pub use crate::NdCvError;
     pub use error_stack::*;
+    pub type Result<T, C> = core::result::Result<T, Report<C>>;
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -69,7 +70,7 @@ pub fn type_depth<T>() -> i32 {
 }
 
 #[cfg(feature = "opencv")]
-pub fn depth_type(depth: i32) -> &'static str {
+pub const fn depth_type(depth: i32) -> &'static str {
     match depth {
         opencv::core::CV_8U => "u8",
         opencv::core::CV_8S => "i8",

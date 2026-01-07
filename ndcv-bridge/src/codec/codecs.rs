@@ -2,7 +2,7 @@ use super::decode::Decoder;
 use super::encode::Encoder;
 use crate::NdCvError;
 use crate::conversions::matref::MatRef;
-use error_stack::*;
+use crate::prelude_::*;
 use img_parts::{
     Bytes,
     jpeg::{Jpeg, markers},
@@ -72,7 +72,7 @@ impl CvTiffEncFlags {
     fn to_cv_param_list(&self) -> Vector<i32> {
         let iter = [(
             ImwriteFlags::IMWRITE_TIFF_COMPRESSION as i32,
-            self.compression.map(|i| i as i32),
+            self.compression,
         )]
         .into_iter()
         .filter_map(|(flag, opt)| opt.map(|o| [flag, o]))

@@ -47,6 +47,9 @@ pub struct AxisAlignedBoundingBox<T: Num, const D: usize> {
 pub type Aabb<T, const D: usize> = AxisAlignedBoundingBox<T, D>;
 pub type Aabb2<T> = AxisAlignedBoundingBox<T, 2>;
 pub type Aabb3<T> = AxisAlignedBoundingBox<T, 3>;
+pub type BBox<T, const D: usize> = AxisAlignedBoundingBox<T, D>;
+pub type BBox2<T> = AxisAlignedBoundingBox<T, 2>;
+pub type BBox3<T> = AxisAlignedBoundingBox<T, 3>;
 
 impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
     // Panics if max < min
@@ -63,6 +66,7 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         }
         Some(Self::from_min_max_vertices(min_point, max_point))
     }
+
     pub fn new_point_size(point: Point<T, D>, size: SVector<T, D>) -> Self {
         Self { point, size }
     }
@@ -82,10 +86,10 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         // find the closest and farthest points from the origin
         let min = points
             .iter()
-            .reduce(|acc, p| (acc > p).then_some(p).unwrap_or(acc))?;
+            .reduce(|acc, p| if acc > p { p } else { acc })?;
         let max = points
             .iter()
-            .reduce(|acc, p| (acc < p).then_some(p).unwrap_or(acc))?;
+            .reduce(|acc, p| if acc < p { p } else { acc })?;
         Some(Self::from_min_max_vertices(*min, *max))
     }
 
@@ -101,6 +105,7 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         self.point + self.size / (T::one() + T::one())
     }
 
+    #[must_use]
     pub fn padding(mut self, padding: T) -> Self
     where
         T: core::ops::AddAssign,
@@ -118,11 +123,13 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         self
     }
 
-    pub fn translate(&mut self, translation: SVector<T, D>)
+    #[must_use]
+    pub fn translate(mut self, translation: SVector<T, D>) -> Self
     where
         T: core::ops::AddAssign,
     {
         self.point += translation;
+        self
     }
 
     pub fn min_vertex(&self) -> Point<T, D> {
@@ -134,6 +141,24 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         T: core::ops::AddAssign,
     {
         self.point + self.size
+    }
+
+    #[must_use]
+    pub fn move_to(mut self, point: Point<T, D>) -> Self
+    where
+        T: core::ops::SubAssign,
+    {
+        self.point = point;
+        self
+    }
+
+    #[must_use]
+    pub fn move_origin(mut self, origin: Point<T, D>) -> Self
+    where
+        T: core::ops::SubAssign,
+    {
+        self.point -= origin.coords;
+        self
     }
 
     pub fn contains_point(&self, point: &Point<T, D>) -> bool
@@ -148,6 +173,7 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         *point >= min && *point <= max
     }
 
+    #[must_use = "Returns a new scaled bounding box"]
     pub fn scale(self, vector: SVector<T, D>) -> Self
     where
         T: core::ops::MulAssign,
@@ -177,7 +203,8 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         other_min >= self_min && other_max <= self_max
     }
 
-    pub fn clamp(&self, other: &Self) -> Option<Self>
+    #[must_use = "Returns a new clamped bounding box or None if there is no intersection"]
+    pub fn clamp(self, other: Self) -> Option<Self>
     where
         T: core::ops::AddAssign,
         T: core::ops::SubAssign,
@@ -185,17 +212,18 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         T: nalgebra::SimdPartialOrd,
         T: nalgebra::SimdValue,
     {
-        if other.contains_bbox(self) {
-            return Some(*self);
+        if other.contains_bbox(&self) {
+            return Some(self);
         }
         self.intersection(other)
     }
 
-    pub fn component_clamp(&self, min: T, max: T) -> Self
+    #[must_use = "Returns a new component-wise clamped bounding box"]
+    pub fn component_clamp(self, min: T, max: T) -> Self
     where
         T: PartialOrd,
     {
-        let mut this = *self;
+        let mut this = self;
         this.point.iter_mut().for_each(|x| {
             *x = nalgebra::clamp(*x, min, max);
         });
@@ -205,7 +233,8 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         this
     }
 
-    pub fn merge(&self, other: &Self) -> Self
+    #[must_use = "Returns a new merged bounding box"]
+    pub fn merge(self, other: Self) -> Self
     where
         T: core::ops::AddAssign,
         T: core::ops::SubAssign,
@@ -218,7 +247,7 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         Self::new(min, max)
     }
 
-    pub fn union(&self, other: &Self) -> T
+    pub fn union(self, other: Self) -> T
     where
         T: core::ops::AddAssign,
         T: core::ops::SubAssign,
@@ -233,7 +262,8 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
                 .unwrap_or(T::zero())
     }
 
-    pub fn intersection(&self, other: &Self) -> Option<Self>
+    #[must_use = "Returns a new intersection bounding box or None if there is no intersection"]
+    pub fn intersection(self, other: Self) -> Option<Self>
     where
         T: core::ops::AddAssign,
         T: core::ops::SubAssign,
@@ -246,7 +276,8 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         Self::try_new(inter_min, inter_max)
     }
 
-    pub fn denormalize(&self, factor: nalgebra::SVector<T, D>) -> Self
+    #[must_use = "Returns a new denormalized bounding box"]
+    pub fn denormalize(self, factor: nalgebra::SVector<T, D>) -> Self
     where
         T: core::ops::MulAssign,
         T: core::ops::AddAssign,
@@ -259,7 +290,8 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         }
     }
 
-    pub fn try_cast<T2>(&self) -> Option<Aabb<T2, D>>
+    #[must_use = "Returns a new casted bounding box or None if the cast fails"]
+    pub fn try_cast<T2>(self) -> Option<Aabb<T2, D>>
     where
         // T: num::NumCast,
         T2: Num + simba::scalar::SubsetOf<T>,
@@ -268,6 +300,16 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
             point: Point::from(self.point.coords.try_cast::<T2>()?),
             size: self.size.try_cast::<T2>()?,
         })
+    }
+
+    #[must_use = "Returns a new casted bounding box"]
+    pub fn cast<T2>(self) -> Aabb<T2, D>
+    where
+        // T: num::NumCast,
+        T2: Num + simba::scalar::SubsetOf<T>,
+    {
+        Self::try_cast(self)
+            .unwrap_or_else(|| panic!("Failed to cast to Aabb<{}>", std::any::type_name::<T2>()))
     }
 
     // pub fn as_<T2>(&self) -> Option<Aabb<T2, D>>
@@ -279,14 +321,15 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
     //         size: self.size.as_(),
     //     })
     // }
-    pub fn measure(&self) -> T
+
+    pub fn measure(self) -> T
     where
         T: core::ops::MulAssign,
     {
         self.size.product()
     }
 
-    pub fn iou(&self, other: &Self) -> T
+    pub fn iou(self, other: Self) -> T
     where
         T: core::ops::AddAssign,
         T: core::ops::SubAssign,
@@ -306,9 +349,31 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
             let intersection = Aabb::new(inter_min, inter_max).measure();
             intersection / (self.measure() + other.measure() - intersection)
         } else {
-            return T::zero();
+            T::zero()
         }
     }
+
+    pub fn is_positive(&self) -> bool
+    where
+        T: PartialOrd,
+        T: core::ops::AddAssign,
+    {
+        self.point >= Point::origin()
+    }
+}
+
+#[test]
+fn test_is_positive() {
+    let bbox = Aabb2::from_xywh(1, 1, 2, 2);
+    assert!(bbox.is_positive());
+    let bbox = Aabb2::from_xywh(0, 0, 2, 2);
+    assert!(bbox.is_positive());
+    let bbox = Aabb2::from_xywh(-1, -1, 2, 2);
+    assert!(!bbox.is_positive());
+    let bbox = Aabb2::from_xywh(-1, 1, 2, 2);
+    assert!(!bbox.is_positive());
+    let bbox = Aabb2::from_xywh(1, -1, 2, 2);
+    assert!(!bbox.is_positive());
 }
 
 impl<T: Num> Aabb2<T> {
@@ -387,6 +452,14 @@ impl<T: Num> Aabb2<T> {
     {
         self.measure()
     }
+
+    pub fn width(&self) -> T {
+        self.size.x
+    }
+
+    pub fn height(&self) -> T {
+        self.size.y
+    }
 }
 
 impl<T: Num> Aabb3<T> {
@@ -395,6 +468,15 @@ impl<T: Num> Aabb3<T> {
         T: core::ops::MulAssign,
     {
         self.measure()
+    }
+}
+
+impl<T: core::fmt::Display, const D: usize> core::fmt::Display for Aabb<T, D>
+where
+    T: Num,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Aabb(point: {}, size: {})", self.point, self.size)
     }
 }
 
@@ -423,8 +505,8 @@ mod boudning_box_tests {
 
         let this = Aabb2::new_point_size(point1, size1);
         let other = Aabb2::new_point_size(point2, size2);
-        let inter = this.intersection(&other);
-        let merged = this.merge(&other);
+        let inter = this.intersection(other);
+        let merged = this.merge(other);
         assert_ne!(inter, Some(merged))
     }
 
@@ -492,7 +574,7 @@ mod boudning_box_tests {
         let point4 = Point2::new(7.0, 8.0);
         let bbox2 = AxisAlignedBoundingBox::new(point3, point4);
 
-        let union_bbox = bbox1.merge(&bbox2);
+        let union_bbox = bbox1.merge(bbox2);
         assert_eq!(union_bbox.min_vertex(), Point2::new(1.0, 2.0));
         assert_eq!(union_bbox.size(), Vector2::new(6.0, 6.0));
     }
@@ -507,7 +589,7 @@ mod boudning_box_tests {
         let point4 = Point2::new(5.0, 7.0);
         let bbox2 = AxisAlignedBoundingBox::new(point3, point4);
 
-        let intersection_bbox = bbox1.intersection(&bbox2).unwrap();
+        let intersection_bbox = bbox1.intersection(bbox2).unwrap();
         assert_eq!(intersection_bbox.min_vertex(), Point2::new(3.0, 5.0));
         assert_eq!(intersection_bbox.size(), Vector2::new(1.0, 1.0));
     }
@@ -526,13 +608,11 @@ mod boudning_box_tests {
                         i, j
                     );
                 }
-            } else {
-                if (2..=5).contains(&i) && (3..=4).contains(&j) {
-                    panic!(
-                        "Point ({}, {}) should be contained in the bounding box",
-                        i, j
-                    );
-                }
+            } else if (2..=5).contains(&i) && (3..=4).contains(&j) {
+                panic!(
+                    "Point ({}, {}) should be contained in the bounding box",
+                    i, j
+                );
             }
         }
     }
@@ -541,14 +621,14 @@ mod boudning_box_tests {
     fn test_bounding_box_clamp_box_2d() {
         let bbox1 = Aabb2::from_x1y1x2y2(1, 1, 4, 4);
         let bbox2 = Aabb2::from_x1y1x2y2(2, 2, 3, 3);
-        let clamped = bbox2.clamp(&bbox1).unwrap();
+        let clamped = bbox2.clamp(bbox1).unwrap();
         assert_eq!(bbox2, clamped);
-        let clamped = bbox1.clamp(&bbox2).unwrap();
+        let clamped = bbox1.clamp(bbox2).unwrap();
         assert_eq!(bbox2, clamped);
 
         let bbox1 = Aabb2::from_x1y1x2y2(4, 5, 7, 8);
         let bbox2 = Aabb2::from_x1y1x2y2(5, 4, 8, 7);
-        let clamped = bbox1.clamp(&bbox2).unwrap();
+        let clamped = bbox1.clamp(bbox2).unwrap();
         let expected = Aabb2::from_x1y1x2y2(5, 5, 7, 7);
         assert_eq!(clamped, expected)
     }
@@ -557,14 +637,14 @@ mod boudning_box_tests {
     fn test_iou_identical_boxes() {
         let a = Aabb2::from_x1y1x2y2(1.0, 2.0, 4.0, 6.0);
         let b = Aabb2::from_x1y1x2y2(1.0, 2.0, 4.0, 6.0);
-        assert_eq!(a.iou(&b), 1.0);
+        assert_eq!(a.iou(b), 1.0);
     }
 
     #[test]
     fn test_iou_non_overlapping_boxes() {
         let a = Aabb2::from_x1y1x2y2(0.0, 0.0, 1.0, 1.0);
         let b = Aabb2::from_x1y1x2y2(2.0, 2.0, 3.0, 3.0);
-        assert_eq!(a.iou(&b), 0.0);
+        assert_eq!(a.iou(b), 0.0);
     }
 
     #[test]
@@ -572,7 +652,7 @@ mod boudning_box_tests {
         let a = Aabb2::from_x1y1x2y2(0.0, 0.0, 2.0, 2.0);
         let b = Aabb2::from_x1y1x2y2(1.0, 1.0, 3.0, 3.0);
         // Intersection area = 1, Union area = 7
-        assert!((a.iou(&b) - 1.0 / 7.0).abs() < 1e-6);
+        assert!((a.iou(b) - 1.0 / 7.0).abs() < 1e-6);
     }
 
     #[test]
@@ -580,34 +660,45 @@ mod boudning_box_tests {
         let a = Aabb2::from_x1y1x2y2(0.0, 0.0, 4.0, 4.0);
         let b = Aabb2::from_x1y1x2y2(1.0, 1.0, 3.0, 3.0);
         // Intersection area = 4, Union area = 16
-        assert!((a.iou(&b) - 0.25).abs() < 1e-6);
+        assert!((a.iou(b) - 0.25).abs() < 1e-6);
     }
 
     #[test]
     fn test_iou_edge_touching() {
         let a = Aabb2::from_x1y1x2y2(0.0, 0.0, 1.0, 1.0);
         let b = Aabb2::from_x1y1x2y2(1.0, 0.0, 2.0, 1.0);
-        assert_eq!(a.iou(&b), 0.0);
+        assert_eq!(a.iou(b), 0.0);
     }
 
     #[test]
     fn test_iou_corner_touching() {
         let a = Aabb2::from_x1y1x2y2(0.0, 0.0, 1.0, 1.0);
         let b = Aabb2::from_x1y1x2y2(1.0, 1.0, 2.0, 2.0);
-        assert_eq!(a.iou(&b), 0.0);
+        assert_eq!(a.iou(b), 0.0);
     }
 
     #[test]
     fn test_iou_zero_area_box() {
         let a = Aabb2::from_x1y1x2y2(0.0, 0.0, 0.0, 0.0);
         let b = Aabb2::from_x1y1x2y2(0.0, 0.0, 1.0, 1.0);
-        assert_eq!(a.iou(&b), 0.0);
+        assert_eq!(a.iou(b), 0.0);
     }
 
     #[test]
     fn test_specific_values() {
         let box1 = Aabb2::from_xywh(0.69482, 0.6716774, 0.07493961, 0.14968264);
         let box2 = Aabb2::from_xywh(0.41546485, 0.70290875, 0.06197411, 0.08818436);
-        assert!(box1.iou(&box2) >= 0.0);
+        assert!(box1.iou(box2) >= 0.0);
+    }
+
+    #[test]
+    fn test_move_origin() {
+        let bbox = Aabb2::from_xywh(2, 3, 4, 5);
+        let moved = bbox.move_origin(Point2::new(0, 0));
+        assert_eq!(moved.min_vertex(), Point2::new(2, 3));
+        assert_eq!(moved.size(), Vector2::new(4, 5));
+        let moved = bbox.move_origin(Point2::new(2, 3));
+        let expected = Aabb2::from_xywh(0, 0, 4, 5);
+        assert_eq!(moved, expected);
     }
 }

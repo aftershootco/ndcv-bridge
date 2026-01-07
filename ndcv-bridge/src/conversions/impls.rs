@@ -1,4 +1,5 @@
-use super::*;
+use super::type_depth;
+use crate::prelude_::*;
 use core::ffi::*;
 use opencv::core::prelude::*;
 pub(crate) unsafe fn ndarray_to_mat_regular<
@@ -13,7 +14,7 @@ pub(crate) unsafe fn ndarray_to_mat_regular<
 
     // let channels = shape.last().copied().unwrap_or(1);
     // if channels > opencv::core::CV_CN_MAX as usize {
-    //     Err(Report::new(NdCvError).attach_printable(format!(
+    //     Err(Report::new(NdCvError).attach(format!(
     //             "Number of channels({channels}) exceeds CV_CN_MAX({}) use the regular version of the function", opencv::core::CV_CN_MAX
     //         )))?;
     // }
@@ -32,13 +33,15 @@ pub(crate) unsafe fn ndarray_to_mat_regular<
     let data_ptr = input.as_ptr() as *const c_void;
 
     let typ = opencv::core::CV_MAKETYPE(type_depth::<T>(), 1);
-    let mat = opencv::core::Mat::new_nd_with_data_unsafe(
-        size.as_slice(),
-        typ,
-        data_ptr.cast_mut(),
-        Some(step.as_slice()),
-    )
-    .change_context(NdCvError)?;
+    let mat = unsafe {
+        opencv::core::Mat::new_nd_with_data_unsafe(
+            size.as_slice(),
+            typ,
+            data_ptr.cast_mut(),
+            Some(step.as_slice()),
+        )
+        .change_context(NdCvError)?
+    };
 
     Ok(mat)
 }
@@ -55,7 +58,7 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
 
     let channels = shape.last().copied().unwrap_or(1);
     if channels > opencv::core::CV_CN_MAX as usize {
-        Err(Report::new(NdCvError).attach_printable(format!(
+        Err(Report::new(NdCvError).attach(format!(
                 "Number of channels({channels}) exceeds CV_CN_MAX({}) use the regular version of the function", opencv::core::CV_CN_MAX
             )))?;
     }
@@ -65,12 +68,11 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
         // But opencv only keeps ndims - 1 strides so we can't have the column stride as that
         // will be lost
         if shape.last() != strides.get(strides.len() - 2).map(|x| *x as usize).as_ref() {
-            Err(Report::new(NdCvError).attach_printable(
-                "You cannot slice into the last axis in ndarray when converting to mat",
-            ))?;
+            Err(Report::new(NdCvError)
+                .attach("You cannot slice into the last axis in ndarray when converting to mat"))?;
         }
     } else if shape.len() == 1 {
-        return Err(Report::new(NdCvError).attach_printable(
+        return Err(Report::new(NdCvError).attach(
             "You cannot convert a 1D array to a Mat while using the consolidated version",
         ));
     }
@@ -96,13 +98,15 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
 
     let typ = opencv::core::CV_MAKETYPE(type_depth::<T>(), channels as i32);
 
-    let mat = opencv::core::Mat::new_nd_with_data_unsafe(
-        size.as_slice(),
-        typ,
-        data_ptr.cast_mut(),
-        Some(step.as_slice()),
-    )
-    .change_context(NdCvError)?;
+    let mat = unsafe {
+        opencv::core::Mat::new_nd_with_data_unsafe(
+            size.as_slice(),
+            typ,
+            data_ptr.cast_mut(),
+            Some(step.as_slice()),
+        )
+        .change_context(NdCvError)?
+    };
 
     Ok(mat)
 }
@@ -112,7 +116,7 @@ pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
 ) -> Result<ndarray::ArrayView<'_, T, D>, NdCvError> {
     let depth = mat.depth();
     if type_depth::<T>() != depth {
-        return Err(Report::new(NdCvError).attach_printable(format!(
+        return Err(Report::new(NdCvError).attach(format!(
             "Expected type Mat<{}> ({}), got Mat<{}> ({})",
             std::any::type_name::<T>(),
             type_depth::<T>(),
@@ -121,48 +125,150 @@ pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
         )));
     }
 
-    // Since a dims always returns >= 2 we can't use this to check if it's a 1D array
-    // So we compare the first axis to the total to see if its a 1D array
-    let is_1d = mat.total() as i32 == mat.rows();
-    let dims = is_1d.then_some(1).unwrap_or(mat.dims());
     let channels = mat.channels();
-    let ndarray_size = (channels != 1).then_some(dims + 1).unwrap_or(dims) as usize;
-    if let Some(ndim) = D::NDIM {
-        // When channels is not 1,
-        // the last dimension is the channels
-        // Array1 -> Mat(ndims = 1, channels = 1)
-        // Array2 -> Mat(ndims = 1, channels = X)
-        // Array2 -> Mat(ndims = 2, channels = 1)
-        // Array3 -> Mat(ndims = 2, channels = X)
-        // Array3 -> Mat(ndims = 3, channels = 1)
-        // ...
-        if ndim != dims as usize && channels == 1 {
-            return Err(Report::new(NdCvError)
-                .attach_printable(format!("Expected {}D array, got {}D", ndim, ndarray_size)));
+    let multi_channel = channels > 1;
+
+    let mat_dims = mat.dims(); // dims is always >= 2
+    let maybe_1d = mat_dims == 2
+        && ((mat.rows() == mat.total() as i32 && mat.cols() == 1)
+            || (mat.cols() == mat.total() as i32 && mat.rows() == 1));
+
+    let (are_dims_compatible, dim) = match (D::NDIM, maybe_1d, multi_channel) {
+        (Some(ndim), false, false) => {
+            // for example a 3d mat with shape (2,3,4) and data type CV_8UC1 maps to a ndarray with
+            // the same shape (2,3,4)
+            (ndim == mat_dims as usize, ndim)
         }
+        (Some(ndim), false, true) => {
+            // for example a 3d mat with shape (2,3,4) and data type CV_8UC3 maps to a ndarray with
+            // shape (2,3,4,3)
+            (ndim == (mat_dims as usize + 1), ndim)
+        }
+        (Some(ndim), true, false) => {
+            // for example a 2d mat with shape (1,12) and data type CV_8UC1 can map to ndarray with
+            // shapes (12) or (1,12) or (12,1)
+            // So either a 1d or 2d ndarray is compatible
+            (ndim == 1 || ndim == 2, ndim)
+        }
+        (Some(ndim), true, true) => {
+            // for example a 2d mat with shape (1,12) and data type CV_8UC3 can map to ndarray with
+            // shapes (12,3) or (1,12,3) or (12,1,3)
+            // So either a 2d or 3d ndarray is compatible
+            (ndim == 2 || ndim == 3, ndim)
+        }
+        (None, false, false) => {
+            // Dynamic dimension ndarray is always compatible but we need to determine the final dims
+            (true, mat_dims as usize)
+        }
+        (None, false, true) => {
+            // if multi channel we need to add an extra dim
+            (true, mat_dims as usize + 1)
+        }
+        (None, true, false) => {
+            // It's probably better to return 1d and let the user upcast to 2d if they want to
+            (true, 1)
+        }
+        (None, true, true) => {
+            // if multi channel we need to add an extra dim It's probably better to return 2d and let the user upcast to 3d if they want to
+            (true, 2)
+        }
+    };
+
+    let multi_channel_1d = maybe_1d && multi_channel && D::NDIM.is_some_and(|d| d == 2);
+
+    if !are_dims_compatible {
+        return Err(Report::new(NdCvError).attach(format!(
+            "Incompatible dimensions: Mat with dims {} (rows {}, cols {}, channels {}) cannot be converted to ndarray with dims {:?}",
+            mat_dims,
+            mat.rows(),
+            mat.cols(),
+            channels,
+            D::NDIM,
+        )));
     }
 
     let mat_size = mat.mat_size();
-    let sizes = (0..dims)
+
+    use ndarray::ShapeBuilder;
+    let sizes = (0..(mat.dims() - multi_channel_1d as i32))
         .map(|i| mat_size.get(i).change_context(NdCvError))
         .chain([Ok(channels)])
         .map(|x| x.map(|x| x as usize))
-        .take(ndarray_size)
+        .take(dim)
         .collect::<Result<Vec<_>, NdCvError>>()
         .change_context(NdCvError)?;
-    let strides = (0..(dims - 1))
+    let strides = (0..(mat.dims() - 1 - multi_channel_1d as i32))
         .map(|i| mat.step1(i).change_context(NdCvError))
-        .chain([
-            Ok(channels as usize),
-            Ok((channels == 1).then_some(0).unwrap_or(1)),
-        ])
-        .take(ndarray_size)
+        .chain([Ok(channels as usize), Ok(1)])
+        .take(dim)
         .collect::<Result<Vec<_>, NdCvError>>()
         .change_context(NdCvError)?;
-    use ndarray::ShapeBuilder;
     let shape = sizes.strides(strides);
-    let raw_array = ndarray::RawArrayView::from_shape_ptr(shape, mat.data() as *const T)
-        .into_dimensionality()
-        .change_context(NdCvError)?;
+
+    use ::tap::*;
+    let raw_array = unsafe {
+        ndarray::RawArrayView::from_shape_ptr(shape, mat.data() as *const T)
+            .into_dimensionality()
+            .change_context(NdCvError)?
+    };
     Ok(unsafe { raw_array.deref_into_view() })
+}
+
+#[test]
+fn mat_test_all_types() {
+    fn print_all_mat<T: opencv::core::MatTraitConst>(mat: &T, name: impl AsRef<str>) {
+        println!(
+            "Mat({:^10}): dims {} rows {:>3}, cols {:>3}, total {:>3}, channels {}, depth {}",
+            name.as_ref(),
+            mat.dims(),
+            mat.rows(),
+            mat.cols(),
+            mat.total(),
+            mat.channels(),
+            mat.depth()
+        );
+    }
+    let mat1 = opencv::core::Mat::from_slice(&[1u8, 2, 3, 4, 5, 6, 7, 8]).unwrap();
+    let mat1a =
+        opencv::core::Mat::new_nd_with_default(&[8], opencv::core::CV_8UC1, (10).into()).unwrap();
+
+    let mat2 = opencv::core::Mat::from_slice_2d(&[[1u8, 2, 3, 4], [5, 6, 7, 8]]).unwrap();
+    let mat2a = opencv::core::Mat::new_nd_with_default(&[8, 1], opencv::core::CV_8UC1, (10).into())
+        .unwrap();
+    let mat2b = opencv::core::Mat::new_nd_with_default(&[1, 8], opencv::core::CV_8UC1, (10).into())
+        .unwrap();
+    let mat2c = opencv::core::Mat::new_nd_with_default(&[2, 4], opencv::core::CV_8UC1, (10).into())
+        .unwrap();
+    let mat3 =
+        opencv::core::Mat::new_nd_with_default(&[2, 2, 2], opencv::core::CV_8UC1, (10).into())
+            .unwrap();
+    let mat3a =
+        opencv::core::Mat::new_nd_with_default(&[2, 2], opencv::core::CV_8UC3, (10, 10, 10).into())
+            .unwrap();
+    let mat3b = opencv::core::Mat::new_nd_with_default(
+        &[3, 1, 1],
+        opencv::core::CV_8UC1,
+        (10, 10, 10).into(),
+    )
+    .unwrap();
+    let mat4 =
+        opencv::core::Mat::new_nd_with_default(&[2, 2, 2, 2], opencv::core::CV_8UC1, (10).into())
+            .unwrap();
+    let mat4a = opencv::core::Mat::new_nd_with_default(
+        &[2, 2, 2],
+        opencv::core::CV_8UC3,
+        (10, 10, 10).into(),
+    )
+    .unwrap();
+    print_all_mat(&mat1, "mat1");
+    print_all_mat(&mat1a, "mat1a");
+    print_all_mat(&mat2, "mat2");
+    print_all_mat(&mat2a, "mat2a");
+    print_all_mat(&mat2b, "mat2b");
+    print_all_mat(&mat2c, "mat2c");
+    print_all_mat(&mat3, "mat3");
+    print_all_mat(&mat3a, "mat3a");
+    print_all_mat(&mat3b, "mat3b");
+    print_all_mat(&mat4, "mat4");
+    print_all_mat(&mat4a, "mat4a");
 }

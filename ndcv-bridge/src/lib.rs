@@ -22,7 +22,7 @@ pub mod gaussian;
 #[cfg(feature = "opencv")]
 pub mod resize;
 
-pub mod codec;
+// pub mod codec;
 pub mod orient;
 pub use blend::NdBlend;
 pub use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};

@@ -286,7 +286,10 @@ mod tests {
         ];
 
         for border_type in border_types {
-            let res = arr.gaussian_blur((3, 3), 1.0, 1.0, border_type).unwrap();
+            let _res = arr.gaussian_blur((3, 3), 1.0, 1.0, border_type).unwrap();
+            let res = arr
+                .gaussian_blur_inplace((3, 3), 1.0, 1.0, border_type)
+                .unwrap();
             assert_eq!(res.shape(), &[10, 10, 3]);
         }
     }

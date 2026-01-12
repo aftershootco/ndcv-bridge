@@ -20,7 +20,6 @@ wide = "1.1.1"
 tap = { workspace = true }
 img-parts.workspace = true
 pretty_assertions = "1.4.1"
-aquamarine = "0.6.0"
 
 [dev-dependencies]
 divan.workspace = true

@@ -16,10 +16,10 @@ edition = "2024"
 
 [workspace.dependencies]
 divan = { version = "0.1.21" }
-ndarray-npy = "0.10"
+ndarray-npy = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 nalgebra = { version = "0.34.0", default-features = false, features = ["std"] }
-opencv = { version = "0.95.1", features = ["clang-runtime"] }
+opencv = { version = "0.95.0", features = ["clang-runtime"] }
 bounding-box = { path = "bounding-box" }
 bytemuck = "1.23.2"
 error-stack = "0.6.0"

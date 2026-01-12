@@ -182,7 +182,8 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
     {
         let two = T::one() + T::one();
         let new_size = self.size.component_mul(&vector);
-        let new_point = self.point.coords - new_size / two;
+        let size_diff = new_size - self.size;
+        let new_point = self.point.coords - size_diff / two;
         Self {
             point: Point::from(new_point),
             size: new_size,
@@ -359,6 +360,20 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         T: core::ops::AddAssign,
     {
         self.point >= Point::origin()
+    }
+}
+
+impl<T: Num + num::Float, const D: usize> Aabb<T, D> {
+    #[must_use = "Returns a new components-wise rounded bounding box"]
+    pub fn round(self) -> Self {
+        let mut this = self;
+        this.point.iter_mut().for_each(|x| {
+            *x = x.round();
+        });
+        this.size.iter_mut().for_each(|x| {
+            *x = x.round();
+        });
+        this
     }
 }
 
@@ -550,7 +565,7 @@ mod boudning_box_tests {
         let bbox = AxisAlignedBoundingBox::new_point_size(point, size);
 
         let padded_bbox = bbox.scale(Vector2::new(2.0, 2.0));
-        assert_eq!(padded_bbox.min_vertex(), Point2::new(-2.0, -3.0));
+        assert_eq!(padded_bbox.min_vertex(), Point2::new(-0.5, -1.0));
         assert_eq!(padded_bbox.size(), Vector2::new(6.0, 8.0));
     }
 
@@ -700,5 +715,13 @@ mod boudning_box_tests {
         let moved = bbox.move_origin(Point2::new(2, 3));
         let expected = Aabb2::from_xywh(0, 0, 4, 5);
         assert_eq!(moved, expected);
+    }
+
+    #[test]
+    fn test_scaling() {
+        let bbox = Aabb2::from_xywh(2, 2, 4, 4);
+        let scaled = bbox.scale(Vector2::new(2, 2));
+        let expected = Aabb2::from_xywh(0, 0, 8, 8);
+        assert_eq!(scaled, expected);
     }
 }

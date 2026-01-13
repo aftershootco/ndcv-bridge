@@ -31,10 +31,13 @@ pub(crate) mod seal {
     // impl<T, S: ndarray::DataMut<Elem = T>, D> SealedInternal for ndarray::ArrayBase<S, D> {}
 }
 
+#[deprecated = "Use NdAsMat and NdAsImage traits instead"]
 pub trait NdCvConversion<T: bytemuck::Pod + Copy, D: ndarray::Dimension>:
     seal::SealedInternal + Sized
 {
+    #[deprecated = "Use NdAsMat and NdAsImage traits instead"]
     fn to_mat(&self) -> Result<opencv::core::Mat, NdCvError>;
+    #[deprecated = "Use NdAsMat and NdAsImage traits instead"]
     fn from_mat(
         mat: opencv::core::Mat,
     ) -> Result<ndarray::ArrayBase<ndarray::OwnedRepr<T>, D>, NdCvError>;

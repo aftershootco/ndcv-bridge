@@ -43,6 +43,7 @@ pub trait NdCvConversion<T: bytemuck::Pod + Copy, D: ndarray::Dimension>:
     ) -> Result<ndarray::ArrayBase<ndarray::OwnedRepr<T>, D>, NdCvError>;
 }
 
+#[allow(deprecated)]
 impl<T: bytemuck::Pod + Copy, S: ndarray::Data<Elem = T>, D: ndarray::Dimension>
     NdCvConversion<T, D> for ndarray::ArrayBase<S, D>
 where
@@ -339,6 +340,7 @@ pub fn test_2d_array_regular() {
 }
 
 #[test]
+#[allow(deprecated)]
 pub fn test_ndcv_1024_1024_to_mat() {
     let array = ndarray::Array2::<f32>::ones((1024, 1024));
     let _mat = array.to_mat().unwrap();

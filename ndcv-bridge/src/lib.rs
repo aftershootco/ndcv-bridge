@@ -41,7 +41,7 @@ pub use bounding_rect::BoundingRect;
 #[cfg(feature = "opencv")]
 pub use connected_components::{Connectivity, NdCvConnectedComponents};
 #[cfg(feature = "opencv")]
-pub use conversions::{MatAsNd, NdAsImage, NdAsImageMut, NdAsMat, NdAsMatMut, NdCvConversion};
+pub use conversions::{MatAsNd, NdAsImage, NdAsImageMut, NdAsMat, NdAsMatMut};
 #[cfg(feature = "opencv")]
 pub use resize::{Interpolation, NdCvResize};
 

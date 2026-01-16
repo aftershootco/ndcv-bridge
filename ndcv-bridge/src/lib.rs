@@ -9,8 +9,8 @@ mod roi;
 
 #[cfg(feature = "opencv")]
 pub mod bounding_rect;
-// #[cfg(feature = "opencv")]
-// pub mod color_space;
+#[cfg(feature = "opencv")]
+pub mod color_space;
 #[cfg(feature = "opencv")]
 pub mod connected_components;
 #[cfg(feature = "opencv")]

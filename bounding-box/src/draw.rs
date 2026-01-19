@@ -26,7 +26,7 @@ impl Drawable<ArrayViewMut3<'_, u8>> for Aabb2<usize> {
         let color = Array1::from_vec(vec![color.r, color.g, color.b, color.a]);
         self.corners()
             .iter()
-            .zip(self.padding(thickness).corners())
+            .zip(self.padding_uniform(thickness).corners())
             .cycle()
             .take(5)
             .tuple_windows()

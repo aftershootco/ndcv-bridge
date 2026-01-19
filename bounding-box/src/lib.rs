@@ -106,7 +106,7 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
     }
 
     #[must_use]
-    pub fn padding(mut self, padding: T) -> Self
+    pub fn padding_uniform(mut self, padding: T) -> Self
     where
         T: core::ops::AddAssign,
         T: core::ops::DivAssign,
@@ -120,6 +120,23 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
             .coords
             .iter_mut()
             .for_each(|c| *c -= padding / two);
+        self
+    }
+
+    #[must_use]
+    pub fn padding(mut self, padding: SVector<T, D>) -> Self
+    where
+        T: core::ops::AddAssign,
+        T: core::ops::DivAssign,
+        T: core::ops::SubAssign,
+    {
+        self.size += padding;
+        let two = T::one() + T::one();
+        self.point
+            .coords
+            .iter_mut()
+            .zip(padding.iter())
+            .for_each(|(c, p)| *c -= *p / two);
         self
     }
 
@@ -553,7 +570,7 @@ mod boudning_box_tests {
         let size = Vector2::new(3.0, 4.0);
         let bbox = AxisAlignedBoundingBox::new_point_size(point, size);
 
-        let padded_bbox = bbox.padding(1.0);
+        let padded_bbox = bbox.padding_uniform(1.0);
         assert_eq!(padded_bbox.min_vertex(), Point2::new(0.5, 1.5));
         assert_eq!(padded_bbox.size(), Vector2::new(4.0, 5.0));
     }

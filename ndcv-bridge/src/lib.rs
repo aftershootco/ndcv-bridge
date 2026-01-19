@@ -36,6 +36,9 @@ pub use contours::{
     NdCvContourArea, NdCvFindContours,
 };
 
+#[allow(deprecated)]
+pub use conversions::NdCvConversion;
+
 #[cfg(feature = "opencv")]
 pub use bounding_rect::BoundingRect;
 #[cfg(feature = "opencv")]

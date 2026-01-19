@@ -106,7 +106,7 @@ fn test_roi_zero_padded() {
     let arr = ndarray::Array2::<u8>::ones((10, 10));
     let original = Aabb2::from_xywh(1.0, 1.0, 3.0, 3.0);
     let clamp = Aabb2::from_xywh(0.0, 0.0, 10.0, 10.0);
-    let padded = original.padding(2.0).clamp(clamp).unwrap();
+    let padded = original.padding_uniform(2.0).clamp(clamp).unwrap();
     let (padded_result, padded_segment) = arr.roi_zero_padded(original.cast(), padded.cast());
     assert_eq!(padded_result, bounding_box::Aabb2::from_xywh(0, 0, 5, 5));
     assert_eq!(padded_segment.shape(), &[5, 5]);
@@ -153,7 +153,7 @@ fn test_roi_zero_padded_3d() {
     let arr = ndarray::Array3::<u8>::ones((10, 10, 3));
     let original = Aabb2::from_xywh(1.0, 1.0, 3.0, 3.0);
     let clamp = Aabb2::from_xywh(0.0, 0.0, 10.0, 10.0);
-    let padded = original.padding(2.0).clamp(clamp).unwrap();
+    let padded = original.padding_uniform(2.0).clamp(clamp).unwrap();
     let (padded_result, padded_segment) = arr.roi_zero_padded(original.cast(), padded.cast());
     assert_eq!(padded_result, bounding_box::Aabb2::from_xywh(0, 0, 5, 5));
     assert_eq!(padded_segment.shape(), &[5, 5, 3]);

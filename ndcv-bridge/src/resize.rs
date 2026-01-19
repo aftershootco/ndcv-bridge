@@ -45,9 +45,9 @@ impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvResize<T, nda
         width: u16,
         interpolation: Interpolation,
     ) -> Result<ndarray::Array2<T>, NdCvError> {
-        let mat = self.as_image_mat()?;
+        let mat = self.as_image_mat().change_context(NdCvError)?;
         let mut dest = ndarray::Array2::zeros((height.into(), width.into()));
-        let mut dest_mat = dest.as_image_mat_mut()?;
+        let mut dest_mat = dest.as_image_mat_mut().change_context(NdCvError)?;
         opencv::imgproc::resize(
             mat.as_ref(),
             dest_mat.as_mut(),
@@ -73,10 +73,10 @@ impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvResize<T, nda
         width: u16,
         interpolation: Interpolation,
     ) -> Result<ndarray::ArrayBase<ndarray::OwnedRepr<T>, ndarray::Ix3>, NdCvError> {
-        let mat = self.as_image_mat()?;
+        let mat = self.as_image_mat().change_context(NdCvError)?;
         let mut dest =
             ndarray::Array3::zeros((height.into(), width.into(), self.len_of(ndarray::Axis(2))));
-        let mut dest_mat = dest.as_image_mat_mut()?;
+        let mut dest_mat = dest.as_image_mat_mut().change_context(NdCvError)?;
         opencv::imgproc::resize(
             mat.as_ref(),
             dest_mat.as_mut(),

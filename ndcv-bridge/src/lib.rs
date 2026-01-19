@@ -1,11 +1,13 @@
 //! Methods and type conversions for ndarray to opencv and vice versa
 mod blend;
+mod errors;
 // mod dilate;
 pub mod fir;
 mod image;
 mod inplace;
 pub mod percentile;
 mod roi;
+pub use errors::NdCvError;
 
 #[cfg(feature = "opencv")]
 pub mod bounding_rect;
@@ -49,14 +51,10 @@ pub use conversions::{MatAsNd, NdAsImage, NdAsImageMut, NdAsMat, NdAsMatMut};
 pub use resize::{Interpolation, NdCvResize};
 
 pub(crate) mod prelude_ {
-    pub use crate::NdCvError;
+    pub use crate::errors::NdCvError;
     pub use error_stack::*;
     pub type Result<T, C> = core::result::Result<T, Report<C>>;
 }
-
-#[derive(Debug, thiserror::Error)]
-#[error("NdCvError")]
-pub struct NdCvError;
 
 #[cfg(feature = "opencv")]
 pub fn type_depth<T>() -> i32 {

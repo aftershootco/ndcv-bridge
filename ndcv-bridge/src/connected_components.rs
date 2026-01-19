@@ -46,9 +46,9 @@ where
         &self,
         connectivity: Connectivity,
     ) -> Result<ndarray::Array2<O>, NdCvError> {
-        let mat = self.as_image_mat()?;
+        let mat = self.as_image_mat().change_context(NdCvError)?;
         let mut labels = ndarray::Array2::<O>::zeros(self.dim());
-        let mut cv_labels = labels.as_image_mat_mut()?;
+        let mut cv_labels = labels.as_image_mat_mut().change_context(NdCvError)?;
         opencv::imgproc::connected_components(
             mat.as_ref(),
             cv_labels.as_mut(),
@@ -67,16 +67,19 @@ where
         let mut stats = opencv::core::Mat::default();
         let mut centroids = opencv::core::Mat::default();
         let num_labels = opencv::imgproc::connected_components_with_stats(
-            self.as_image_mat()?.as_ref(),
-            labels.as_image_mat_mut()?.as_mut(),
+            self.as_image_mat().change_context(NdCvError)?.as_ref(),
+            labels
+                .as_image_mat_mut()
+                .change_context(NdCvError)?
+                .as_mut(),
             &mut stats,
             &mut centroids,
             connectivity as i32,
             O::as_cv_type(),
         )
         .change_context(NdCvError)?;
-        let stats = stats.as_ndarray()?.to_owned();
-        let centroids = centroids.as_ndarray()?.to_owned();
+        let stats = stats.as_ndarray().change_context(NdCvError)?.to_owned();
+        let centroids = centroids.as_ndarray().change_context(NdCvError)?.to_owned();
         Ok(ConnectedComponentStats {
             labels,
             stats,

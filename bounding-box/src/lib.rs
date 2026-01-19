@@ -1,6 +1,9 @@
 pub mod draw;
 pub mod nms;
 pub mod roi;
+pub use nalgebra;
+#[cfg(feature = "bbox-compat")]
+pub mod compat;
 
 use nalgebra::{Point, Point2, SVector, Vector2};
 pub trait Num:
@@ -44,6 +47,8 @@ pub struct AxisAlignedBoundingBox<T: Num, const D: usize> {
     size: SVector<T, D>,
 }
 
+impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {}
+
 pub type Aabb<T, const D: usize> = AxisAlignedBoundingBox<T, D>;
 pub type Aabb2<T> = AxisAlignedBoundingBox<T, 2>;
 pub type Aabb3<T> = AxisAlignedBoundingBox<T, 3>;
@@ -60,6 +65,7 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
             panic!("max_point must be greater than or equal to min_point");
         }
     }
+
     pub fn try_new(min_point: Point<T, D>, max_point: Point<T, D>) -> Option<Self> {
         if max_point < min_point {
             return None;
@@ -95,6 +101,13 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
 
     pub fn size(&self) -> SVector<T, D> {
         self.size
+    }
+
+    pub fn zero() -> Self {
+        Self {
+            point: Point::origin(),
+            size: SVector::from_element(T::zero()),
+        }
     }
 
     pub fn center(&self) -> Point<T, D>
@@ -178,7 +191,7 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         self
     }
 
-    pub fn contains_point(&self, point: &Point<T, D>) -> bool
+    pub fn contains_point(&self, point: Point<T, D>) -> bool
     where
         T: core::ops::AddAssign,
         T: core::ops::SubAssign,
@@ -187,7 +200,7 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         let min = self.min_vertex();
         let max = self.max_vertex();
 
-        *point >= min && *point <= max
+        point >= min && point <= max
     }
 
     #[must_use = "Returns a new scaled bounding box"]
@@ -205,6 +218,16 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
             point: Point::from(new_point),
             size: new_size,
         }
+    }
+
+    #[must_use]
+    pub fn scale_uniform(self, factor: T) -> Self
+    where
+        T: core::ops::MulAssign,
+        T: core::ops::DivAssign,
+        T: core::ops::SubAssign,
+    {
+        self.scale(SVector::<T, D>::from_element(factor))
     }
 
     pub fn contains_bbox(&self, other: &Self) -> bool
@@ -308,6 +331,19 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         }
     }
 
+    pub fn normalize(self, factor: nalgebra::SVector<T, D>) -> Self
+    where
+        T: core::ops::DivAssign,
+        T: core::ops::AddAssign,
+        // nalgebra::constraint::ShapeConstraint:
+        //     nalgebra::constraint::DimEq<nalgebra::Const<D>, nalgebra::Const<D>>,
+    {
+        Self {
+            point: (self.point.coords.component_div(&factor)).into(),
+            size: self.size.component_div(&factor),
+        }
+    }
+
     #[must_use = "Returns a new casted bounding box or None if the cast fails"]
     pub fn try_cast<T2>(self) -> Option<Aabb<T2, D>>
     where
@@ -330,15 +366,16 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
             .unwrap_or_else(|| panic!("Failed to cast to Aabb<{}>", std::any::type_name::<T2>()))
     }
 
-    // pub fn as_<T2>(&self) -> Option<Aabb<T2, D>>
-    // where
-    //     T2: Num + simba::scalar::SubsetOf<T>,
-    // {
-    //     Some(Aabb {
-    //         point: Point::from(self.point.coords.as_()),
-    //         size: self.size.as_(),
-    //     })
-    // }
+    pub fn as_<T2>(&self) -> Aabb<T2, D>
+    where
+        T2: Num,
+        T: num::cast::AsPrimitive<T2>,
+    {
+        Aabb {
+            point: self.point.map(|v| v.as_()),
+            size: self.size.map(|v| v.as_()),
+        }
+    }
 
     pub fn measure(self) -> T
     where
@@ -369,6 +406,12 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         } else {
             T::zero()
         }
+    }
+
+    pub fn overlap(self, other: Self) -> T
+where {
+        self.intersection(other)
+            .map_or_else(T::zero, |r| r.measure())
     }
 
     pub fn is_positive(&self) -> bool
@@ -592,8 +635,8 @@ mod boudning_box_tests {
         let point2 = Point2::new(4.0, 6.0);
         let bbox = AxisAlignedBoundingBox::new(point1, point2);
 
-        assert!(bbox.contains_point(&Point2::new(2.0, 3.0)));
-        assert!(!bbox.contains_point(&Point2::new(5.0, 7.0)));
+        assert!(bbox.contains_point(Point2::new(2.0, 3.0)));
+        assert!(!bbox.contains_point(Point2::new(5.0, 7.0)));
     }
 
     #[test]
@@ -633,7 +676,7 @@ mod boudning_box_tests {
         let bbox = AxisAlignedBoundingBox::new(point1, point2);
         use itertools::Itertools;
         for (i, j) in (0..=10).cartesian_product(0..=10) {
-            if bbox.contains_point(&Point2::new(i, j)) {
+            if bbox.contains_point(Point2::new(i, j)) {
                 if !(2..=5).contains(&i) && !(3..=4).contains(&j) {
                     panic!(
                         "Point ({}, {}) should not be contained in the bounding box",

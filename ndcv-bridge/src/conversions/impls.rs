@@ -1,5 +1,6 @@
+use super::ConversionError;
+use super::ConversionErrorKind;
 use super::type_depth;
-use crate::prelude_::*;
 use core::ffi::*;
 use opencv::core::prelude::*;
 pub(crate) unsafe fn ndarray_to_mat_regular<
@@ -8,13 +9,13 @@ pub(crate) unsafe fn ndarray_to_mat_regular<
     D: ndarray::Dimension,
 >(
     input: &ndarray::ArrayBase<S, D>,
-) -> Result<opencv::core::Mat, NdCvError> {
+) -> Result<opencv::core::Mat, ConversionError> {
     let shape = input.shape();
     let strides = input.strides();
 
     // let channels = shape.last().copied().unwrap_or(1);
     // if channels > opencv::core::CV_CN_MAX as usize {
-    //     Err(Report::new(NdCvError).attach(format!(
+    //     Err(Report::new(ConversionError).attach(format!(
     //             "Number of channels({channels}) exceeds CV_CN_MAX({}) use the regular version of the function", opencv::core::CV_CN_MAX
     //         )))?;
     // }
@@ -39,8 +40,7 @@ pub(crate) unsafe fn ndarray_to_mat_regular<
             typ,
             data_ptr.cast_mut(),
             Some(step.as_slice()),
-        )
-        .change_context(NdCvError)?
+        )?
     };
 
     Ok(mat)
@@ -52,15 +52,16 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
     D: ndarray::Dimension,
 >(
     input: &ndarray::ArrayBase<S, D>,
-) -> Result<opencv::core::Mat, NdCvError> {
+) -> Result<opencv::core::Mat, ConversionError> {
     let shape = input.shape();
     let strides = input.strides();
 
     let channels = shape.last().copied().unwrap_or(1);
     if channels > opencv::core::CV_CN_MAX as usize {
-        Err(Report::new(NdCvError).attach(format!(
-                "Number of channels({channels}) exceeds CV_CN_MAX({}) use the regular version of the function", opencv::core::CV_CN_MAX
-            )))?;
+        Err(ConversionErrorKind::InvalidNumberOfChannels {
+            max: opencv::core::CV_CN_MAX as usize,
+            found: channels,
+        })?;
     }
 
     if shape.len() > 2 {
@@ -68,13 +69,10 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
         // But opencv only keeps ndims - 1 strides so we can't have the column stride as that
         // will be lost
         if shape.last() != strides.get(strides.len() - 2).map(|x| *x as usize).as_ref() {
-            Err(Report::new(NdCvError)
-                .attach("You cannot slice into the last axis in ndarray when converting to mat"))?;
+            Err(ConversionErrorKind::NonContiguousData)?;
         }
     } else if shape.len() == 1 {
-        return Err(Report::new(NdCvError).attach(
-            "You cannot convert a 1D array to a Mat while using the consolidated version",
-        ));
+        return Err(ConversionErrorKind::UnsupportedNdarrayShape)?;
     }
 
     // Since this is the consolidated version we should always only have ndims - 1 sizes and
@@ -105,24 +103,30 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
             data_ptr.cast_mut(),
             Some(step.as_slice()),
         )
-        .change_context(NdCvError)?
-    };
+    }?;
 
     Ok(mat)
 }
 
 pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
     mat: &opencv::core::Mat,
-) -> Result<ndarray::ArrayView<'_, T, D>, NdCvError> {
+) -> Result<ndarray::ArrayView<'_, T, D>, ConversionError> {
     let depth = mat.depth();
     if type_depth::<T>() != depth {
-        return Err(Report::new(NdCvError).attach(format!(
-            "Expected type Mat<{}> ({}), got Mat<{}> ({})",
-            std::any::type_name::<T>(),
-            type_depth::<T>(),
-            crate::depth_type(depth),
-            depth,
-        )));
+        Err(ConversionErrorKind::TypeMismatch {
+            expected: std::any::type_name::<T>()
+                .rsplit_once("::")
+                .expect("Impossible")
+                .1,
+            got: crate::depth_type(depth),
+        })?;
+        // return Err(Report::new(ConversionError).attach(format!(
+        //     "Expected type Mat<{}> ({}), got Mat<{}> ({})",
+        //     std::any::type_name::<T>(),
+        //     type_depth::<T>(),
+        //     crate::depth_type(depth),
+        //     depth,
+        // )));
     }
 
     let channels = mat.channels();
@@ -177,38 +181,34 @@ pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
     let multi_channel_1d = maybe_1d && multi_channel && D::NDIM.is_some_and(|d| d == 2);
 
     if !are_dims_compatible {
-        return Err(Report::new(NdCvError).attach(format!(
-            "Incompatible dimensions: Mat with dims {} (rows {}, cols {}, channels {}) cannot be converted to ndarray with dims {:?}",
-            mat_dims,
-            mat.rows(),
-            mat.cols(),
-            channels,
-            D::NDIM,
-        )));
+        return Err(ConversionErrorKind::IncompatibleDimensions {
+            mat_dims: mat_dims as _,
+            rows: mat.rows() as _,
+            cols: mat.cols() as _,
+            channels: channels as _,
+            ndarray_dims: D::NDIM.unwrap_or(0),
+        })?;
     }
 
     let mat_size = mat.mat_size();
 
     use ndarray::ShapeBuilder;
     let sizes = (0..(mat.dims() - multi_channel_1d as i32))
-        .map(|i| mat_size.get(i).change_context(NdCvError))
+        .map(|i| mat_size.get(i).map_err(ConversionError::from))
         .chain([Ok(channels)])
         .map(|x| x.map(|x| x as usize))
         .take(dim)
-        .collect::<Result<Vec<_>, NdCvError>>()
-        .change_context(NdCvError)?;
+        .collect::<Result<Vec<_>, ConversionError>>()?;
     let strides = (0..(mat.dims() - 1 - multi_channel_1d as i32))
-        .map(|i| mat.step1(i).change_context(NdCvError))
+        .map(|i| mat.step1(i).map_err(ConversionError::from))
         .chain([Ok(channels as usize), Ok(1)])
         .take(dim)
-        .collect::<Result<Vec<_>, NdCvError>>()
-        .change_context(NdCvError)?;
+        .collect::<Result<Vec<_>, ConversionError>>()?;
     let shape = sizes.strides(strides);
 
     let raw_array = unsafe {
         ndarray::RawArrayView::from_shape_ptr(shape, mat.data() as *const T)
-            .into_dimensionality()
-            .change_context(NdCvError)?
+            .into_dimensionality()?
     };
     Ok(unsafe { raw_array.deref_into_view() })
 }

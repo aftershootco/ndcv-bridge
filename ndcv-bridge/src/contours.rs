@@ -91,7 +91,7 @@ impl<T: ndarray::RawData + ndarray::Data<Elem = u8>> NdCvFindContours<u8> for Ar
         mode: ContourRetrievalMode,
         method: ContourApproximationMethod,
     ) -> Result<Vec<Vec<Point2<i32>>>, NdCvError> {
-        let cv_self = self.as_image_mat()?;
+        let cv_self = self.as_image_mat().change_context(NdCvError)?;
         let mut contours = opencv::core::Vector::<opencv::core::Vector<opencv::core::Point>>::new();
 
         opencv::imgproc::find_contours(
@@ -120,7 +120,7 @@ impl<T: ndarray::RawData + ndarray::Data<Elem = u8>> NdCvFindContours<u8> for Ar
         mode: ContourRetrievalMode,
         method: ContourApproximationMethod,
     ) -> Result<ContourResult, NdCvError> {
-        let cv_self = self.as_image_mat()?;
+        let cv_self = self.as_image_mat().change_context(NdCvError)?;
         let mut contours = opencv::core::Vector::<opencv::core::Vector<opencv::core::Point>>::new();
         let mut hierarchy = opencv::core::Vector::<opencv::core::Vec4i>::new();
 

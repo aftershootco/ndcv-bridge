@@ -17,8 +17,6 @@
 //! | Array<T, Ix6>     | Mat(ndims = 5, channels = X)   |
 //!
 //! // X is the last dimension
-use crate::NdCvError;
-use crate::prelude_::*;
 use crate::type_depth;
 use ndarray::{Ix2, Ix3};
 pub mod impls;
@@ -28,7 +26,79 @@ use matref::{MatRef, MatRefMut};
 pub(crate) mod seal {
     pub trait SealedInternal {}
     impl<T, S: ndarray::Data<Elem = T>, D> SealedInternal for ndarray::ArrayBase<S, D> {}
-    // impl<T, S: ndarray::DataMut<Elem = T>, D> SealedInternal for ndarray::ArrayBase<S, D> {}
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ConversionErrorKind {
+    #[error("Opencv Error: {0}")]
+    OpenCvError(#[from] opencv::Error),
+    #[error("Ndarray Shape Error: {0}")]
+    NdarrayShapeError(#[from] ndarray::ShapeError),
+    #[error("Unsupported ndarray shape for conversion")]
+    UnsupportedNdarrayShape,
+    #[error("Invalid number of channels for conversion max: {max}, found: {found}")]
+    InvalidNumberOfChannels { max: usize, found: usize },
+    #[error("Data is not contiguous")]
+    NonContiguousData,
+    #[error("Data type {0} is not supported for conversion")]
+    UnsupportedDataType(&'static str),
+    #[error(
+        "Incompatible dimensions: Mat with dims {mat_dims} (rows {rows}, cols {cols}, channels {channels}) cannot be converted to ndarray with dims {ndarray_dims}"
+    )]
+    IncompatibleDimensions {
+        mat_dims: usize,
+        rows: usize,
+        cols: usize,
+        channels: usize,
+        ndarray_dims: usize,
+    },
+    #[error("Expected Mat<{expected}>, but got Mat<{got}>")]
+    TypeMismatch {
+        expected: &'static str,
+        got: &'static str,
+    },
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("Conversion error at {location}: {kind}")]
+pub struct ConversionError {
+    pub kind: ConversionErrorKind,
+    pub location: &'static core::panic::Location<'static>,
+}
+
+impl ConversionError {
+    pub fn into_error(self) -> impl std::error::Error + Send + Sync + 'static {
+        self
+    }
+}
+
+impl From<ConversionErrorKind> for ConversionError {
+    fn from(kind: ConversionErrorKind) -> Self {
+        ConversionError {
+            kind,
+            location: core::panic::Location::caller(),
+        }
+    }
+}
+
+impl From<opencv::Error> for ConversionError {
+    #[track_caller]
+    fn from(err: opencv::Error) -> Self {
+        ConversionError {
+            kind: ConversionErrorKind::OpenCvError(err),
+            location: core::panic::Location::caller(),
+        }
+    }
+}
+
+impl From<ndarray::ShapeError> for ConversionError {
+    #[track_caller]
+    fn from(err: ndarray::ShapeError) -> Self {
+        ConversionError {
+            kind: ConversionErrorKind::NdarrayShapeError(err),
+            location: core::panic::Location::caller(),
+        }
+    }
 }
 
 #[deprecated = "Use NdAsMat and NdAsImage traits instead"]
@@ -36,11 +106,11 @@ pub trait NdCvConversion<T: bytemuck::Pod + Copy, D: ndarray::Dimension>:
     seal::SealedInternal + Sized
 {
     #[deprecated = "Use NdAsMat and NdAsImage traits instead"]
-    fn to_mat(&self) -> Result<opencv::core::Mat, NdCvError>;
+    fn to_mat(&self) -> Result<opencv::core::Mat, ConversionError>;
     #[deprecated = "Use NdAsMat and NdAsImage traits instead"]
     fn from_mat(
         mat: opencv::core::Mat,
-    ) -> Result<ndarray::ArrayBase<ndarray::OwnedRepr<T>, D>, NdCvError>;
+    ) -> Result<ndarray::ArrayBase<ndarray::OwnedRepr<T>, D>, ConversionError>;
 }
 
 #[allow(deprecated)]
@@ -49,14 +119,14 @@ impl<T: bytemuck::Pod + Copy, S: ndarray::Data<Elem = T>, D: ndarray::Dimension>
 where
     Self: NdAsImage<T, D>,
 {
-    fn to_mat(&self) -> Result<opencv::core::Mat, NdCvError> {
+    fn to_mat(&self) -> Result<opencv::core::Mat, ConversionError> {
         Ok(self.as_image_mat()?.mat.clone())
     }
 
     fn from_mat(
         mat: opencv::core::Mat,
-    ) -> Result<ndarray::ArrayBase<ndarray::OwnedRepr<T>, D>, NdCvError> {
-        let ndarray = unsafe { impls::mat_to_ndarray::<T, D>(&mat) }.change_context(NdCvError)?;
+    ) -> Result<ndarray::ArrayBase<ndarray::OwnedRepr<T>, D>, ConversionError> {
+        let ndarray = unsafe { impls::mat_to_ndarray::<T, D>(&mat) }?;
         Ok(ndarray.to_owned())
     }
 }
@@ -64,36 +134,36 @@ where
 pub trait MatAsNd {
     fn as_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
         &self,
-    ) -> Result<ndarray::ArrayView<'_, T, D>, NdCvError>;
+    ) -> Result<ndarray::ArrayView<'_, T, D>, ConversionError>;
 }
 
 impl MatAsNd for opencv::core::Mat {
     fn as_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
         &self,
-    ) -> Result<ndarray::ArrayView<'_, T, D>, NdCvError> {
-        unsafe { impls::mat_to_ndarray::<T, D>(self) }.change_context(NdCvError)
+    ) -> Result<ndarray::ArrayView<'_, T, D>, ConversionError> {
+        unsafe { impls::mat_to_ndarray::<T, D>(self) }
     }
 }
 
 pub trait NdAsMat<T: bytemuck::Pod + Copy, D: ndarray::Dimension> {
-    fn as_single_channel_mat(&self) -> Result<MatRef<'_>, NdCvError>;
-    fn as_multi_channel_mat(&self) -> Result<MatRef<'_>, NdCvError>;
+    fn as_single_channel_mat(&self) -> Result<MatRef<'_>, ConversionError>;
+    fn as_multi_channel_mat(&self) -> Result<MatRef<'_>, ConversionError>;
 }
 
 pub trait NdAsMatMut<T: bytemuck::Pod + Copy, D: ndarray::Dimension>: NdAsMat<T, D> {
-    fn as_single_channel_mat_mut(&mut self) -> Result<MatRefMut<'_>, NdCvError>;
-    fn as_multi_channel_mat_mut(&mut self) -> Result<MatRefMut<'_>, NdCvError>;
+    fn as_single_channel_mat_mut(&mut self) -> Result<MatRefMut<'_>, ConversionError>;
+    fn as_multi_channel_mat_mut(&mut self) -> Result<MatRefMut<'_>, ConversionError>;
 }
 
 impl<T: bytemuck::Pod, S: ndarray::Data<Elem = T>, D: ndarray::Dimension> NdAsMat<T, D>
     for ndarray::ArrayBase<S, D>
 {
-    fn as_single_channel_mat(&self) -> Result<MatRef<'_>, NdCvError> {
-        let mat = unsafe { impls::ndarray_to_mat_regular(self) }.change_context(NdCvError)?;
+    fn as_single_channel_mat(&self) -> Result<MatRef<'_>, ConversionError> {
+        let mat = unsafe { impls::ndarray_to_mat_regular(self) }?;
         Ok(MatRef::new(mat))
     }
-    fn as_multi_channel_mat(&self) -> Result<MatRef<'_>, NdCvError> {
-        let mat = unsafe { impls::ndarray_to_mat_consolidated(self) }.change_context(NdCvError)?;
+    fn as_multi_channel_mat(&self) -> Result<MatRef<'_>, ConversionError> {
+        let mat = unsafe { impls::ndarray_to_mat_consolidated(self) }?;
         Ok(MatRef::new(mat))
     }
 }
@@ -101,23 +171,23 @@ impl<T: bytemuck::Pod, S: ndarray::Data<Elem = T>, D: ndarray::Dimension> NdAsMa
 impl<T: bytemuck::Pod, S: ndarray::DataMut<Elem = T>, D: ndarray::Dimension> NdAsMatMut<T, D>
     for ndarray::ArrayBase<S, D>
 {
-    fn as_single_channel_mat_mut(&mut self) -> Result<MatRefMut<'_>, NdCvError> {
-        let mat = unsafe { impls::ndarray_to_mat_regular(self) }.change_context(NdCvError)?;
+    fn as_single_channel_mat_mut(&mut self) -> Result<MatRefMut<'_>, ConversionError> {
+        let mat = unsafe { impls::ndarray_to_mat_regular(self) }?;
         Ok(MatRefMut::new(mat))
     }
 
-    fn as_multi_channel_mat_mut(&mut self) -> Result<MatRefMut<'_>, NdCvError> {
-        let mat = unsafe { impls::ndarray_to_mat_consolidated(self) }.change_context(NdCvError)?;
+    fn as_multi_channel_mat_mut(&mut self) -> Result<MatRefMut<'_>, ConversionError> {
+        let mat = unsafe { impls::ndarray_to_mat_consolidated(self) }?;
         Ok(MatRefMut::new(mat))
     }
 }
 
 pub trait NdAsImage<T: bytemuck::Pod, D: ndarray::Dimension> {
-    fn as_image_mat(&self) -> Result<MatRef<'_>, NdCvError>;
+    fn as_image_mat(&self) -> Result<MatRef<'_>, ConversionError>;
 }
 
 pub trait NdAsImageMut<T: bytemuck::Pod, D: ndarray::Dimension> {
-    fn as_image_mat_mut(&mut self) -> Result<MatRefMut<'_>, NdCvError>;
+    fn as_image_mat_mut(&mut self) -> Result<MatRefMut<'_>, ConversionError>;
 }
 
 impl<T, S> NdAsImage<T, Ix2> for ndarray::ArrayBase<S, Ix2>
@@ -125,7 +195,7 @@ where
     T: bytemuck::Pod + Copy,
     S: ndarray::Data<Elem = T>,
 {
-    fn as_image_mat(&self) -> Result<MatRef<'_>, NdCvError> {
+    fn as_image_mat(&self) -> Result<MatRef<'_>, ConversionError> {
         self.as_single_channel_mat()
     }
 }
@@ -135,7 +205,7 @@ where
     T: bytemuck::Pod + Copy,
     S: ndarray::DataMut<Elem = T>,
 {
-    fn as_image_mat_mut(&mut self) -> Result<MatRefMut<'_>, NdCvError> {
+    fn as_image_mat_mut(&mut self) -> Result<MatRefMut<'_>, ConversionError> {
         self.as_single_channel_mat_mut()
     }
 }
@@ -145,7 +215,7 @@ where
     T: bytemuck::Pod + Copy,
     S: ndarray::Data<Elem = T>,
 {
-    fn as_image_mat(&self) -> Result<MatRef<'_>, NdCvError> {
+    fn as_image_mat(&self) -> Result<MatRef<'_>, ConversionError> {
         self.as_multi_channel_mat()
     }
 }
@@ -155,7 +225,7 @@ where
     T: bytemuck::Pod + Copy,
     S: ndarray::DataMut<Elem = T>,
 {
-    fn as_image_mat_mut(&mut self) -> Result<MatRefMut<'_>, NdCvError> {
+    fn as_image_mat_mut(&mut self) -> Result<MatRefMut<'_>, ConversionError> {
         self.as_multi_channel_mat_mut()
     }
 }

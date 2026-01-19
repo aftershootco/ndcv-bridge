@@ -1,10 +1,31 @@
-use error_stack::*;
 pub use fast_image_resize::*;
 use images::{Image, ImageRef};
+
 #[derive(Debug, Clone, thiserror::Error)]
 #[error("NdFirError")]
-pub struct NdFirError;
-type Result<T, E = Report<NdFirError>> = std::result::Result<T, E>;
+pub enum NdFirError {
+    #[error("Invalid Pixel Type")]
+    InvalidPixelType {
+        type_name: &'static str,
+        channels: usize,
+    },
+    #[error("Non continuous ndarray")]
+    NonContinuousNdarray,
+    #[error("Failed to access ndarray rows")]
+    FailedToAccessNdarrayRows,
+    #[error("Image Conversion Failed: {0}")]
+    ImageConversionFailure(#[from] fast_image_resize::ImageBufferError),
+    #[error("Image Resize Failed: {0}")]
+    ImageResizeFailure(#[from] fast_image_resize::ResizeError),
+}
+
+impl NdFirError {
+    pub fn into_error(self) -> impl std::error::Error + Send + Sync + 'static {
+        self
+    }
+}
+
+type Result<T, E = NdFirError> = std::result::Result<T, E>;
 
 pub trait NdAsImage<T: seal::Sealed, D: ndarray::Dimension>: Sized {
     fn as_image_ref(&self) -> Result<ImageRef<'_>>;
@@ -131,7 +152,10 @@ pub fn to_pixel_type<T: seal::Sealed>(u: usize) -> Result<PixelType> {
         ("f32", 2) => Ok(PixelType::F32x2),
         ("f32", 3) => Ok(PixelType::F32x3),
         ("f32", 4) => Ok(PixelType::F32x4),
-        _ => Err(Report::new(NdFirError).attach("Unsupported pixel type")),
+        _ => Err(NdFirError::InvalidPixelType {
+            type_name: core::any::type_name::<T>(),
+            channels: u,
+        }),
     }
 }
 
@@ -151,20 +175,14 @@ impl<S: ndarray::Data<Elem = T>, T: seal::Sealed + bytemuck::Pod, D: ndarray::Di
         let shape = self.shape();
         let rows = *shape
             .first()
-            .ok_or_else(|| Report::new(NdFirError).attach("Failed to get rows"))?
-            as u32;
+            .expect("UNEXPECTED: Failed to access ndarray rows") as u32;
         let cols = *shape.get(1).unwrap_or(&1) as u32;
         let channels = *shape.get(2).unwrap_or(&1);
-        let data = self
-            .as_slice()
-            .ok_or(NdFirError)
-            .attach("The ndarray is non continuous")?;
+        let data = self.as_slice().ok_or(NdFirError::NonContinuousNdarray)?;
         let data_bytes: &[u8] = bytemuck::cast_slice(data);
 
         let pixel_type = to_pixel_type::<T>(channels)?;
-        ImageRef::new(cols, rows, data_bytes, pixel_type)
-            .change_context(NdFirError)
-            .attach("Failed to create Image from ndarray")
+        Ok(ImageRef::new(cols, rows, data_bytes, pixel_type)?)
     }
 }
 
@@ -178,20 +196,17 @@ impl<S: ndarray::DataMut<Elem = T>, T: seal::Sealed + bytemuck::Pod, D: ndarray:
         let shape = self.shape();
         let rows = *shape
             .first()
-            .ok_or_else(|| Report::new(NdFirError).attach("Failed to get rows"))?
-            as u32;
+            .expect("UNEXPECTED: Failed to access ndarray rows") as u32;
         let cols = *shape.get(1).unwrap_or(&1) as u32;
         let channels = *shape.get(2).unwrap_or(&1);
         let data = self
             .as_slice_mut()
-            .ok_or(NdFirError)
-            .attach("The ndarray is non continuous")?;
+            .ok_or(NdFirError::NonContinuousNdarray)?;
+
         let data_bytes: &mut [u8] = bytemuck::cast_slice_mut(data);
 
         let pixel_type = to_pixel_type::<T>(channels)?;
-        Image::from_slice_u8(cols, rows, data_bytes, pixel_type)
-            .change_context(NdFirError)
-            .attach("Failed to create Image from ndarray")
+        Ok(Image::from_slice_u8(cols, rows, data_bytes, pixel_type)?)
     }
 }
 
@@ -218,9 +233,7 @@ impl<T: seal::Sealed + bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> Nd
         let mut dest = ndarray::Array3::<T>::zeros((height, width, channels));
         let mut dest_image = dest.as_image_ref_mut()?;
         let mut resizer = fast_image_resize::Resizer::default();
-        resizer
-            .resize(&source, &mut dest_image, options)
-            .change_context(NdFirError)?;
+        resizer.resize(&source, &mut dest_image, options)?;
         Ok(dest)
     }
 }
@@ -239,9 +252,7 @@ impl<T: seal::Sealed + bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> Nd
         let mut dest = ndarray::Array::<T, ndarray::Ix2>::zeros((height, width));
         let mut dest_image = dest.as_image_ref_mut()?;
         let mut resizer = fast_image_resize::Resizer::default();
-        resizer
-            .resize(&source, &mut dest_image, options)
-            .change_context(NdFirError)?;
+        resizer.resize(&source, &mut dest_image, options)?;
         Ok(dest)
     }
 }

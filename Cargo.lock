@@ -186,6 +186,7 @@ dependencies = [
  "ndarray",
  "num",
  "ordered-float",
+ "serde",
  "simba",
  "thiserror",
  "tracing",

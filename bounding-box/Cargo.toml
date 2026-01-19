@@ -11,6 +11,7 @@ nalgebra = { workspace = true }
 ndarray = { workspace = true, optional = true }
 num = "0.4.3"
 ordered-float = "5.0.0"
+serde = { workspace = true, features = ["derive"], optional = true }
 simba = "0.9.1"
 thiserror = "2.0.12"
 tracing = { version = "0.1.41", optional = true, default-features = false }
@@ -18,5 +19,8 @@ tracing = { version = "0.1.41", optional = true, default-features = false }
 [features]
 ndarray = ["dep:ndarray"]
 tracing = ["dep:tracing"]
+serde = ["dep:serde"]
 
-default = ["ndarray", "tracing"]
+bbox-compat = ["serde"]
+
+default = ["ndarray", "tracing", "bbox-compat"]

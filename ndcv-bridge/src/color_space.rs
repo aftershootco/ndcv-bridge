@@ -71,7 +71,6 @@ where
 //     }
 // }
 
-
 // impl<T: seal::Sealed + num::One + num::Zero, S: ndarray::Data<Elem = T>>
 //     ConvertColor<Rgb<T>, Rgba<T>> for ArrayBase<S, Ix3>
 // {

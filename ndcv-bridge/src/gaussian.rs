@@ -82,8 +82,8 @@ where
         border_type: BorderType,
     ) -> Result<ndarray::Array<T, D>, NdCvError> {
         let mut dst = ndarray::Array::zeros(self.dim());
-        let cv_self = self.as_image_mat()?;
-        let mut cv_dst = dst.as_image_mat_mut()?;
+        let cv_self = self.as_image_mat().change_context(NdCvError)?;
+        let mut cv_dst = dst.as_image_mat_mut().change_context(NdCvError)?;
         opencv::imgproc::gaussian_blur(
             &*cv_self,
             &mut *cv_dst,
@@ -202,7 +202,7 @@ where
         sigma_y: f64,
         border_type: BorderType,
     ) -> Result<&mut Self, NdCvError> {
-        let mut cv_self = self.as_image_mat_mut()?;
+        let mut cv_self = self.as_image_mat_mut().change_context(NdCvError)?;
 
         unsafe {
             crate::inplace::op_inplace(&mut cv_self, |this, out| {

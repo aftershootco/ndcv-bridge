@@ -2,8 +2,6 @@ use crate::prelude_::*;
 use ndarray::{ArrayBase, Ix1};
 use num::cast::AsPrimitive;
 
-use crate::NdCvError;
-
 pub trait Percentile {
     fn percentile(&self, qth_percentile: f64) -> Result<f64, NdCvError>;
 }

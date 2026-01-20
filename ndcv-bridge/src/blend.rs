@@ -1,7 +1,17 @@
-use crate::prelude_::*;
 use ndarray::*;
 
-type Result<T, E = Report<NdCvError>> = std::result::Result<T, E>;
+#[derive(Debug, thiserror::Error)]
+pub enum BlendError {
+    #[error("Shape mismatch between source and other images: {src_shape:?} vs {other_shape:?}")]
+    ShapeMismatch {
+        src_shape: Vec<usize>,
+        other_shape: Vec<usize>,
+    },
+    #[error("Failed to process non-continuous array")]
+    NonContinuousArray,
+}
+
+type Result<T> = std::result::Result<T, BlendError>;
 
 mod seal {
     pub trait Sealed {}
@@ -33,10 +43,16 @@ where
         alpha: f32,
     ) -> Result<ndarray::Array<f32, Ix3>> {
         if self.shape() != other.shape() {
-            return Err(NdCvError).attach("Shapes of image and other image do not match");
+            return Err(BlendError::ShapeMismatch {
+                src_shape: self.shape().to_vec(),
+                other_shape: other.shape().to_vec(),
+            });
         }
         if self.shape()[0] != mask.shape()[0] || self.shape()[1] != mask.shape()[1] {
-            return Err(NdCvError).attach("Shapes of image and mask do not match");
+            return Err(BlendError::ShapeMismatch {
+                src_shape: self.shape().to_vec(),
+                other_shape: mask.shape().to_vec(),
+            });
         }
 
         let mut output = ndarray::Array3::zeros(self.dim());
@@ -66,10 +82,16 @@ where
         alpha: f32,
     ) -> Result<()> {
         if self.shape() != other.shape() {
-            return Err(NdCvError).attach("Shapes of image and other imagge do not match");
+            return Err(BlendError::ShapeMismatch {
+                src_shape: self.shape().to_vec(),
+                other_shape: other.shape().to_vec(),
+            });
         }
         if self.shape()[0] != mask.shape()[0] || self.shape()[1] != mask.shape()[1] {
-            return Err(NdCvError).attach("Shapes of image and mask do not match");
+            return Err(BlendError::ShapeMismatch {
+                src_shape: self.shape().to_vec(),
+                other_shape: mask.shape().to_vec(),
+            });
         }
 
         let (_height, _width, channels) = self.dim();
@@ -86,18 +108,9 @@ where
         //             .expect("Failed to get mutable slice")
         //             .copy_from_slice(&o.as_array()[..channels]);
         //     });
-        let this = self
-            .as_slice_mut()
-            .ok_or(NdCvError)
-            .attach("Failed to get source image as a continuous slice")?;
-        let other = other
-            .as_slice()
-            .ok_or(NdCvError)
-            .attach("Failed to get other image as a continuous slice")?;
-        let mask = mask
-            .as_slice()
-            .ok_or(NdCvError)
-            .attach("Failed to get mask as a continuous slice")?;
+        let this = self.as_slice_mut().ok_or(BlendError::NonContinuousArray)?;
+        let other = other.as_slice().ok_or(BlendError::NonContinuousArray)?;
+        let mask = mask.as_slice().ok_or(BlendError::NonContinuousArray)?;
 
         use rayon::prelude::*;
         this.par_chunks_exact_mut(channels)

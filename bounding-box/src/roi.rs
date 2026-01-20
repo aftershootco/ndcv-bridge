@@ -3,12 +3,12 @@ use ndarray::{Array2, Array3, ArrayView2, ArrayView3, ArrayViewMut2, ArrayViewMu
 /// A trait that extracts a region of interest from an image
 pub trait Roi<'a, Output> {
     type Error;
-    fn roi(&'a self, aabb: Aabb2<usize>) -> Result<Output, Self::Error>;
+    fn roi(&'a self, aabb: impl Into<Aabb2<usize>>) -> Result<Output, Self::Error>;
 }
 
 pub trait RoiMut<'a, Output> {
     type Error;
-    fn roi_mut(&'a mut self, aabb: Aabb2<usize>) -> Result<Output, Self::Error>;
+    fn roi_mut(&'a mut self, aabb: impl Into<Aabb2<usize>>) -> Result<Output, Self::Error>;
 }
 
 pub trait MultiRoi<'a, Output> {
@@ -29,7 +29,8 @@ pub enum RoiError {
 
 impl<'a, T: Num> Roi<'a, ArrayView3<'a, T>> for Array3<T> {
     type Error = RoiError;
-    fn roi(&'a self, aabb: Aabb2<usize>) -> Result<ArrayView3<'a, T>, Self::Error> {
+    fn roi(&'a self, aabb: impl Into<Aabb2<usize>>) -> Result<ArrayView3<'a, T>, Self::Error> {
+        let aabb = aabb.into();
         let x1 = aabb.x1();
         let x2 = aabb.x2();
         let y1 = aabb.y1();
@@ -50,7 +51,8 @@ impl<'a, T: Num> Roi<'a, ArrayView3<'a, T>> for Array3<T> {
 
 impl<'a, T: Num> Roi<'a, ArrayView2<'a, T>> for Array2<T> {
     type Error = RoiError;
-    fn roi(&'a self, aabb: Aabb2<usize>) -> Result<ArrayView2<'a, T>, Self::Error> {
+    fn roi(&'a self, aabb: impl Into<Aabb2<usize>>) -> Result<ArrayView2<'a, T>, Self::Error> {
+        let aabb = aabb.into();
         let x1 = aabb.x1();
         let x2 = aabb.x2();
         let y1 = aabb.y1();
@@ -71,7 +73,11 @@ impl<'a, T: Num> Roi<'a, ArrayView2<'a, T>> for Array2<T> {
 
 impl<'a, T: Num> RoiMut<'a, ArrayViewMut3<'a, T>> for Array3<T> {
     type Error = RoiError;
-    fn roi_mut(&'a mut self, aabb: Aabb2<usize>) -> Result<ArrayViewMut3<'a, T>, Self::Error> {
+    fn roi_mut(
+        &'a mut self,
+        aabb: impl Into<Aabb2<usize>>,
+    ) -> Result<ArrayViewMut3<'a, T>, Self::Error> {
+        let aabb = aabb.into();
         let x1 = aabb.x1();
         let x2 = aabb.x2();
         let y1 = aabb.y1();
@@ -92,7 +98,11 @@ impl<'a, T: Num> RoiMut<'a, ArrayViewMut3<'a, T>> for Array3<T> {
 
 impl<'a, T: Num> RoiMut<'a, ArrayViewMut2<'a, T>> for Array2<T> {
     type Error = RoiError;
-    fn roi_mut(&'a mut self, aabb: Aabb2<usize>) -> Result<ArrayViewMut2<'a, T>, Self::Error> {
+    fn roi_mut(
+        &'a mut self,
+        aabb: impl Into<Aabb2<usize>>,
+    ) -> Result<ArrayViewMut2<'a, T>, Self::Error> {
+        let aabb = aabb.into();
         let x1 = aabb.x1();
         let x2 = aabb.x2();
         let y1 = aabb.y1();
@@ -113,7 +123,8 @@ impl<'a, T: Num> RoiMut<'a, ArrayViewMut2<'a, T>> for Array2<T> {
 
 impl<'a, 'b, T: Num> Roi<'a, ArrayView3<'b, T>> for ArrayView3<'b, T> {
     type Error = RoiError;
-    fn roi(&'a self, aabb: Aabb2<usize>) -> Result<ArrayView3<'b, T>, Self::Error> {
+    fn roi(&'a self, aabb: impl Into<Aabb2<usize>>) -> Result<ArrayView3<'b, T>, Self::Error> {
+        let aabb = aabb.into();
         let x1 = aabb.x1();
         let x2 = aabb.x2();
         let y1 = aabb.y1();
@@ -134,7 +145,8 @@ impl<'a, 'b, T: Num> Roi<'a, ArrayView3<'b, T>> for ArrayView3<'b, T> {
 
 impl<'a, 'b, T: Num> Roi<'a, ArrayView2<'b, T>> for ArrayView2<'b, T> {
     type Error = RoiError;
-    fn roi(&'a self, aabb: Aabb2<usize>) -> Result<ArrayView2<'b, T>, Self::Error> {
+    fn roi(&'a self, aabb: impl Into<Aabb2<usize>>) -> Result<ArrayView2<'b, T>, Self::Error> {
+        let aabb = aabb.into();
         let x1 = aabb.x1();
         let x2 = aabb.x2();
         let y1 = aabb.y1();
@@ -155,7 +167,11 @@ impl<'a, 'b, T: Num> Roi<'a, ArrayView2<'b, T>> for ArrayView2<'b, T> {
 
 impl<'a, 'b: 'a, T: Num> RoiMut<'a, ArrayViewMut3<'a, T>> for ArrayViewMut3<'b, T> {
     type Error = RoiError;
-    fn roi_mut(&'a mut self, aabb: Aabb2<usize>) -> Result<ArrayViewMut3<'a, T>, Self::Error> {
+    fn roi_mut(
+        &'a mut self,
+        aabb: impl Into<Aabb2<usize>>,
+    ) -> Result<ArrayViewMut3<'a, T>, Self::Error> {
+        let aabb = aabb.into();
         let x1 = aabb.x1();
         let x2 = aabb.x2();
         let y1 = aabb.y1();
@@ -177,7 +193,11 @@ impl<'a, 'b: 'a, T: Num> RoiMut<'a, ArrayViewMut3<'a, T>> for ArrayViewMut3<'b, 
 
 impl<'a, 'b: 'a, T: Num> RoiMut<'a, ArrayViewMut2<'a, T>> for ArrayViewMut2<'b, T> {
     type Error = RoiError;
-    fn roi_mut(&'a mut self, aabb: Aabb2<usize>) -> Result<ArrayViewMut2<'a, T>, Self::Error> {
+    fn roi_mut(
+        &'a mut self,
+        aabb: impl Into<Aabb2<usize>>,
+    ) -> Result<ArrayViewMut2<'a, T>, Self::Error> {
+        let aabb = aabb.into();
         let x1 = aabb.x1();
         let x2 = aabb.x2();
         let y1 = aabb.y1();
@@ -193,6 +213,52 @@ impl<'a, 'b: 'a, T: Num> RoiMut<'a, ArrayViewMut2<'a, T>> for ArrayViewMut2<'b, 
             });
         }
         let out: ArrayViewMut2<'a, T> = self.slice_mut(ndarray::s![y1..y2, x1..x2]);
+        Ok(out)
+    }
+}
+
+impl<'a, 'b: 'a, T: Num> Roi<'a, ArrayView2<'a, T>> for ArrayViewMut2<'b, T> {
+    type Error = RoiError;
+    fn roi(&'a self, aabb: impl Into<Aabb2<usize>>) -> Result<ArrayView2<'a, T>, Self::Error> {
+        let aabb = aabb.into();
+        let x1 = aabb.x1();
+        let x2 = aabb.x2();
+        let y1 = aabb.y1();
+        let y2 = aabb.y2();
+        if !aabb.is_positive() {
+            return Err(RoiError::InvalidRoi { got: aabb });
+        }
+        let max_aabb = Aabb2::from_x1y1x2y2(0, 0, self.shape()[1], self.shape()[0]);
+        if !max_aabb.contains_bbox(&aabb) {
+            return Err(RoiError::RoiOutOfBounds {
+                max: max_aabb,
+                got: aabb,
+            });
+        }
+        let out: ArrayView2<'a, T> = self.slice(ndarray::s![y1..y2, x1..x2]);
+        Ok(out)
+    }
+}
+
+impl<'a, 'b: 'a, T: Num> Roi<'a, ArrayView3<'a, T>> for ArrayViewMut3<'b, T> {
+    type Error = RoiError;
+    fn roi(&'a self, aabb: impl Into<Aabb2<usize>>) -> Result<ArrayView3<'a, T>, Self::Error> {
+        let aabb = aabb.into();
+        let x1 = aabb.x1();
+        let x2 = aabb.x2();
+        let y1 = aabb.y1();
+        let y2 = aabb.y2();
+        if !aabb.is_positive() {
+            return Err(RoiError::InvalidRoi { got: aabb });
+        }
+        let max_aabb = Aabb2::from_x1y1x2y2(0, 0, self.shape()[1], self.shape()[0]);
+        if !max_aabb.contains_bbox(&aabb) {
+            return Err(RoiError::RoiOutOfBounds {
+                max: max_aabb,
+                got: aabb,
+            });
+        }
+        let out: ArrayView3<'a, T> = self.slice(ndarray::s![y1..y2, x1..x2, ..]);
         Ok(out)
     }
 }

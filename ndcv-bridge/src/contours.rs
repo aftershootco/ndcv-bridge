@@ -3,9 +3,17 @@
 #![deny(warnings)]
 
 use crate::conversions::*;
-use crate::prelude_::*;
+use core::result::Result;
 use nalgebra::Point2;
 use ndarray::*;
+
+#[derive(Debug, thiserror::Error)]
+pub enum ContoursError {
+    #[error("Conversion error: {0}")]
+    ConversionError(#[from] ConversionError),
+    #[error("OpenCV error: {0}")]
+    OpenCvError(#[from] opencv::Error),
+}
 
 #[repr(C)]
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
@@ -54,22 +62,22 @@ pub trait NdCvFindContours<T: bytemuck::Pod + seal::Sealed>:
         &self,
         mode: ContourRetrievalMode,
         method: ContourApproximationMethod,
-    ) -> Result<Vec<Vec<Point2<i32>>>, NdCvError>;
+    ) -> Result<Vec<Vec<Point2<i32>>>, ContoursError>;
 
     fn find_contours_with_hierarchy(
         &self,
         mode: ContourRetrievalMode,
         method: ContourApproximationMethod,
-    ) -> Result<ContourResult, NdCvError>;
+    ) -> Result<ContourResult, ContoursError>;
 
-    fn find_contours_def(&self) -> Result<Vec<Vec<Point2<i32>>>, NdCvError> {
+    fn find_contours_def(&self) -> Result<Vec<Vec<Point2<i32>>>, ContoursError> {
         self.find_contours(
             ContourRetrievalMode::External,
             ContourApproximationMethod::Simple,
         )
     }
 
-    fn find_contours_with_hierarchy_def(&self) -> Result<ContourResult, NdCvError> {
+    fn find_contours_with_hierarchy_def(&self) -> Result<ContourResult, ContoursError> {
         self.find_contours_with_hierarchy(
             ContourRetrievalMode::External,
             ContourApproximationMethod::Simple,
@@ -78,9 +86,9 @@ pub trait NdCvFindContours<T: bytemuck::Pod + seal::Sealed>:
 }
 
 pub trait NdCvContourArea<T: bytemuck::Pod> {
-    fn contours_area(&self, oriented: bool) -> Result<f64, NdCvError>;
+    fn contours_area(&self, oriented: bool) -> Result<f64, ContoursError>;
 
-    fn contours_area_def(&self) -> Result<f64, NdCvError> {
+    fn contours_area_def(&self) -> Result<f64, ContoursError> {
         self.contours_area(false)
     }
 }
@@ -90,8 +98,8 @@ impl<T: ndarray::RawData + ndarray::Data<Elem = u8>> NdCvFindContours<u8> for Ar
         &self,
         mode: ContourRetrievalMode,
         method: ContourApproximationMethod,
-    ) -> Result<Vec<Vec<Point2<i32>>>, NdCvError> {
-        let cv_self = self.as_image_mat().change_context(NdCvError)?;
+    ) -> Result<Vec<Vec<Point2<i32>>>, ContoursError> {
+        let cv_self = self.as_image_mat()?;
         let mut contours = opencv::core::Vector::<opencv::core::Vector<opencv::core::Point>>::new();
 
         opencv::imgproc::find_contours(
@@ -100,13 +108,11 @@ impl<T: ndarray::RawData + ndarray::Data<Elem = u8>> NdCvFindContours<u8> for Ar
             mode as i32,
             method as i32,
             opencv::core::Point::new(0, 0),
-        )
-        .change_context(NdCvError)
-        .attach("Failed to find contours")?;
+        )?;
         let mut result: Vec<Vec<Point2<i32>>> = Vec::new();
 
         for i in 0..contours.len() {
-            let contour = contours.get(i).change_context(NdCvError)?;
+            let contour = contours.get(i)?;
             let points: Vec<Point2<i32>> =
                 contour.iter().map(|pt| Point2::new(pt.x, pt.y)).collect();
             result.push(points);
@@ -119,8 +125,8 @@ impl<T: ndarray::RawData + ndarray::Data<Elem = u8>> NdCvFindContours<u8> for Ar
         &self,
         mode: ContourRetrievalMode,
         method: ContourApproximationMethod,
-    ) -> Result<ContourResult, NdCvError> {
-        let cv_self = self.as_image_mat().change_context(NdCvError)?;
+    ) -> Result<ContourResult, ContoursError> {
+        let cv_self = self.as_image_mat()?;
         let mut contours = opencv::core::Vector::<opencv::core::Vector<opencv::core::Point>>::new();
         let mut hierarchy = opencv::core::Vector::<opencv::core::Vec4i>::new();
 
@@ -131,13 +137,11 @@ impl<T: ndarray::RawData + ndarray::Data<Elem = u8>> NdCvFindContours<u8> for Ar
             mode as i32,
             method as i32,
             opencv::core::Point::new(0, 0),
-        )
-        .change_context(NdCvError)
-        .attach("Failed to find contours with hierarchy")?;
+        )?;
         let mut contour_list: Vec<Vec<Point2<i32>>> = Vec::new();
 
         for i in 0..contours.len() {
-            let contour = contours.get(i).change_context(NdCvError)?;
+            let contour = contours.get(i)?;
             let points: Vec<Point2<i32>> =
                 contour.iter().map(|pt| Point2::new(pt.x, pt.y)).collect();
             contour_list.push(points);
@@ -145,7 +149,7 @@ impl<T: ndarray::RawData + ndarray::Data<Elem = u8>> NdCvFindContours<u8> for Ar
 
         let mut hierarchy_list = Vec::new();
         for i in 0..hierarchy.len() {
-            let h = hierarchy.get(i).change_context(NdCvError)?;
+            let h = hierarchy.get(i)?;
             hierarchy_list.push(ContourHierarchy {
                 next: h[0],
                 previous: h[1],
@@ -165,7 +169,7 @@ impl<T> NdCvContourArea<T> for Vec<Point2<T>>
 where
     T: bytemuck::Pod + num::traits::AsPrimitive<i32> + std::cmp::PartialEq + std::fmt::Debug + Copy,
 {
-    fn contours_area(&self, oriented: bool) -> Result<f64, NdCvError> {
+    fn contours_area(&self, oriented: bool) -> Result<f64, ContoursError> {
         if self.is_empty() {
             return Ok(0.0);
         }
@@ -178,9 +182,7 @@ where
             ));
         });
 
-        opencv::imgproc::contour_area(&cv_contour, oriented)
-            .change_context(NdCvError)
-            .attach("Failed to calculate contour area")
+        Ok(opencv::imgproc::contour_area(&cv_contour, oriented)?)
     }
 }
 

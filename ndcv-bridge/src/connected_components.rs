@@ -1,4 +1,21 @@
-use crate::{NdAsImage, NdAsImageMut, conversions::MatAsNd, prelude_::*};
+use crate::{
+    NdAsImage, NdAsImageMut,
+    conversions::{ConversionError, MatAsNd},
+};
+
+#[derive(Debug, thiserror::Error)]
+pub enum ConnectedComponentsError {
+    #[error("Conversion error: {0}")]
+    ConversionError(#[from] ConversionError),
+    #[error("OpenCV error: {0}")]
+    OpenCvError(#[from] opencv::Error),
+}
+
+impl ConnectedComponentsError {
+    pub fn into_error(self) -> impl core::error::Error + Send + Sync + 'static {
+        self
+    }
+}
 
 pub(crate) mod seal {
     pub trait ConnectedComponentOutput: Sized + Copy + bytemuck::Pod + num::Zero {
@@ -14,11 +31,11 @@ pub trait NdCvConnectedComponents<T> {
     fn connected_components<O: seal::ConnectedComponentOutput>(
         &self,
         connectivity: Connectivity,
-    ) -> Result<ndarray::Array2<O>, NdCvError>;
+    ) -> Result<ndarray::Array2<O>, ConnectedComponentsError>;
     fn connected_components_with_stats<O: seal::ConnectedComponentOutput>(
         &self,
         connectivity: Connectivity,
-    ) -> Result<ConnectedComponentStats<O>, NdCvError>;
+    ) -> Result<ConnectedComponentStats<O>, ConnectedComponentsError>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -45,41 +62,36 @@ where
     fn connected_components<O: seal::ConnectedComponentOutput>(
         &self,
         connectivity: Connectivity,
-    ) -> Result<ndarray::Array2<O>, NdCvError> {
-        let mat = self.as_image_mat().change_context(NdCvError)?;
+    ) -> Result<ndarray::Array2<O>, ConnectedComponentsError> {
+        let mat = self.as_image_mat()?;
         let mut labels = ndarray::Array2::<O>::zeros(self.dim());
-        let mut cv_labels = labels.as_image_mat_mut().change_context(NdCvError)?;
+        let mut cv_labels = labels.as_image_mat_mut()?;
         opencv::imgproc::connected_components(
             mat.as_ref(),
             cv_labels.as_mut(),
             connectivity as i32,
             O::as_cv_type(),
-        )
-        .change_context(NdCvError)?;
+        )?;
         Ok(labels)
     }
 
     fn connected_components_with_stats<O: seal::ConnectedComponentOutput>(
         &self,
         connectivity: Connectivity,
-    ) -> Result<ConnectedComponentStats<O>, NdCvError> {
+    ) -> Result<ConnectedComponentStats<O>, ConnectedComponentsError> {
         let mut labels = ndarray::Array2::<O>::zeros(self.dim());
         let mut stats = opencv::core::Mat::default();
         let mut centroids = opencv::core::Mat::default();
         let num_labels = opencv::imgproc::connected_components_with_stats(
-            self.as_image_mat().change_context(NdCvError)?.as_ref(),
-            labels
-                .as_image_mat_mut()
-                .change_context(NdCvError)?
-                .as_mut(),
+            self.as_image_mat()?.as_ref(),
+            labels.as_image_mat_mut()?.as_mut(),
             &mut stats,
             &mut centroids,
             connectivity as i32,
             O::as_cv_type(),
-        )
-        .change_context(NdCvError)?;
-        let stats = stats.as_ndarray().change_context(NdCvError)?.to_owned();
-        let centroids = centroids.as_ndarray().change_context(NdCvError)?.to_owned();
+        )?;
+        let stats = stats.as_ndarray()?.to_owned();
+        let centroids = centroids.as_ndarray()?.to_owned();
         Ok(ConnectedComponentStats {
             labels,
             stats,

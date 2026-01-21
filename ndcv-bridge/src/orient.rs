@@ -1,7 +1,8 @@
 use ndarray::{Array, ArrayBase};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum Orientation {
+    #[default]
     NoRotation,
     Mirror,
     Clock180,

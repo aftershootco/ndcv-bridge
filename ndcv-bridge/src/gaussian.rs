@@ -1,8 +1,15 @@
 //! <https://docs.rs/opencv/latest/opencv/imgproc/fn.gaussian_blur.html>
 use crate::conversions::*;
-use crate::prelude_::*;
 use ndarray::*;
 use opencv::core::AlgorithmHint as OpencvAlgorithmHint;
+
+#[derive(Debug, thiserror::Error)]
+pub enum GaussianBlurError {
+    #[error("Conversion error: {0}")]
+    ConversionError(#[from] crate::conversions::ConversionError),
+    #[error("OpenCV error: {0}")]
+    OpenCvError(#[from] opencv::Error),
+}
 
 #[repr(C)]
 #[derive(Default, Debug, Copy, Clone)]
@@ -55,12 +62,12 @@ pub trait NdCvGaussianBlur<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimensio
         sigma_x: f64,
         sigma_y: f64,
         border_type: BorderType,
-    ) -> Result<ndarray::Array<T, D>, NdCvError>;
+    ) -> Result<ndarray::Array<T, D>, GaussianBlurError>;
     fn gaussian_blur_def(
         &self,
         kernel: (u8, u8),
         sigma_x: f64,
-    ) -> Result<ndarray::Array<T, D>, NdCvError> {
+    ) -> Result<ndarray::Array<T, D>, GaussianBlurError> {
         self.gaussian_blur(kernel, sigma_x, sigma_x, BorderType::BorderConstant)
     }
 }
@@ -80,10 +87,10 @@ where
         sigma_x: f64,
         sigma_y: f64,
         border_type: BorderType,
-    ) -> Result<ndarray::Array<T, D>, NdCvError> {
+    ) -> Result<ndarray::Array<T, D>, GaussianBlurError> {
         let mut dst = ndarray::Array::zeros(self.dim());
-        let cv_self = self.as_image_mat().change_context(NdCvError)?;
-        let mut cv_dst = dst.as_image_mat_mut().change_context(NdCvError)?;
+        let cv_self = self.as_image_mat()?;
+        let mut cv_dst = dst.as_image_mat_mut()?;
         opencv::imgproc::gaussian_blur(
             &*cv_self,
             &mut *cv_dst,
@@ -95,9 +102,7 @@ where
             sigma_y,
             border_type as i32,
             OpencvAlgorithmHint::ALGO_HINT_DEFAULT,
-        )
-        .change_context(NdCvError)
-        .attach("Failed to apply gaussian blur")?;
+        )?;
         Ok(dst)
     }
 }
@@ -113,7 +118,7 @@ where
 //         sigma_x: f64,
 //         sigma_y: f64,
 //         border_type: BorderType,
-//     ) -> Result<ndarray::Array<T, Ix3>, NdCvError> {
+//     ) -> Result<ndarray::Array<T, Ix3>, GaussianBlurError> {
 //         let mut dst = ndarray::Array::zeros(self.dim());
 //         let cv_self = self.as_image_mat()?;
 //         let mut cv_dst = dst.as_image_mat_mut()?;
@@ -128,7 +133,7 @@ where
 //             sigma_y,
 //             border_type as i32,
 //         )
-//         .change_context(NdCvError)
+//
 //         .attach("Failed to apply gaussian blur")?;
 //         Ok(dst)
 //     }
@@ -145,7 +150,7 @@ where
 //         sigma_x: f64,
 //         sigma_y: f64,
 //         border_type: BorderType,
-//     ) -> Result<ndarray::Array<T, Ix2>, NdCvError> {
+//     ) -> Result<ndarray::Array<T, Ix2>, GaussianBlurError> {
 //         let mut dst = ndarray::Array::zeros(self.dim());
 //         let cv_self = self.as_image_mat()?;
 //         let mut cv_dst = dst.as_image_mat_mut()?;
@@ -160,7 +165,7 @@ where
 //             sigma_y,
 //             border_type as i32,
 //         )
-//         .change_context(NdCvError)
+//
 //         .attach("Failed to apply gaussian blur")?;
 //         Ok(dst)
 //     }
@@ -177,12 +182,12 @@ pub trait NdCvGaussianBlurInPlace<T: bytemuck::Pod + seal::Sealed, D: ndarray::D
         sigma_x: f64,
         sigma_y: f64,
         border_type: BorderType,
-    ) -> Result<&mut Self, NdCvError>;
+    ) -> Result<&mut Self, GaussianBlurError>;
     fn gaussian_blur_def_inplace(
         &mut self,
         kernel: (u8, u8),
         sigma_x: f64,
-    ) -> Result<&mut Self, NdCvError> {
+    ) -> Result<&mut Self, GaussianBlurError> {
         self.gaussian_blur_inplace(kernel, sigma_x, sigma_x, BorderType::BorderConstant)
     }
 }
@@ -201,8 +206,8 @@ where
         sigma_x: f64,
         sigma_y: f64,
         border_type: BorderType,
-    ) -> Result<&mut Self, NdCvError> {
-        let mut cv_self = self.as_image_mat_mut().change_context(NdCvError)?;
+    ) -> Result<&mut Self, GaussianBlurError> {
+        let mut cv_self = self.as_image_mat_mut()?;
 
         unsafe {
             crate::inplace::op_inplace(&mut cv_self, |this, out| {
@@ -219,9 +224,7 @@ where
                     OpencvAlgorithmHint::ALGO_HINT_DEFAULT,
                 )
             })
-        }
-        .change_context(NdCvError)
-        .attach("Failed to apply gaussian blur")?;
+        }?;
         Ok(self)
     }
 }

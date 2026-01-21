@@ -2,7 +2,72 @@ use super::{Aabb2, Num};
 use nalgebra::Point2;
 use nalgebra::Vector2;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(from = "PointCompat<T>", into = "PointCompat<T>")]
+pub struct Point<T = f32>(pub nalgebra::Point2<T>)
+where
+    T: Num;
+
+#[derive(Debug, Copy, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct PointCompat<T = f32> {
+    pub x: T,
+    pub y: T,
+}
+
+impl<T: Num> From<PointCompat<T>> for Point<T> {
+    fn from(value: PointCompat<T>) -> Self {
+        Self(nalgebra::Point2::new(value.x, value.y))
+    }
+}
+
+impl<T: Num> From<Point<T>> for PointCompat<T> {
+    fn from(value: Point<T>) -> Self {
+        Self {
+            x: value.0.x,
+            y: value.0.y,
+        }
+    }
+}
+
+impl<T: Num> From<nalgebra::Point2<T>> for Point<T> {
+    fn from(value: nalgebra::Point2<T>) -> Self {
+        Self(value)
+    }
+}
+
+impl<T: Num> From<Point<T>> for nalgebra::Point2<T> {
+    fn from(value: Point<T>) -> Self {
+        value.0
+    }
+}
+
+impl<T: Num> Point<T> {
+    pub fn new(x: T, y: T) -> Self {
+        Self(nalgebra::Point2::new(x, y))
+    }
+    pub fn x(&self) -> T
+    where
+        T: Copy,
+    {
+        self.0.x
+    }
+    pub fn y(&self) -> T
+    where
+        T: Copy,
+    {
+        self.0.y
+    }
+
+    pub fn cast<T2: Num>(&self) -> Point<T2>
+    where
+        T: num::cast::AsPrimitive<T2>,
+    {
+        Point(self.0.map(|v| v.as_()))
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(from = "BBoxCompat<T>", into = "BBoxCompat<T>")]
 #[repr(transparent)]
 pub struct BBox<T = f32>(Aabb2<T>)

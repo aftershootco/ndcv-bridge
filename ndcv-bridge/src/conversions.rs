@@ -101,13 +101,13 @@ impl From<ndarray::ShapeError> for ConversionError {
     }
 }
 
-#[deprecated = "Use NdAsMat and NdAsImage traits instead"]
+// #[deprecated = "Use NdAsMat and NdAsImage traits instead"]
 pub trait NdCvConversion<T: bytemuck::Pod + Copy, D: ndarray::Dimension>:
     seal::SealedInternal + Sized
 {
-    #[deprecated = "Use NdAsMat and NdAsImage traits instead"]
+    // #[deprecated = "Use NdAsMat and NdAsImage traits instead"]
     fn to_mat(&self) -> Result<opencv::core::Mat, ConversionError>;
-    #[deprecated = "Use NdAsMat and NdAsImage traits instead"]
+    // #[deprecated = "Use NdAsMat and NdAsImage traits instead"]
     fn from_mat(
         mat: opencv::core::Mat,
     ) -> Result<ndarray::ArrayBase<ndarray::OwnedRepr<T>, D>, ConversionError>;

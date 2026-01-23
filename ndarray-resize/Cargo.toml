@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 bytemuck = "1.23.1"
 error-stack = "0.6.0"
-fast_image_resize = "5.2.0"
+fast_image_resize = { workspace = true }
 ndarray = { workspace = true }
 num = "0.4.3"
 thiserror = "2.0.12"

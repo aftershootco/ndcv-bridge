@@ -13,4 +13,4 @@ ndcv-docs:
     # Package documentation for the upload
     cargo doc -p ndcv-bridge --target-dir ./target --no-deps
     cd ./target && zip -r doc.zip ./doc
-    curl -v -L -H "Authorization: {{auth-token}}" https://crates.darksailor.dev/api/v1/docs/ndcv-bridge/{{ndcv-version}} --upload-file target/doc.zip
+    curl -sS -L -H "Authorization: {{auth-token}}" https://crates.darksailor.dev/api/v1/docs/ndcv-bridge/{{ndcv-version}} --upload-file target/doc.zip

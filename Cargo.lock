@@ -540,18 +540,6 @@ dependencies = [
 
 [[package]]
 name = "fast_image_resize"
-version = "5.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbc7fe45cf92b43817ff62a3723e862b85bd1d06288f63007f7645d1d2f7a060"
-dependencies = [
- "cfg-if",
- "document-features",
- "num-traits",
- "thiserror",
-]
-
-[[package]]
-name = "fast_image_resize"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "12dd43e5011e8d8411a3215a0d57a2ec5c68282fb90eb5d7221fab0113442174"
@@ -1049,7 +1037,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "error-stack",
- "fast_image_resize 5.5.0",
+ "fast_image_resize",
  "ndarray",
  "num",
  "thiserror",
@@ -1074,7 +1062,7 @@ dependencies = [
  "bytemuck",
  "divan",
  "error-stack",
- "fast_image_resize 6.0.0",
+ "fast_image_resize",
  "img-parts",
  "nalgebra",
  "ndarray",

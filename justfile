@@ -7,6 +7,7 @@ publish:
     cargo publish --registry kellnr -p ndcv-bridge
     cargo publish --registry kellnr -p ndarray-image
     cargo publish --registry kellnr -p ndarray-resize
+    cargo publish --registry kellnr -p ndarray-safetensors
 
 ndcv-docs:
     # Package documentation for the upload

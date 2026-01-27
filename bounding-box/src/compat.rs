@@ -437,8 +437,8 @@ impl<T: Copy + Num> BBox<T> {
 impl<T: Num + core::ops::Sub<Output = T> + Copy> core::ops::Sub<T> for BBox<T> {
     type Output = BBox<T>;
     fn sub(mut self, rhs: T) -> Self::Output {
-        self.0.point.iter_mut().for_each(|v| *v = *v - rhs);
-        self.0.size.iter_mut().for_each(|v| *v = *v - rhs);
+        self.0.point.iter_mut().for_each(|v| *v -= rhs);
+        self.0.size.iter_mut().for_each(|v| *v -= rhs);
         self
     }
 }
@@ -446,24 +446,24 @@ impl<T: Num + core::ops::Sub<Output = T> + Copy> core::ops::Sub<T> for BBox<T> {
 impl<T: Num + core::ops::Add<Output = T> + Copy> core::ops::Add<T> for BBox<T> {
     type Output = BBox<T>;
     fn add(mut self, rhs: T) -> Self::Output {
-        self.0.point.iter_mut().for_each(|v| *v = *v + rhs);
-        self.0.size.iter_mut().for_each(|v| *v = *v + rhs);
+        self.0.point.iter_mut().for_each(|v| *v += rhs);
+        self.0.size.iter_mut().for_each(|v| *v += rhs);
         self
     }
 }
 impl<T: Num + core::ops::Mul<Output = T> + Copy> core::ops::Mul<T> for BBox<T> {
     type Output = BBox<T>;
     fn mul(mut self, rhs: T) -> Self::Output {
-        self.0.point.iter_mut().for_each(|v| *v = *v * rhs);
-        self.0.size.iter_mut().for_each(|v| *v = *v * rhs);
+        self.0.point.iter_mut().for_each(|v| *v *= rhs);
+        self.0.size.iter_mut().for_each(|v| *v *= rhs);
         self
     }
 }
 impl<T: Num + core::ops::Div<Output = T> + Copy> core::ops::Div<T> for BBox<T> {
     type Output = BBox<T>;
     fn div(mut self, rhs: T) -> Self::Output {
-        self.0.point.iter_mut().for_each(|v| *v = *v / rhs);
-        self.0.size.iter_mut().for_each(|v| *v = *v / rhs);
+        self.0.point.iter_mut().for_each(|v| *v /= rhs);
+        self.0.size.iter_mut().for_each(|v| *v /= rhs);
         self
     }
 }

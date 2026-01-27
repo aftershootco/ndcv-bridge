@@ -72,7 +72,7 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
             Err(ConversionErrorKind::NonContiguousData)?;
         }
     } else if shape.len() == 1 {
-        return Err(ConversionErrorKind::UnsupportedNdarrayShape)?;
+        Err(ConversionErrorKind::UnsupportedNdarrayShape)?;
     }
 
     // Since this is the consolidated version we should always only have ndims - 1 sizes and
@@ -181,7 +181,7 @@ pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
     let multi_channel_1d = maybe_1d && multi_channel && D::NDIM.is_some_and(|d| d == 2);
 
     if !are_dims_compatible {
-        return Err(ConversionErrorKind::IncompatibleDimensions {
+        Err(ConversionErrorKind::IncompatibleDimensions {
             mat_dims: mat_dims as _,
             rows: mat.rows() as _,
             cols: mat.cols() as _,

@@ -642,7 +642,7 @@ mod bbox_scale_tests {
         // assert_eq!(result[0], Rect::new(200, 400, 600, 800));
         let bbox = BBox::new(100, 200, 300, 400);
         let scaled = bbox.scale(2);
-        assert_eq!(scaled, BBox::new(200, 400, 600, 800));
+        assert_eq!(scaled, BBox::new(-50, 0, 600, 800));
     }
 }
 

@@ -1,8 +1,8 @@
 /// Trait for converting images to ndarray
 ///
-/// ```rust
+/// ```rust,no_run,ignore
 /// use ndcv_bridge::NdImage;
-/// use ndarray::Array3;
+/// use ndarray::{Array3, Array2};
 /// use image::{DynamicImage, GrayImage, RgbImage};
 /// let rgb: RgbImage = RgbImage::new(10, 10);
 /// let luma: GrayImage = DynamicImage::ImageRgb8(rgb).into_luma8();

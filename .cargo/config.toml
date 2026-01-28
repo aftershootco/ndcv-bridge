@@ -1,0 +1,3 @@
+# replace once aftershoot internal regsitry is up
+[registries.kellnr]
+index = "sparse+https://crates.darksailor.dev/api/v1/crates"

@@ -29,3 +29,7 @@ img-parts = "0.4.0"
 ndarray = { version = "0.16.1", features = ["rayon"] }
 num = "0.4"
 tap = "1.0.1"
+
+
+[workspace.metadata.crane]
+name = "ndcv"

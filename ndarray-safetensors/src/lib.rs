@@ -69,17 +69,17 @@ use safetensors::tensor::SafeTensors;
 /// let tensor: ndarray::ArrayView2<f32> = view.tensor("data").unwrap();
 /// ```
 #[derive(Debug)]
-pub struct SafeArraysView<'a> {
+pub struct SafeArrayView<'a> {
     pub tensors: SafeTensors<'a>,
 }
 
-impl<'a> SafeArraysView<'a> {
+impl<'a> SafeArrayView<'a> {
     fn new(tensors: SafeTensors<'a>) -> Self {
         Self { tensors }
     }
 
     /// Create a SafeArrayView from serialized bytes
-    pub fn from_bytes(bytes: &'a [u8]) -> Result<SafeArraysView<'a>> {
+    pub fn from_bytes(bytes: &'a [u8]) -> Result<SafeArrayView<'a>> {
         let tensors = SafeTensors::deserialize(bytes)?;
         Ok(Self::new(tensors))
     }
@@ -429,7 +429,7 @@ fn test_serialize_safe_arrays() {
     assert!(!serialized.is_empty());
 
     // Deserialize to check if it works
-    let deserialized = SafeArraysView::from_bytes(&serialized).unwrap();
+    let deserialized = SafeArrayView::from_bytes(&serialized).unwrap();
     assert_eq!(deserialized.len(), 2);
     assert_eq!(
         deserialized

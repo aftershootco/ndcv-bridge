@@ -474,25 +474,24 @@ mod tests {
             _ => 0,
         });
 
-        // Note: RGB to Gray conversion changes from Ix3 to Ix2
-        // This test currently has a known issue in the library implementation
-        // where Gray (Ix2) dimension handling needs special logic
-        // Commenting out until library fix is implemented
         let gray_result: CowArray<u8, Ix2> = rgb_data.cvt::<Rgb<u8>, Gray<u8>>();
-        assert_eq!(gray_result.shape(), [10, 10]);
 
-        // For now, just test that the conversion is defined
-        // The conversion code exists at line 91 but has dimension handling issues
-        assert_eq!(rgb_data.shape(), [10, 10, 3]);
+        assert_eq!(gray_result.shape(), [10, 10]);
+        assert_eq!(gray_result.ndim(), 2);
+        // OpenCV uses weighted average: 0.299*R + 0.587*G + 0.114*B
+        // Expected: 0.299*100 + 0.587*150 + 0.114*200 = 29.9 + 88.05 + 22.8 = 140.75
+        // Allow for rounding differences in OpenCV implementation
+        let gray_value = gray_result[[5, 5]];
+        assert!(
+            gray_value >= 140 && gray_value <= 141,
+            "Expected gray value between 140-141, got {}",
+            gray_value
+        );
     }
 
     #[test]
     fn test_gray_conversion_different_types() {
         // Test grayscale with different numeric types
-        // Note: RGB to Gray conversions have a known issue with dimension handling
-        // (Ix3 -> Ix2 conversion has bugs in current implementation)
-        // These tests document the expected behavior once the library is fixed
-
         let rgb_u16 = Array3::<u16>::from_shape_fn((8, 8, 3), |(_y, _x, c)| match c {
             0 => 32768,
             1 => 16384,
@@ -500,13 +499,11 @@ mod tests {
             _ => 0,
         });
 
-        // Commented out until library fix:
         let gray_u16: CowArray<u16, Ix2> = rgb_u16.cvt::<Rgb<u16>, Gray<u16>>();
         assert_eq!(gray_u16.shape(), [8, 8]);
         assert_eq!(gray_u16.ndim(), 2);
 
-        assert_eq!(rgb_u16.shape(), [8, 8, 3]);
-
+        // Test grayscale with f32
         let rgb_f32 = Array3::<f32>::from_shape_fn((6, 6, 3), |(_y, _x, c)| match c {
             0 => 0.5,
             1 => 0.5,
@@ -514,13 +511,10 @@ mod tests {
             _ => 0.0,
         });
 
-        // Commented out until library fix:
         let gray_f32: CowArray<f32, Ix2> = rgb_f32.cvt::<Rgb<f32>, Gray<f32>>();
         assert_eq!(gray_f32.shape(), [6, 6]);
         assert_eq!(gray_f32.ndim(), 2);
         assert!((gray_f32[[3, 3]] - 0.5).abs() < 1e-6);
-
-        assert_eq!(rgb_f32.shape(), [6, 6, 3]);
     }
 
     #[test]
@@ -760,5 +754,91 @@ mod tests {
 
         // Verify all values are in reasonable range
         assert!(bgr_result.iter().all(|&v| v >= 0.0 && v <= 1.0));
+    }
+
+    #[test]
+    fn test_gray_pure_colors() {
+        // Test grayscale conversion with pure colors
+        // Pure red
+        let red_rgb = Array3::<u8>::from_shape_fn((5, 5, 3), |(_, _, c)| match c {
+            0 => 255,
+            _ => 0,
+        });
+        let red_gray: CowArray<u8, Ix2> = red_rgb.cvt::<Rgb<u8>, Gray<u8>>();
+        assert_eq!(red_gray.shape(), [5, 5]);
+        // Red contributes ~30% to gray value
+        let red_gray_val = red_gray[[2, 2]];
+        assert!(
+            red_gray_val > 70 && red_gray_val < 80,
+            "Red gray value: {}",
+            red_gray_val
+        );
+
+        // Pure green
+        let green_rgb = Array3::<u8>::from_shape_fn((5, 5, 3), |(_, _, c)| match c {
+            1 => 255,
+            _ => 0,
+        });
+        let green_gray: CowArray<u8, Ix2> = green_rgb.cvt::<Rgb<u8>, Gray<u8>>();
+        // Green contributes ~59% to gray value
+        let green_gray_val = green_gray[[2, 2]];
+        assert!(
+            green_gray_val > 145 && green_gray_val < 155,
+            "Green gray value: {}",
+            green_gray_val
+        );
+
+        // Pure blue
+        let blue_rgb = Array3::<u8>::from_shape_fn((5, 5, 3), |(_, _, c)| match c {
+            2 => 255,
+            _ => 0,
+        });
+        let blue_gray: CowArray<u8, Ix2> = blue_rgb.cvt::<Rgb<u8>, Gray<u8>>();
+        // Blue contributes ~11% to gray value
+        let blue_gray_val = blue_gray[[2, 2]];
+        assert!(
+            blue_gray_val > 25 && blue_gray_val < 35,
+            "Blue gray value: {}",
+            blue_gray_val
+        );
+    }
+
+    #[test]
+    fn test_gray_black_and_white() {
+        // Test pure black and white conversions to gray
+        let black_rgb = Array3::<u8>::zeros((8, 8, 3));
+        let black_gray: CowArray<u8, Ix2> = black_rgb.cvt::<Rgb<u8>, Gray<u8>>();
+        assert_eq!(black_gray.shape(), [8, 8]);
+        assert!(black_gray.iter().all(|&v| v == 0));
+
+        let white_rgb = Array3::<u8>::from_elem((8, 8, 3), 255);
+        let white_gray: CowArray<u8, Ix2> = white_rgb.cvt::<Rgb<u8>, Gray<u8>>();
+        assert_eq!(white_gray.shape(), [8, 8]);
+        assert!(white_gray.iter().all(|&v| v == 255));
+    }
+
+    #[test]
+    fn test_gray_dimension_change() {
+        // Verify that converting to Gray changes dimension from Ix3 to Ix2
+        let rgb_data = Array3::<u8>::from_elem((12, 15, 3), 128);
+        let gray_result: CowArray<u8, Ix2> = rgb_data.cvt::<Rgb<u8>, Gray<u8>>();
+
+        assert_eq!(rgb_data.ndim(), 3);
+        assert_eq!(gray_result.ndim(), 2);
+        assert_eq!(gray_result.shape(), [12, 15]);
+    }
+
+    #[test]
+    fn test_gray_edge_case_sizes() {
+        // Test Gray conversion with various image sizes
+        // Minimum size
+        let min_rgb = Array3::<u8>::from_elem((1, 1, 3), 100);
+        let min_gray: CowArray<u8, Ix2> = min_rgb.cvt::<Rgb<u8>, Gray<u8>>();
+        assert_eq!(min_gray.shape(), [1, 1]);
+
+        // Non-square
+        let rect_rgb = Array3::<u8>::from_elem((5, 20, 3), 150);
+        let rect_gray: CowArray<u8, Ix2> = rect_rgb.cvt::<Rgb<u8>, Gray<u8>>();
+        assert_eq!(rect_gray.shape(), [5, 20]);
     }
 }

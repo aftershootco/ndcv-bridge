@@ -62,6 +62,7 @@ define_color_space!(Rgb, 3, Ix3);
 define_color_space!(Bgr, 3, Ix3);
 define_color_space!(Rgba, 4, Ix3);
 define_color_space!(Lab, 3, Ix3);
+define_color_space!(Gray, 1, Ix2);
 
 pub trait ToColorSpace<T, U, Dst>: ColorSpace<T>
 where
@@ -72,19 +73,24 @@ where
 }
 
 macro_rules! impl_color_converter {
-    ($src:tt, $dst:tt, $code:expr) => {
-        impl<T: seal::Sealed> ToColorSpace<T, T, $dst<T>> for $src<T> {
-            fn cv_colorspace_code() -> i32 {
-                $code
+    ($src:tt, $dst:tt, $code:expr => $($type:ty,)*) => {
+        $(
+            impl ToColorSpace<$type, $type, $dst<$type>> for $src<$type> {
+                fn cv_colorspace_code() -> i32 {
+                    $code
+                }
             }
-        }
+        )*
     };
 }
 
-impl_color_converter!(Rgb, Bgr, opencv::imgproc::COLOR_BGR2RGB);
-impl_color_converter!(Bgr, Rgb, opencv::imgproc::COLOR_BGR2RGB);
-impl_color_converter!(Rgba, Rgb, opencv::imgproc::COLOR_BGRA2BGR);
-impl_color_converter!(Rgb, Rgba, opencv::imgproc::COLOR_BGR2BGRA);
+impl_color_converter!(Rgb, Bgr, opencv::imgproc::COLOR_RGB2BGR => u8,  u16, f32,);
+impl_color_converter!(Bgr, Rgb, opencv::imgproc::COLOR_BGR2RGB => u8,  u16, f32,);
+impl_color_converter!(Rgba, Rgb, opencv::imgproc::COLOR_RGBA2RGB => u8,  u16, f32,);
+impl_color_converter!(Rgb, Rgba, opencv::imgproc::COLOR_RGB2RGBA => u8,  u16, f32,);
+impl_color_converter!(Rgb, Gray, opencv::imgproc::COLOR_RGB2GRAY => u8,  u16, f32,);
+impl_color_converter!(Rgb, Lab, opencv::imgproc::COLOR_RGB2Lab => f32,);
+impl_color_converter!(Lab, Rgb, opencv::imgproc::COLOR_Lab2RGB => f32,);
 
 impl ToColorSpace<u8, i8, Lab<i8>> for Rgb<u8> {
     fn cv_colorspace_code() -> i32 {
@@ -97,8 +103,6 @@ impl ToColorSpace<u8, i8, Lab<i8>> for Rgb<u8> {
 //         opencv::imgproc::ColorConversionCodes::COLOR_Lab2RGB
 //     }
 // }
-
-impl_color_converter!(Lab, Rgb, opencv::imgproc::COLOR_Lab2RGB);
 
 pub trait ConvertColor<T, T2, S>
 where
@@ -127,20 +131,18 @@ where
     }
 }
 
-impl<T, S, T2> ConvertColor<T, T2, S> for ArrayBase<S, <Rgb<T> as ColorSpace<T>>::Dim>
+impl<T, S, U> ConvertColor<T, U, S> for ArrayBase<S, ndarray::Ix3>
 where
     T: seal::Sealed + num::Zero,
-    T2: seal::Sealed + num::Zero,
+    U: seal::Sealed + num::Zero,
     S: ndarray::Data<Elem = T>,
 {
-    fn try_cvt<Src, Dst>(
-        &self,
-    ) -> Result<ArrayBase<CowRepr<'_, T2>, Dst::Dim>, ColorConversionError>
+    fn try_cvt<Src, Dst>(&self) -> Result<ArrayBase<CowRepr<'_, U>, Dst::Dim>, ColorConversionError>
     where
-        Src: ToColorSpace<T, T2, Dst>,
-        Dst: ColorSpace<T2>,
-        ArrayBase<OwnedRepr<T2>, <Dst as ColorSpace<T2>>::Dim>:
-            NdAsImageMut<T2, <Dst as ColorSpace<T2>>::Dim>,
+        Src: ToColorSpace<T, U, Dst>,
+        Dst: ColorSpace<U>,
+        ArrayBase<OwnedRepr<U>, <Dst as ColorSpace<U>>::Dim>:
+            NdAsImageMut<U, <Dst as ColorSpace<U>>::Dim>,
         ArrayBase<S, <Rgb<T> as ColorSpace<T>>::Dim>: NdAsImage<T, <Rgb<T> as ColorSpace<T>>::Dim>,
     {
         let size = self.shape();
@@ -148,12 +150,12 @@ where
         let src_channels = size[size.len() - 1];
         if src_channels != Src::CHANNELS {
             return Err(ColorConversionError::ChannelMismatch {
-                expected: Src::CHANNELS,
+                expected: src_channels,
                 src_type: std::any::type_name::<Src>()
                     .rsplit_once("::")
                     .map(|(_, s)| s)
                     .unwrap_or_else(std::any::type_name::<Src>),
-                got: src_channels,
+                got: Src::CHANNELS,
                 size: size.to_vec(),
             });
         }
@@ -165,13 +167,62 @@ where
             .for_each(|(idx, val)| {
                 new_size[idx] = val;
             });
-        let mut dst_ndarray = ArrayBase::<ndarray::OwnedRepr<T2>, Dst::Dim>::zeros(new_size);
+        let mut dst_ndarray = ArrayBase::<ndarray::OwnedRepr<U>, Dst::Dim>::zeros(new_size);
         let mat = self.as_image_mat()?;
         let mut dst_mat = dst_ndarray.as_image_mat_mut()?;
         opencv::imgproc::cvt_color(
             &*mat,
             &mut *dst_mat,
-            <Src as ToColorSpace<T, T2, Dst>>::cv_colorspace_code().into(),
+            <Src as ToColorSpace<T, U, Dst>>::cv_colorspace_code().into(),
+            0,
+            opencv::core::AlgorithmHint::ALGO_HINT_DEFAULT,
+        )?;
+        Ok(dst_ndarray.into())
+    }
+}
+
+impl<T, S, U> ConvertColor<T, U, S> for ArrayBase<S, ndarray::Ix2>
+where
+    T: seal::Sealed + num::Zero,
+    U: seal::Sealed + num::Zero,
+    S: ndarray::Data<Elem = T>,
+{
+    fn try_cvt<Src, Dst>(&self) -> Result<ArrayBase<CowRepr<'_, U>, Dst::Dim>, ColorConversionError>
+    where
+        Src: ToColorSpace<T, U, Dst>,
+        Dst: ColorSpace<U>,
+        ArrayBase<OwnedRepr<U>, <Dst as ColorSpace<U>>::Dim>:
+            NdAsImageMut<U, <Dst as ColorSpace<U>>::Dim>,
+        ArrayBase<S, <Rgb<T> as ColorSpace<T>>::Dim>: NdAsImage<T, <Rgb<T> as ColorSpace<T>>::Dim>,
+    {
+        let size = self.shape();
+        let mut new_size = Dst::Dim::zeros(Dst::Dim::NDIM.unwrap_or(self.ndim()));
+        if Src::CHANNELS != 1 {
+            return Err(ColorConversionError::ChannelMismatch {
+                expected: 1,
+                src_type: std::any::type_name::<Src>()
+                    .rsplit_once("::")
+                    .map(|(_, s)| s)
+                    .unwrap_or_else(std::any::type_name::<Src>),
+                got: Src::CHANNELS,
+                size: size.to_vec(),
+            });
+        }
+        size.iter()
+            .cloned()
+            .take(size.len() - 1)
+            .chain(std::iter::once(Dst::CHANNELS))
+            .enumerate()
+            .for_each(|(idx, val)| {
+                new_size[idx] = val;
+            });
+        let mut dst_ndarray = ArrayBase::<ndarray::OwnedRepr<U>, Dst::Dim>::zeros(new_size);
+        let mat = self.as_image_mat()?;
+        let mut dst_mat = dst_ndarray.as_image_mat_mut()?;
+        opencv::imgproc::cvt_color(
+            &*mat,
+            &mut *dst_mat,
+            <Src as ToColorSpace<T, U, Dst>>::cv_colorspace_code().into(),
             0,
             opencv::core::AlgorithmHint::ALGO_HINT_DEFAULT,
         )?;

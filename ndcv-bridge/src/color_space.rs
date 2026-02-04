@@ -31,7 +31,7 @@ pub enum ColorConversionError {
     },
 }
 
-pub trait ColorSpace<Elem> {
+pub trait ColorSpace<Elem>: seal::SealedColorSpace {
     type Dim: ndarray::Dimension;
     const CHANNELS: usize;
 }
@@ -39,9 +39,10 @@ pub trait ColorSpace<Elem> {
 mod seal {
     pub trait Sealed: bytemuck::Pod {}
     impl Sealed for u8 {} // 0 to 255
-    impl Sealed for i8 {} // -128 to 128
+    impl Sealed for i8 {} // -128 to 127
     impl Sealed for u16 {} // 0 to 65535
     impl Sealed for f32 {} // 0 to 1
+    pub trait SealedColorSpace {}
 }
 
 macro_rules! define_color_space {
@@ -49,6 +50,7 @@ macro_rules! define_color_space {
         pub struct $name<T: seal::Sealed> {
             __phantom: core::marker::PhantomData<T>,
         }
+        impl<T: seal::Sealed> seal::SealedColorSpace for $name<T> {}
         impl<T: seal::Sealed> ColorSpace<T> for $name<T> {
             type Dim = $depth;
             const CHANNELS: usize = $channels;
@@ -61,48 +63,32 @@ define_color_space!(Bgr, 3, Ix3);
 define_color_space!(Rgba, 4, Ix3);
 define_color_space!(Lab, 3, Ix3);
 
-pub trait ToColorSpace<SrcT, DstT, Dst>: ColorSpace<SrcT>
+pub trait ToColorSpace<T, U, Dst>: ColorSpace<T>
 where
-    SrcT: seal::Sealed,
-    Dst: ColorSpace<DstT>,
+    T: seal::Sealed,
+    Dst: ColorSpace<U>,
 {
-    fn cv_colorspace_code() -> opencv::imgproc::ColorConversionCodes;
+    fn cv_colorspace_code() -> i32;
 }
 
 macro_rules! impl_color_converter {
     ($src:tt, $dst:tt, $code:expr) => {
         impl<T: seal::Sealed> ToColorSpace<T, T, $dst<T>> for $src<T> {
-            fn cv_colorspace_code() -> opencv::imgproc::ColorConversionCodes {
+            fn cv_colorspace_code() -> i32 {
                 $code
             }
         }
     };
 }
 
-impl_color_converter!(
-    Rgb,
-    Bgr,
-    opencv::imgproc::ColorConversionCodes::COLOR_BGR2RGB
-);
-impl_color_converter!(
-    Bgr,
-    Rgb,
-    opencv::imgproc::ColorConversionCodes::COLOR_BGR2RGB
-);
-impl_color_converter!(
-    Rgba,
-    Rgb,
-    opencv::imgproc::ColorConversionCodes::COLOR_BGRA2BGR
-);
-impl_color_converter!(
-    Rgb,
-    Rgba,
-    opencv::imgproc::ColorConversionCodes::COLOR_BGR2BGRA
-);
+impl_color_converter!(Rgb, Bgr, opencv::imgproc::COLOR_BGR2RGB);
+impl_color_converter!(Bgr, Rgb, opencv::imgproc::COLOR_BGR2RGB);
+impl_color_converter!(Rgba, Rgb, opencv::imgproc::COLOR_BGRA2BGR);
+impl_color_converter!(Rgb, Rgba, opencv::imgproc::COLOR_BGR2BGRA);
 
 impl ToColorSpace<u8, i8, Lab<i8>> for Rgb<u8> {
-    fn cv_colorspace_code() -> opencv::imgproc::ColorConversionCodes {
-        opencv::imgproc::ColorConversionCodes::COLOR_RGB2Lab
+    fn cv_colorspace_code() -> i32 {
+        opencv::imgproc::COLOR_RGB2Lab
     }
 }
 
@@ -112,11 +98,7 @@ impl ToColorSpace<u8, i8, Lab<i8>> for Rgb<u8> {
 //     }
 // }
 
-impl_color_converter!(
-    Lab,
-    Rgb,
-    opencv::imgproc::ColorConversionCodes::COLOR_Lab2RGB
-);
+impl_color_converter!(Lab, Rgb, opencv::imgproc::COLOR_Lab2RGB);
 
 pub trait ConvertColor<T, T2, S>
 where
@@ -167,7 +149,10 @@ where
         if src_channels != Src::CHANNELS {
             return Err(ColorConversionError::ChannelMismatch {
                 expected: Src::CHANNELS,
-                src_type: std::any::type_name::<Src>().rsplit_once("::").unwrap().1,
+                src_type: std::any::type_name::<Src>()
+                    .rsplit_once("::")
+                    .map(|(_, s)| s)
+                    .unwrap_or_else(std::any::type_name::<Src>),
                 got: src_channels,
                 size: size.to_vec(),
             });

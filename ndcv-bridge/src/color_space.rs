@@ -161,11 +161,11 @@ where
         }
         size.iter()
             .cloned()
-            .take(
-                (size.len() != new_size.ndim())
-                    .then_some(new_size.ndim())
-                    .unwrap_or(size.len() - 1),
-            )
+            .take(if size.len() != new_size.ndim() {
+                new_size.ndim()
+            } else {
+                size.len() - 1
+            })
             .chain(std::iter::once(Dst::CHANNELS))
             .take(new_size.ndim())
             .enumerate()
@@ -178,7 +178,7 @@ where
         opencv::imgproc::cvt_color(
             &*mat,
             &mut *dst_mat,
-            <Src as ToColorSpace<T, U, Dst>>::cv_colorspace_code().into(),
+            <Src as ToColorSpace<T, U, Dst>>::cv_colorspace_code(),
             0,
             opencv::core::AlgorithmHint::ALGO_HINT_DEFAULT,
         )?;
@@ -227,7 +227,7 @@ where
         opencv::imgproc::cvt_color(
             &*mat,
             &mut *dst_mat,
-            <Src as ToColorSpace<T, U, Dst>>::cv_colorspace_code().into(),
+            <Src as ToColorSpace<T, U, Dst>>::cv_colorspace_code(),
             0,
             opencv::core::AlgorithmHint::ALGO_HINT_DEFAULT,
         )?;

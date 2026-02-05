@@ -168,7 +168,7 @@ impl<T: Copy + Num> BBox<T> {
         Self::new_xywh(x, y, width, height)
     }
 
-    /// Casts the internal values to another type using [as] keyword
+    /// Casts the internal values to another type using as keyword
     pub fn cast<T2>(self) -> BBox<T2>
     where
         T: num::cast::AsPrimitive<T2>,

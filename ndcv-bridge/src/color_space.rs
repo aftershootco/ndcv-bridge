@@ -10,7 +10,7 @@
 //! let arr = Array3::<u8>::ones((100, 100, 3));
 //! let out = arr.cvt::<Rgb<u8>, Lab<i8>>();
 //! ```
-use crate::{conversions::ConversionError, NdAsImage, NdAsImageMut};
+use crate::{NdAsImage, NdAsImageMut, conversions::ConversionError};
 use ndarray::*;
 
 #[derive(Debug, thiserror::Error)]
@@ -21,7 +21,7 @@ pub enum ColorConversionError {
     OpencvError(#[from] opencv::Error),
     #[error(
         "Channel mismatch:
-        expected: {expected} channels in the array ({src_type}), found: {got}, (shape: {size:?})"
+        expected: {expected} channels in the source color type ({src_type}), but found: {got}, (array shape: {size:?})"
     )]
     ChannelMismatch {
         expected: usize,

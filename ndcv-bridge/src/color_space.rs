@@ -483,7 +483,7 @@ mod tests {
         // Allow for rounding differences in OpenCV implementation
         let gray_value = gray_result[[5, 5]];
         assert!(
-            gray_value >= 140 && gray_value <= 141,
+            (140..=141).contains(&gray_value),
             "Expected gray value between 140-141, got {}",
             gray_value
         );
@@ -753,7 +753,7 @@ mod tests {
         let bgr_result: CowArray<f32, Ix3> = rgb_data.cvt::<Rgb<f32>, Bgr<f32>>();
 
         // Verify all values are in reasonable range
-        assert!(bgr_result.iter().all(|&v| v >= 0.0 && v <= 1.0));
+        assert!(bgr_result.iter().all(|&v| (0.0..=1.0).contains(&v)));
     }
 
     #[test]

@@ -10,7 +10,7 @@
 //! let arr = Array3::<u8>::ones((100, 100, 3));
 //! let out = arr.cvt::<Rgb<u8>, Lab<i8>>();
 //! ```
-use crate::{NdAsImage, NdAsImageMut, conversions::ConversionError};
+use crate::{conversions::ConversionError, NdAsImage, NdAsImageMut};
 use ndarray::*;
 
 #[derive(Debug, thiserror::Error)]
@@ -89,6 +89,7 @@ impl_color_converter!(Bgr, Rgb, opencv::imgproc::COLOR_BGR2RGB => u8,  u16, f32,
 impl_color_converter!(Rgba, Rgb, opencv::imgproc::COLOR_RGBA2RGB => u8,  u16, f32,);
 impl_color_converter!(Rgb, Rgba, opencv::imgproc::COLOR_RGB2RGBA => u8,  u16, f32,);
 impl_color_converter!(Rgb, Gray, opencv::imgproc::COLOR_RGB2GRAY => u8,  u16, f32,);
+impl_color_converter!(Gray, Rgb, opencv::imgproc::COLOR_GRAY2RGB => u8,  u16, f32,);
 impl_color_converter!(Rgb, Lab, opencv::imgproc::COLOR_RGB2Lab => f32,);
 impl_color_converter!(Lab, Rgb, opencv::imgproc::COLOR_Lab2RGB => f32,);
 
@@ -215,7 +216,6 @@ where
         }
         size.iter()
             .cloned()
-            .take(size.len() - 1)
             .chain(std::iter::once(Dst::CHANNELS))
             .enumerate()
             .for_each(|(idx, val)| {
@@ -840,5 +840,117 @@ mod tests {
         let rect_rgb = Array3::<u8>::from_elem((5, 20, 3), 150);
         let rect_gray: CowArray<u8, Ix2> = rect_rgb.cvt::<Rgb<u8>, Gray<u8>>();
         assert_eq!(rect_gray.shape(), [5, 20]);
+    }
+
+    #[test]
+    fn test_gray_to_rgb_conversion() {
+        // Test Gray (Ix2) to RGB (Ix3) conversion with various dimensions
+        use ndarray::Array2;
+
+        // Test 1: Standard rectangular grayscale image [100, 200]
+        let gray_data = Array2::<u8>::from_elem((100, 200), 128);
+        let rgb_result: CowArray<u8, Ix3> = gray_data.cvt::<Gray<u8>, Rgb<u8>>();
+
+        // Verify correct shape: [height, width, channels]
+        assert_eq!(
+            rgb_result.shape(),
+            [100, 200, 3],
+            "Gray to RGB conversion should preserve height and width, and add 3 channels"
+        );
+
+        // Verify all RGB channels have the same grayscale value
+        assert_eq!(rgb_result[[50, 100, 0]], 128); // R channel
+        assert_eq!(rgb_result[[50, 100, 1]], 128); // G channel
+        assert_eq!(rgb_result[[50, 100, 2]], 128); // B channel
+
+        // Test 2: Square grayscale image
+        let gray_square = Array2::<u8>::from_elem((50, 50), 200);
+        let rgb_square: CowArray<u8, Ix3> = gray_square.cvt::<Gray<u8>, Rgb<u8>>();
+        assert_eq!(rgb_square.shape(), [50, 50, 3]);
+        assert_eq!(rgb_square[[25, 25, 0]], 200);
+        assert_eq!(rgb_square[[25, 25, 1]], 200);
+        assert_eq!(rgb_square[[25, 25, 2]], 200);
+
+        // Test 3: Very wide image [10, 500]
+        let gray_wide = Array2::<u8>::from_elem((10, 500), 64);
+        let rgb_wide: CowArray<u8, Ix3> = gray_wide.cvt::<Gray<u8>, Rgb<u8>>();
+        assert_eq!(rgb_wide.shape(), [10, 500, 3]);
+
+        // Test 4: Very tall image [500, 10]
+        let gray_tall = Array2::<u8>::from_elem((500, 10), 192);
+        let rgb_tall: CowArray<u8, Ix3> = gray_tall.cvt::<Gray<u8>, Rgb<u8>>();
+        assert_eq!(rgb_tall.shape(), [500, 10, 3]);
+
+        // Test 5: Minimum size [1, 1]
+        let gray_min = Array2::<u8>::from_elem((1, 1), 255);
+        let rgb_min: CowArray<u8, Ix3> = gray_min.cvt::<Gray<u8>, Rgb<u8>>();
+        assert_eq!(rgb_min.shape(), [1, 1, 3]);
+        assert_eq!(rgb_min[[0, 0, 0]], 255);
+        assert_eq!(rgb_min[[0, 0, 1]], 255);
+        assert_eq!(rgb_min[[0, 0, 2]], 255);
+    }
+
+    #[test]
+    fn test_gray_to_rgb_different_types() {
+        // Test Gray to RGB conversion with different numeric types
+        use ndarray::Array2;
+
+        // Test with u16
+        let gray_u16 = Array2::<u16>::from_elem((20, 30), 32768);
+        let rgb_u16: CowArray<u16, Ix3> = gray_u16.cvt::<Gray<u16>, Rgb<u16>>();
+        assert_eq!(rgb_u16.shape(), [20, 30, 3]);
+        assert_eq!(rgb_u16[[10, 15, 0]], 32768);
+        assert_eq!(rgb_u16[[10, 15, 1]], 32768);
+        assert_eq!(rgb_u16[[10, 15, 2]], 32768);
+
+        // Test with f32
+        let gray_f32 = Array2::<f32>::from_elem((15, 25), 0.5);
+        let rgb_f32: CowArray<f32, Ix3> = gray_f32.cvt::<Gray<f32>, Rgb<f32>>();
+        assert_eq!(rgb_f32.shape(), [15, 25, 3]);
+        assert!((rgb_f32[[7, 12, 0]] - 0.5).abs() < 1e-6);
+        assert!((rgb_f32[[7, 12, 1]] - 0.5).abs() < 1e-6);
+        assert!((rgb_f32[[7, 12, 2]] - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_gray_to_rgb_round_trip() {
+        // Test RGB -> Gray -> RGB round trip
+        // Note: RGB -> Gray is lossy, so we won't get the exact same values
+        let original_rgb = Array3::<u8>::from_shape_fn((10, 15, 3), |(_, _, c)| match c {
+            0 => 100,
+            1 => 100,
+            2 => 100,
+            _ => 0,
+        });
+
+        // Convert to grayscale
+        let gray_result: CowArray<u8, Ix2> = original_rgb.cvt::<Rgb<u8>, Gray<u8>>();
+        assert_eq!(gray_result.shape(), [10, 15]);
+
+        // Convert back to RGB
+        let rgb_result: CowArray<u8, Ix3> = gray_result.cvt::<Gray<u8>, Rgb<u8>>();
+        assert_eq!(rgb_result.shape(), [10, 15, 3]);
+
+        // All channels should be equal after round trip
+        assert_eq!(rgb_result[[5, 7, 0]], rgb_result[[5, 7, 1]]);
+        assert_eq!(rgb_result[[5, 7, 1]], rgb_result[[5, 7, 2]]);
+    }
+
+    #[test]
+    fn test_gray_to_rgb_boundary_values() {
+        // Test with boundary values
+        use ndarray::Array2;
+
+        // All zeros (black)
+        let gray_black = Array2::<u8>::zeros((8, 12));
+        let rgb_black: CowArray<u8, Ix3> = gray_black.cvt::<Gray<u8>, Rgb<u8>>();
+        assert_eq!(rgb_black.shape(), [8, 12, 3]);
+        assert!(rgb_black.iter().all(|&v| v == 0));
+
+        // All max values (white)
+        let gray_white = Array2::<u8>::from_elem((8, 12), 255);
+        let rgb_white: CowArray<u8, Ix3> = gray_white.cvt::<Gray<u8>, Rgb<u8>>();
+        assert_eq!(rgb_white.shape(), [8, 12, 3]);
+        assert!(rgb_white.iter().all(|&v| v == 255));
     }
 }

@@ -145,6 +145,7 @@
                   cargo-nextest
                   cargo-deny
                   just
+                  cargo-llvm-cov
                 ]
                 ++ (lib.optionals pkgs.stdenv.isDarwin [
                   apple-sdk_26

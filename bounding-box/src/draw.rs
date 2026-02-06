@@ -17,8 +17,8 @@ pub trait Drawable<Canvas> {
     fn draw(&self, canvas: &mut Canvas, color: color::Rgba8, thickness: usize);
 }
 
-/// Implementing Drawable for Aabb2 with Array3<u8> as the canvas type
-/// Assuming Array3<u8> is a 3D array representing an image with RGB/RGBA channels
+/// Implementing Drawable for `Aabb2` with `Array3<u8>` as the canvas type
+/// Assuming `Array3<u8>` is a 3D array representing an image with RGB/RGBA channels
 impl Drawable<ArrayViewMut3<'_, u8>> for Aabb2<usize> {
     fn draw(&self, canvas: &mut ArrayViewMut3<u8>, color: color::Rgba8, thickness: usize) {
         use itertools::Itertools;

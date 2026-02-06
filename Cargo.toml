@@ -8,11 +8,13 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 
 # [patch.crates-io]
 # paste = { package = "pastey", version = "*" }
+[workspace.metadata.crane]
+name = "ndcv"
 
 [workspace.dependencies]
 divan = { version = "0.1.21" }

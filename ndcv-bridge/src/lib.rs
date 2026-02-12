@@ -22,9 +22,15 @@ pub mod contours;
 #[cfg(feature = "opencv")]
 pub mod conversions;
 #[cfg(feature = "opencv")]
+pub mod conversions_v2;
+#[cfg(feature = "opencv")]
 pub mod gaussian;
 #[cfg(feature = "opencv")]
 pub mod resize;
+#[cfg(feature = "opencv")]
+pub mod sobel;
+#[cfg(feature = "opencv")]
+pub mod types;
 
 // pub mod codec;
 pub mod orient;
@@ -34,6 +40,7 @@ pub use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 pub use fir::NdFir;
 pub use gaussian::{BorderType, NdCvGaussianBlur, NdCvGaussianBlurInPlace};
 pub use roi::{NdRoiZeroPadded, Roi as NdRoi, RoiMut as NdRoiMut};
+pub use sobel::{Ksize, NdCvSobel, NdCvSobelError, SobelArgs};
 
 #[cfg(feature = "opencv")]
 pub use contours::{
@@ -60,17 +67,9 @@ pub(crate) mod prelude_ {
 }
 
 #[cfg(feature = "opencv")]
-pub fn type_depth<T>() -> i32 {
-    match std::any::type_name::<T>() {
-        "u8" => opencv::core::CV_8U,
-        "i8" => opencv::core::CV_8S,
-        "u16" => opencv::core::CV_16U,
-        "i16" => opencv::core::CV_16S,
-        "i32" => opencv::core::CV_32S,
-        "f32" => opencv::core::CV_32F,
-        "f64" => opencv::core::CV_64F,
-        _ => panic!("Unsupported type"),
-    }
+pub fn type_depth<T: conversions::CvType>() -> i32 {
+    use crate::conversions::CvType;
+    <T as CvType>::cv_depth()
 }
 
 #[cfg(feature = "opencv")]

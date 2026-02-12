@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Args;
 
 use crate::io::NdImage;
@@ -210,7 +210,9 @@ pub fn run(image: &NdImage, args: &ColorArgs) -> Result<NdImage> {
 
         // Lab -> X  (Lab is stored as shifted u8, so we can't easily decode it back)
         (SrcColorSpaceArg::Lab, _) => {
-            bail!("converting FROM Lab is not supported in the CLI (Lab data would need special encoding)")
+            bail!(
+                "converting FROM Lab is not supported in the CLI (Lab data would need special encoding)"
+            )
         }
     }
 }

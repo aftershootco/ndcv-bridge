@@ -21,7 +21,7 @@ tap = { workspace = true }
 img-parts.workspace = true
 pretty_assertions = "1.4.1"
 derive_builder = "0.20.2"
-glam = "0.32.0"
+glam = { version = "0.32.0", features = ["bytemuck"] }
 
 [dev-dependencies]
 divan.workspace = true

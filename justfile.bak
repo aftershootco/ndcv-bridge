@@ -1,2 +1,0 @@
-push-cachix:
-    nix eval .#checks.x86_64-linux --json | jq -r '.[]' | cachix push toshokan

@@ -1,6 +1,6 @@
-use crate::type_depth;
 use crate::types::CvType;
 use crate::{MatAsNd, NdAsImage, image::NdImage};
+use crate::{NdAsImageMut, type_depth};
 
 #[derive(Debug, Clone, derive_builder::Builder)]
 #[builder(setter(into), pattern = "owned")]
@@ -43,7 +43,12 @@ pub enum NdCvSobelError {
 }
 
 pub trait NdCvSobel<T: CvType, D: ndarray::Dimension>: crate::image::NdImage {
-    fn sobel<U: CvType>(&self, args: SobelArgs) -> Result<ndarray::Array<U, D>, NdCvSobelError>;
+    fn sobel<U: CvType + Default>(
+        &self,
+        args: SobelArgs,
+    ) -> Result<ndarray::Array<U, D>, NdCvSobelError>
+    where
+        ndarray::Array<U, D>: NdAsImageMut<U, D>;
 }
 
 impl<T, D, S> NdCvSobel<T, D> for ndarray::ArrayBase<S, D>
@@ -54,13 +59,20 @@ where
     ndarray::ArrayBase<S, D>: NdAsImage<T, D>,
     ndarray::ArrayBase<S, D>: NdImage,
 {
-    fn sobel<U: CvType>(&self, args: SobelArgs) -> Result<ndarray::Array<U, D>, NdCvSobelError> {
+    fn sobel<U: CvType + Default>(
+        &self,
+        args: SobelArgs,
+    ) -> Result<ndarray::Array<U, D>, NdCvSobelError>
+    where
+        ndarray::Array<U, D>: NdAsImageMut<U, D>,
+    {
         let img = self.as_image_mat()?;
-        let mut dst = opencv::core::Mat::default();
         let ddepth = type_depth::<U>();
+        let mut dst = ndarray::Array::<U, D>::default(self.raw_dim());
+        let mut dst_mat = dst.as_image_mat_mut()?;
         opencv::imgproc::sobel(
-            &*img,
-            &mut dst,
+            &img,
+            &mut dst_mat,
             ddepth,
             args.dxy.x,
             args.dxy.y,
@@ -69,7 +81,7 @@ where
             args.delta,
             args.border_type as i32,
         )?;
-        Ok(dst.as_ndarray()?.into_owned())
+        Ok(dst)
     }
 }
 

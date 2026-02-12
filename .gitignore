@@ -3,3 +3,4 @@
 .direnv
 .env
 justfile
+*.jpg

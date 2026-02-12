@@ -38,7 +38,7 @@ pub(crate) mod seal {
         glam::IVec4
     );
 }
-pub trait CvType: seal::Sealed + bytemuck::Pod {
+pub trait CvType: seal::Sealed + bytemuck::Pod + Default {
     fn cv_depth() -> i32;
     fn channels() -> i32 {
         1

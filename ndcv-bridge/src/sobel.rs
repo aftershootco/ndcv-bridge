@@ -1,4 +1,5 @@
 use crate::type_depth;
+use crate::types::CvType;
 use crate::{MatAsNd, NdAsImage, image::NdImage};
 
 #[derive(Debug, Clone, derive_builder::Builder)]
@@ -50,16 +51,13 @@ pub trait NdCvSobel<T: bytemuck::Pod, D: ndarray::Dimension>: crate::image::NdIm
 
 impl<T, D, S> NdCvSobel<T, D> for ndarray::ArrayBase<S, D>
 where
-    T: bytemuck::Pod,
+    T: CvType,
     D: ndarray::Dimension,
     S: ndarray::RawData<Elem = T> + ndarray::RawDataMut<Elem = T>,
     ndarray::ArrayBase<S, D>: NdAsImage<T, D>,
     ndarray::ArrayBase<S, D>: NdImage,
 {
-    fn sobel<U: bytemuck::Pod>(
-        &self,
-        args: SobelArgs,
-    ) -> Result<ndarray::Array<U, D>, NdCvSobelError> {
+    fn sobel<U: CvType>(&self, args: SobelArgs) -> Result<ndarray::Array<U, D>, NdCvSobelError> {
         let img = self.as_image_mat()?;
         let mut dst = opencv::core::Mat::default();
         let ddepth = type_depth::<U>();

@@ -1,3 +1,19 @@
+/// Primitive types that can be used as Type depth for OpenCV Mat.
+pub trait CvDepth: seal::Sealed + bytemuck::Pod + Default {
+    fn cv_depth() -> i32;
+}
+
+/// Types that can be used as OpenCV Mat types (combination of depth and channels).
+pub trait CvType: seal::Sealed + bytemuck::Pod + Default {
+    fn cv_depth() -> i32;
+    fn channels() -> i32 {
+        1
+    }
+    fn cv_type() -> i32 {
+        opencv::core::CV_MAKETYPE(Self::cv_depth(), Self::channels())
+    }
+}
+
 pub(crate) mod seal {
     pub trait Sealed {}
     macro_rules! seal {
@@ -56,10 +72,6 @@ pub(crate) mod seal {
     };
 }
 
-pub trait CvDepth: seal::Sealed + bytemuck::Pod + Default {
-    fn cv_depth() -> i32;
-}
-
 macro_rules! impl_cv_depth {
     ($($t:ty => $cv_const:ident),*) => {
         $(
@@ -81,16 +93,6 @@ impl_cv_depth!(
     f32 => CV_32F,
     f64 => CV_64F
 );
-
-pub trait CvType: seal::Sealed + bytemuck::Pod + Default {
-    fn cv_depth() -> i32;
-    fn channels() -> i32 {
-        1
-    }
-    fn cv_type() -> i32 {
-        opencv::core::CV_MAKETYPE(Self::cv_depth(), Self::channels())
-    }
-}
 
 macro_rules! impl_cv_type {
     ($($t:ty => $cv_const:ident $(=> $channels: expr)?),*) => {
@@ -121,8 +123,9 @@ macro_rules! impl_cv_type {
         };
 }
 
-impl<T: CvDepth, const N: usize> CvType for [T; N]
+impl<T, const N: usize> CvType for [T; N]
 where
+    T: CvDepth,
     [T; N]: seal::Sealed + Default + bytemuck::Pod,
 {
     fn cv_depth() -> i32 {
@@ -171,14 +174,28 @@ impl_cv_type!(
 
 #[cfg(feature = "nalgebra")]
 const _: () = {
-    use nalgebra::{Vector2, Vector3, Vector4, Vector5, Vector6};
-    impl_cv_type!(
-        Vector2 => 2 => (u8, i8, u16, i16, i32, f32, f64),
-        Vector3 => 3 => (u8, i8, u16, i16, i32, f32, f64),
-        Vector4 => 4 => (u8, i8, u16, i16, i32, f32, f64),
-        Vector5 => 5 => (u8, i8, u16, i16, i32, f32, f64),
-        Vector6 => 6 => (u8, i8, u16, i16, i32, f32, f64)
-    );
+    use nalgebra::SVector;
+
+    impl<T, const N: usize> CvType for SVector<T, N>
+    where
+        T: CvDepth,
+        SVector<T, N>: seal::Sealed + Default + bytemuck::Pod,
+    {
+        fn cv_depth() -> i32 {
+            T::cv_depth()
+        }
+
+        fn channels() -> i32 {
+            N as i32
+        }
+    }
+    // impl_cv_type!(
+    //     Vector2 => 2 => (u8, i8, u16, i16, i32, f32, f64),
+    //     Vector3 => 3 => (u8, i8, u16, i16, i32, f32, f64),
+    //     Vector4 => 4 => (u8, i8, u16, i16, i32, f32, f64),
+    //     Vector5 => 5 => (u8, i8, u16, i16, i32, f32, f64),
+    //     Vector6 => 6 => (u8, i8, u16, i16, i32, f32, f64)
+    // );
 };
 
 #[test]

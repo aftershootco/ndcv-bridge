@@ -42,11 +42,8 @@ pub enum NdCvSobelError {
     OpenCvError(#[from] opencv::Error),
 }
 
-pub trait NdCvSobel<T: bytemuck::Pod, D: ndarray::Dimension>: crate::image::NdImage {
-    fn sobel<U: bytemuck::Pod>(
-        &self,
-        args: SobelArgs,
-    ) -> Result<ndarray::Array<U, D>, NdCvSobelError>;
+pub trait NdCvSobel<T: CvType, D: ndarray::Dimension>: crate::image::NdImage {
+    fn sobel<U: CvType>(&self, args: SobelArgs) -> Result<ndarray::Array<U, D>, NdCvSobelError>;
 }
 
 impl<T, D, S> NdCvSobel<T, D> for ndarray::ArrayBase<S, D>

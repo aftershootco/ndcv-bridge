@@ -4,7 +4,7 @@ use super::type_depth;
 use core::ffi::*;
 use opencv::core::prelude::*;
 pub(crate) unsafe fn ndarray_to_mat_regular<
-    T,
+    T: crate::types::CvType,
     S: ndarray::Data<Elem = T>,
     D: ndarray::Dimension,
 >(
@@ -47,7 +47,7 @@ pub(crate) unsafe fn ndarray_to_mat_regular<
 }
 
 pub(crate) unsafe fn ndarray_to_mat_consolidated<
-    T,
+    T: crate::types::CvType,
     S: ndarray::Data<Elem = T>,
     D: ndarray::Dimension,
 >(
@@ -108,7 +108,7 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
     Ok(mat)
 }
 
-pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
+pub(crate) unsafe fn mat_to_ndarray<T: crate::types::CvType, D: ndarray::Dimension>(
     mat: &opencv::core::Mat,
 ) -> Result<ndarray::ArrayView<'_, T, D>, ConversionError> {
     let depth = mat.depth();

@@ -104,7 +104,7 @@ impl From<ndarray::ShapeError> for ConversionError {
 }
 
 // #[deprecated = "Use NdAsMat and NdAsImage traits instead"]
-pub trait NdCvConversion<T: bytemuck::Pod + Copy, D: ndarray::Dimension>:
+pub trait NdCvConversion<T: crate::types::CvType, D: ndarray::Dimension>:
     seal::SealedInternal + Sized
 {
     // #[deprecated = "Use NdAsMat and NdAsImage traits instead"]
@@ -116,7 +116,7 @@ pub trait NdCvConversion<T: bytemuck::Pod + Copy, D: ndarray::Dimension>:
 }
 
 #[allow(deprecated)]
-impl<T: bytemuck::Pod + Copy, S: ndarray::Data<Elem = T>, D: ndarray::Dimension>
+impl<T: crate::types::CvType, S: ndarray::Data<Elem = T>, D: ndarray::Dimension>
     NdCvConversion<T, D> for ndarray::ArrayBase<S, D>
 where
     Self: NdAsImage<T, D>,
@@ -134,30 +134,30 @@ where
 }
 
 pub trait MatAsNd {
-    fn as_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
+    fn as_ndarray<T: crate::types::CvType, D: ndarray::Dimension>(
         &self,
     ) -> Result<ndarray::ArrayView<'_, T, D>, ConversionError>;
 }
 
 impl MatAsNd for opencv::core::Mat {
-    fn as_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
+    fn as_ndarray<T: crate::types::CvType, D: ndarray::Dimension>(
         &self,
     ) -> Result<ndarray::ArrayView<'_, T, D>, ConversionError> {
         unsafe { impls::mat_to_ndarray::<T, D>(self) }
     }
 }
 
-pub trait NdAsMat<T: bytemuck::Pod + Copy, D: ndarray::Dimension> {
+pub trait NdAsMat<T: crate::types::CvType, D: ndarray::Dimension> {
     fn as_single_channel_mat(&self) -> Result<MatRef<'_>, ConversionError>;
     fn as_multi_channel_mat(&self) -> Result<MatRef<'_>, ConversionError>;
 }
 
-pub trait NdAsMatMut<T: bytemuck::Pod + Copy, D: ndarray::Dimension>: NdAsMat<T, D> {
+pub trait NdAsMatMut<T: crate::types::CvType, D: ndarray::Dimension>: NdAsMat<T, D> {
     fn as_single_channel_mat_mut(&mut self) -> Result<MatRefMut<'_>, ConversionError>;
     fn as_multi_channel_mat_mut(&mut self) -> Result<MatRefMut<'_>, ConversionError>;
 }
 
-impl<T: bytemuck::Pod, S: ndarray::Data<Elem = T>, D: ndarray::Dimension> NdAsMat<T, D>
+impl<T: crate::types::CvType, S: ndarray::Data<Elem = T>, D: ndarray::Dimension> NdAsMat<T, D>
     for ndarray::ArrayBase<S, D>
 {
     fn as_single_channel_mat(&self) -> Result<MatRef<'_>, ConversionError> {
@@ -170,7 +170,7 @@ impl<T: bytemuck::Pod, S: ndarray::Data<Elem = T>, D: ndarray::Dimension> NdAsMa
     }
 }
 
-impl<T: bytemuck::Pod, S: ndarray::DataMut<Elem = T>, D: ndarray::Dimension> NdAsMatMut<T, D>
+impl<T: crate::types::CvType, S: ndarray::DataMut<Elem = T>, D: ndarray::Dimension> NdAsMatMut<T, D>
     for ndarray::ArrayBase<S, D>
 {
     fn as_single_channel_mat_mut(&mut self) -> Result<MatRefMut<'_>, ConversionError> {
@@ -184,17 +184,17 @@ impl<T: bytemuck::Pod, S: ndarray::DataMut<Elem = T>, D: ndarray::Dimension> NdA
     }
 }
 
-pub trait NdAsImage<T: bytemuck::Pod, D: ndarray::Dimension> {
+pub trait NdAsImage<T: crate::types::CvType, D: ndarray::Dimension> {
     fn as_image_mat(&self) -> Result<MatRef<'_>, ConversionError>;
 }
 
-pub trait NdAsImageMut<T: bytemuck::Pod, D: ndarray::Dimension> {
+pub trait NdAsImageMut<T: crate::types::CvType, D: ndarray::Dimension> {
     fn as_image_mat_mut(&mut self) -> Result<MatRefMut<'_>, ConversionError>;
 }
 
 impl<T, S> NdAsImage<T, Ix2> for ndarray::ArrayBase<S, Ix2>
 where
-    T: bytemuck::Pod + Copy,
+    T: crate::types::CvType,
     S: ndarray::Data<Elem = T>,
 {
     fn as_image_mat(&self) -> Result<MatRef<'_>, ConversionError> {
@@ -204,7 +204,7 @@ where
 
 impl<T, S> NdAsImageMut<T, Ix2> for ndarray::ArrayBase<S, Ix2>
 where
-    T: bytemuck::Pod + Copy,
+    T: crate::types::CvType,
     S: ndarray::DataMut<Elem = T>,
 {
     fn as_image_mat_mut(&mut self) -> Result<MatRefMut<'_>, ConversionError> {
@@ -214,7 +214,7 @@ where
 
 impl<T, S> NdAsImage<T, Ix3> for ndarray::ArrayBase<S, Ix3>
 where
-    T: bytemuck::Pod + Copy,
+    T: crate::types::CvType,
     S: ndarray::Data<Elem = T>,
 {
     fn as_image_mat(&self) -> Result<MatRef<'_>, ConversionError> {
@@ -224,7 +224,7 @@ where
 
 impl<T, S> NdAsImageMut<T, Ix3> for ndarray::ArrayBase<S, Ix3>
 where
-    T: bytemuck::Pod + Copy,
+    T: crate::types::CvType,
     S: ndarray::DataMut<Elem = T>,
 {
     fn as_image_mat_mut(&mut self) -> Result<MatRefMut<'_>, ConversionError> {

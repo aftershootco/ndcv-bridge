@@ -55,7 +55,7 @@ mod seal {
     impl Sealed for u8 {}
 }
 
-pub trait NdCvFindContours<T: bytemuck::Pod + seal::Sealed>:
+pub trait NdCvFindContours<T: crate::types::CvType + seal::Sealed>:
     crate::image::NdImage + crate::conversions::NdAsImage<T, ndarray::Ix2>
 {
     fn find_contours(

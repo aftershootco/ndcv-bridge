@@ -53,7 +53,7 @@ mod seal {
     impl Sealed for f64 {}
 }
 
-pub trait NdCvGaussianBlur<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
+pub trait NdCvGaussianBlur<T: crate::types::CvType + seal::Sealed, D: ndarray::Dimension>:
     crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
     fn gaussian_blur(
@@ -73,7 +73,7 @@ pub trait NdCvGaussianBlur<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimensio
 }
 
 impl<
-    T: bytemuck::Pod + num::Zero + seal::Sealed,
+    T: crate::types::CvType + num::Zero + seal::Sealed,
     S: ndarray::RawData + ndarray::Data<Elem = T>,
     D: ndarray::Dimension,
 > NdCvGaussianBlur<T, D> for ArrayBase<S, D>
@@ -173,7 +173,7 @@ where
 
 /// For smaller values it is faster to use the allocated version
 /// For example in a 4k f32 image this is about 50% faster than the allocated one
-pub trait NdCvGaussianBlurInPlace<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
+pub trait NdCvGaussianBlurInPlace<T: crate::types::CvType + seal::Sealed, D: ndarray::Dimension>:
     crate::image::NdImage + crate::conversions::NdAsImageMut<T, D>
 {
     fn gaussian_blur_inplace(
@@ -193,7 +193,7 @@ pub trait NdCvGaussianBlurInPlace<T: bytemuck::Pod + seal::Sealed, D: ndarray::D
 }
 
 impl<
-    T: bytemuck::Pod + num::Zero + seal::Sealed,
+    T: crate::types::CvType + num::Zero + seal::Sealed,
     S: ndarray::RawData + ndarray::DataMut<Elem = T>,
     D: ndarray::Dimension,
 > NdCvGaussianBlurInPlace<T, D> for ArrayBase<S, D>

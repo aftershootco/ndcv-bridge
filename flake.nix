@@ -39,7 +39,7 @@
         };
         inherit (pkgs) lib;
         # cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
-        name = "ndcv-bridge";
+        name = "ndcv";
 
         stableToolchain = pkgs.rust-bin.stable.latest.default;
         stableToolchainWithLLvmTools = stableToolchain.override {
@@ -84,7 +84,7 @@
             # BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.llvmPackages.libclang.lib}/lib/clang/18/include";
           });
         cargoArtifacts = craneLib.buildPackage commonArgs;
-      in {
+      in rec {
         checks =
           {
             "${name}-clippy" = craneLib.cargoClippy (commonArgs
@@ -121,6 +121,7 @@
           pkg = craneLib.buildPackage (commonArgs
             // {inherit cargoArtifacts;}
             // {
+              cargoExtraArgs = "--package ndcv-cli";
               postInstall = ''
                 mkdir -p $out/bin
                 mkdir -p $out/share/bash-completions
@@ -141,6 +142,7 @@
             // {
               packages = with pkgs;
                 [
+                  packages.default
                   stableToolchainWithRustAnalyzer
                   cargo-nextest
                   cargo-deny

@@ -64,8 +64,8 @@ pub(crate) mod prelude_ {
 }
 
 #[cfg(feature = "opencv")]
-pub fn type_depth<T: conversions::CvType>() -> i32 {
-    use crate::conversions::CvType;
+pub fn type_depth<T: types::CvType>() -> i32 {
+    use types::CvType;
     <T as CvType>::cv_depth()
 }
 

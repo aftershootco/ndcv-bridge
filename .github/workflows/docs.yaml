@@ -24,7 +24,7 @@ jobs:
     - uses: DeterminateSystems/flake-checker-action@main
 
     - name: Generate docs
-      run: nix build .#checks.x86_64-linux.ndcv-bridge-docs
+      run: nix build .#checks.x86_64-linux.ndcv-docs
 
     - name: Setup Pages
       uses: actions/configure-pages@v5

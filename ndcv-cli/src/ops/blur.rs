@@ -45,7 +45,7 @@ pub struct BlurArgs {
     pub sigma_y: Option<f64>,
 
     /// Border extrapolation method
-    #[arg(short, long, value_enum, default_value_t = BorderTypeArg::Constant)]
+    #[arg(short, long, value_enum, default_value_t = BorderTypeArg::Reflect101)]
     pub border: BorderTypeArg,
 }
 

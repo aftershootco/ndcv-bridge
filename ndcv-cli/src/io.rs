@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use ndarray::{Array2, Array3};
 use ndarray_image::{ImageToNdarray, NdarrayToImage};
 use std::path::Path;

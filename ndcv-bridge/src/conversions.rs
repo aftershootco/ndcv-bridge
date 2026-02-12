@@ -24,8 +24,9 @@ pub(crate) mod matref;
 use matref::{MatRef, MatRefMut};
 
 pub(crate) mod seal {
+    use crate::types::CvType;
     pub trait SealedInternal {}
-    impl<T, S: ndarray::Data<Elem = T>, D> SealedInternal for ndarray::ArrayBase<S, D> {}
+    impl<T: CvType, S: ndarray::Data<Elem = T>, D> SealedInternal for ndarray::ArrayBase<S, D> {}
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -73,6 +74,7 @@ impl ConversionError {
 }
 
 impl From<ConversionErrorKind> for ConversionError {
+    #[track_caller]
     fn from(kind: ConversionErrorKind) -> Self {
         ConversionError {
             kind,

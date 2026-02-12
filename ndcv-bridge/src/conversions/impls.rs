@@ -116,17 +116,9 @@ pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
         Err(ConversionErrorKind::TypeMismatch {
             expected: std::any::type_name::<T>()
                 .rsplit_once("::")
-                .expect("Impossible")
-                .1,
+                .map_or_else(|| std::any::type_name::<T>(), |(_, name)| name),
             got: crate::depth_type(depth),
         })?;
-        // return Err(Report::new(ConversionError).attach(format!(
-        //     "Expected type Mat<{}> ({}), got Mat<{}> ({})",
-        //     std::any::type_name::<T>(),
-        //     type_depth::<T>(),
-        //     crate::depth_type(depth),
-        //     depth,
-        // )));
     }
 
     let channels = mat.channels();

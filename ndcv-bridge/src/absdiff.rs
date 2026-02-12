@@ -27,11 +27,8 @@ pub trait NdCvAbsDiff<T: crate::types::CvType, D: ndarray::Dimension>:
         ArrayBase<S2, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>;
 }
 
-impl<
-    T: crate::types::CvType + num::Zero,
-    S: ndarray::RawData + ndarray::Data<Elem = T>,
-    D: ndarray::Dimension,
-> NdCvAbsDiff<T, D> for ArrayBase<S, D>
+impl<T: crate::types::CvType, S: ndarray::RawData + ndarray::Data<Elem = T>, D: ndarray::Dimension>
+    NdCvAbsDiff<T, D> for ArrayBase<S, D>
 where
     ndarray::ArrayBase<S, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>,
     ndarray::Array<T, D>: crate::conversions::NdAsImageMut<T, D>,
@@ -43,7 +40,7 @@ where
     where
         ArrayBase<S2, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>,
     {
-        let mut dst = ndarray::Array::zeros(self.dim());
+        let mut dst = ndarray::Array::default(self.dim());
         let cv_self = self.as_image_mat()?;
         let cv_other = other.as_image_mat()?;
         let mut cv_dst = dst.as_image_mat_mut()?;
@@ -65,7 +62,7 @@ pub trait NdCvAbsDiffInPlace<T: crate::types::CvType, D: ndarray::Dimension>:
 }
 
 impl<
-    T: crate::types::CvType + num::Zero,
+    T: crate::types::CvType,
     S: ndarray::RawData + ndarray::DataMut<Elem = T>,
     D: ndarray::Dimension,
 > NdCvAbsDiffInPlace<T, D> for ArrayBase<S, D>

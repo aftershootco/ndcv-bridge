@@ -1,5 +1,5 @@
 use crate::types::CvType;
-use crate::{MatAsNd, NdAsImage, image::NdImage};
+use crate::{NdAsImage, image::NdImage};
 use crate::{NdAsImageMut, type_depth};
 
 #[derive(Debug, Clone, derive_builder::Builder)]

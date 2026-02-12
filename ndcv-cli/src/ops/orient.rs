@@ -61,7 +61,7 @@ pub struct OrientArgs {
     pub flip: Option<FlipArg>,
 
     /// Apply EXIF orientation (1-8)
-    #[arg(short, long)]
+    #[arg(short = 'O', long)]
     pub orientation: Option<u8>,
 }
 

@@ -111,6 +111,12 @@ enum Command {
         /// Input image path
         input: PathBuf,
     },
+
+    Completions {
+        /// Shell type for which to generate completions
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
+    },
 }
 
 fn main() -> Result<()> {
@@ -273,6 +279,16 @@ fn main() -> Result<()> {
                 n => &format!("{}-channel", n),
             };
             println!("type:     {}", color_type);
+        }
+
+        Command::Completions { shell } => {
+            let mut command = <Cli as clap::CommandFactory>::command();
+            clap_complete::generate(
+                shell,
+                &mut command,
+                env!("CARGO_BIN_NAME"),
+                &mut std::io::stdout(),
+            );
         }
     }
 

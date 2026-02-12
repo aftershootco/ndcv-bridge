@@ -7,14 +7,9 @@ pub(crate) mod seal {
             )*
         };
     }
+    seal!(u8, i8, u16, i16, i32, f32, f64);
+    #[cfg(feature = "glam")]
     seal!(
-        u8,
-        i8,
-        u16,
-        i16,
-        i32,
-        f32,
-        f64,
         glam::Vec2,
         glam::Vec3,
         glam::Vec4,
@@ -37,7 +32,17 @@ pub(crate) mod seal {
         glam::IVec3,
         glam::IVec4
     );
+
+    #[cfg(feature = "nalgebra")]
+    const _: () = {
+        impl<T: Sealed> Sealed for nalgebra::Vector2<T> {}
+        impl<T: Sealed> Sealed for nalgebra::Vector3<T> {}
+        impl<T: Sealed> Sealed for nalgebra::Vector4<T> {}
+        impl<T: Sealed> Sealed for nalgebra::Vector5<T> {}
+        impl<T: Sealed> Sealed for nalgebra::Vector6<T> {}
+    };
 }
+
 pub trait CvType: seal::Sealed + bytemuck::Pod + Default {
     fn cv_depth() -> i32;
     fn channels() -> i32 {
@@ -70,7 +75,10 @@ impl_cv_depth!(
     i16 => CV_16S,
     i32 => CV_32S,
     f32 => CV_32F,
-    f64 => CV_64F,
+    f64 => CV_64F
+);
+#[cfg(feature = "glam")]
+impl_cv_depth!(
     glam::Vec2 => CV_32F => 2,
     glam::Vec3 => CV_32F => 3,
     glam::Vec4 => CV_32F => 4,
@@ -93,6 +101,35 @@ impl_cv_depth!(
     glam::IVec3 => CV_32S => 3,
     glam::IVec4 => CV_32S => 4
 );
+
+#[cfg(feature = "nalgebra")]
+const _: () = {
+    #[cfg(feature = "nalgebra")]
+    macro_rules! impl_cv_type_nalgebra {
+        ($($t:tt => $channels: expr => ($($u:tt),*)),*) => {
+            $(
+                $(
+                impl CvType for $t <$u> {
+                    fn cv_depth() -> i32 {
+                        <$u as CvType>::cv_depth()
+                    }
+                    fn channels() -> i32 {
+                        $channels
+                    }
+                }
+                )*
+            )*
+        };
+    }
+    use nalgebra::{Vector2, Vector3, Vector4, Vector5, Vector6};
+    impl_cv_type_nalgebra!(
+        Vector2 => 2 => (u8, i8, u16, i16, i32, f32, f64),
+        Vector3 => 3 => (u8, i8, u16, i16, i32, f32, f64),
+        Vector4 => 4 => (u8, i8, u16, i16, i32, f32, f64),
+        Vector5 => 5 => (u8, i8, u16, i16, i32, f32, f64),
+        Vector6 => 6 => (u8, i8, u16, i16, i32, f32, f64)
+    );
+};
 
 #[test]
 fn test_cv_type() {

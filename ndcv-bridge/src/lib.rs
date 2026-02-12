@@ -10,6 +10,8 @@ mod roi;
 pub use errors::NdCvError;
 
 #[cfg(feature = "opencv")]
+pub mod absdiff;
+#[cfg(feature = "opencv")]
 pub mod blur;
 #[cfg(feature = "opencv")]
 pub mod bounding_rect;
@@ -51,6 +53,8 @@ pub use contours::{
 #[allow(deprecated)]
 pub use conversions::NdCvConversion;
 
+#[cfg(feature = "opencv")]
+pub use absdiff::{NdCvAbsDiff, NdCvAbsDiffInPlace};
 #[cfg(feature = "opencv")]
 pub use bounding_rect::BoundingRect;
 #[cfg(feature = "opencv")]

@@ -1,3 +1,8 @@
+#[cfg(all(feature = "ndarray_0_16", not(feature = "ndarray_0_17")))]
+extern crate ndarray_0_16 as ndarray;
+#[cfg(feature = "ndarray_0_17")]
+extern crate ndarray_0_17 as ndarray;
+
 use divan::black_box;
 use ndarray::*;
 use ndcv_bridge::*;

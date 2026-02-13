@@ -1,12 +1,16 @@
 //! Methods and type conversions for ndarray to opencv and vice versa
+
+#[cfg(all(feature = "ndarray_0_16", not(feature = "ndarray_0_17")))]
+extern crate ndarray_0_16 as ndarray;
+#[cfg(feature = "ndarray_0_17")]
+extern crate ndarray_0_17 as ndarray;
+
 mod blend;
 mod errors;
-// mod dilate;
 pub mod fir;
 mod image;
 mod inplace;
 pub mod percentile;
-mod roi;
 pub use errors::NdCvError;
 
 #[cfg(feature = "opencv")]
@@ -23,13 +27,15 @@ pub mod conversions;
 pub mod gaussian;
 #[cfg(feature = "opencv")]
 pub mod resize;
+#[cfg(feature = "roi")]
+mod roi;
 
-// pub mod codec;
 pub mod orient;
 pub use blend::NdBlend;
 pub use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 pub use fir::NdFir;
 pub use gaussian::{BorderType, NdCvGaussianBlur, NdCvGaussianBlurInPlace};
+#[cfg(feature = "roi")]
 pub use roi::{NdRoiZeroPadded, Roi as NdRoi, RoiMut as NdRoiMut};
 
 #[cfg(feature = "opencv")]

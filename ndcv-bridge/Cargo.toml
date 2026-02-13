@@ -5,30 +5,40 @@ edition.workspace = true
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-bounding-box.workspace = true
-nalgebra.workspace = true
-bytemuck.workspace = true
-error-stack.workspace = true
-fast_image_resize.workspace = true
-ndarray = { workspace = true, features = ["rayon"] }
-num.workspace = true
-opencv = { workspace = true, optional = true }
 rayon = "1.10.0"
+tap = { workspace = true }
 thiserror.workspace = true
 tracing = "0.1.41"
 wide = "1.1.1"
-tap = { workspace = true }
+bytemuck.workspace = true
+fast_image_resize.workspace = true
 img-parts.workspace = true
-pretty_assertions = "1.4.1"
+
+ndarray_0_16 = { package = "ndarray", version = "0.16.1", features = [
+  "rayon",
+], optional = true }
+ndarray_0_17 = { package = "ndarray", version = "0.17.0", features = [
+  "rayon",
+], optional = true }
+
+bounding-box = { workspace = true, optional = true }
+nalgebra = { workspace = true, optional = true }
+num.workspace = true
+opencv = { workspace = true, optional = true }
 
 [dev-dependencies]
 divan.workspace = true
 ndarray-npy.workspace = true
 
 [features]
+nalgebra = ["dep:nalgebra"]
+bounding-box = ["dep:bounding-box"]
+ndarray_0_16 = ["dep:ndarray_0_16"]
+ndarray_0_17 = ["dep:ndarray_0_17"]
 opencv = ["dep:opencv"]
-default = ["opencv"]
+roi = ["bounding-box"]
 
+default = ["opencv", "nalgebra", "roi", "ndarray_0_17"]
 
 [[bench]]
 name = "conversions"

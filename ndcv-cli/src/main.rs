@@ -91,6 +91,17 @@ enum Command {
         args: ops::blend::BlendArgs,
     },
 
+    /// Apply Extended Difference of Gaussians (XDoG) edge detection
+    Xdog {
+        /// Input image path
+        input: PathBuf,
+        /// Output image path
+        #[arg(short, long)]
+        output: PathBuf,
+        #[command(flatten)]
+        args: ops::xdog::XDoGArgs,
+    },
+
     /// Chain multiple operations in sequence
     ///
     /// Operations are separated by commas. Example:
@@ -239,6 +250,23 @@ fn main() -> Result<()> {
                 image.channels()
             );
             let result = ops::blend::run(&image, &args).context("blend failed")?;
+            result.save(&output)?;
+            eprintln!("saved: {}", output.display());
+        }
+
+        Command::Xdog {
+            input,
+            output,
+            args,
+        } => {
+            let image = NdImage::load(&input)?;
+            eprintln!(
+                "loaded: {}x{}, {} channels",
+                image.width(),
+                image.height(),
+                image.channels()
+            );
+            let result = ops::xdog::run(&image, &args).context("xdog failed")?;
             result.save(&output)?;
             eprintln!("saved: {}", output.display());
         }

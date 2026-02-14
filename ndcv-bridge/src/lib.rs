@@ -33,6 +33,8 @@ pub mod resize;
 pub mod sobel;
 #[cfg(feature = "opencv")]
 pub mod types;
+#[cfg(feature = "opencv")]
+pub mod xdog;
 
 // pub mod codec;
 pub mod orient;
@@ -43,6 +45,7 @@ pub use fir::NdFir;
 pub use gaussian::{BorderType, NdCvGaussianBlur, NdCvGaussianBlurInPlace};
 pub use roi::{NdRoiZeroPadded, Roi as NdRoi, RoiMut as NdRoiMut};
 pub use sobel::{Ksize, NdCvSobel, NdCvSobelError, SobelArgs};
+pub use xdog::{NdCvXDoG, XDoGArgs, XDoGError};
 
 #[cfg(feature = "opencv")]
 pub use contours::{

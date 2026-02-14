@@ -12,6 +12,7 @@ pub enum PipelineOp {
     Resize(ops::resize::ResizeArgs),
     Color(ops::color::ColorArgs),
     Orient(ops::orient::OrientArgs),
+    Xdog(ops::xdog::XDoGArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -21,7 +22,7 @@ pub struct PipelineArgs {
     /// Example: blur --sigma 1.5 , resize --width 800 , color --to gray
     ///
     /// Each segment is: <operation-name> [args...]
-    /// Supported operations: blur, sobel, resize, color, orient
+    /// Supported operations: blur, sobel, resize, color, orient, xdog
     #[arg(trailing_var_arg = true, allow_hyphen_values = true, num_args = 1..)]
     pub ops: Vec<String>,
 }
@@ -35,6 +36,7 @@ impl PipelineOp {
             PipelineOp::Resize(args) => ops::resize::run(image, args),
             PipelineOp::Color(args) => ops::color::run(image, args),
             PipelineOp::Orient(args) => ops::orient::run(image, args),
+            PipelineOp::Xdog(args) => ops::xdog::run(image, args),
         }
     }
 
@@ -45,6 +47,7 @@ impl PipelineOp {
             PipelineOp::Resize(_) => "resize",
             PipelineOp::Color(_) => "color",
             PipelineOp::Orient(_) => "orient",
+            PipelineOp::Xdog(_) => "xdog",
         }
     }
 }
@@ -161,8 +164,17 @@ fn parse_single_op(name: &str, args: &[String]) -> Result<PipelineOp> {
             let w = Wrapper::try_parse_from(&argv)?;
             Ok(PipelineOp::Orient(w.inner))
         }
+        "xdog" => {
+            #[derive(Parser)]
+            struct Wrapper {
+                #[command(flatten)]
+                inner: ops::xdog::XDoGArgs,
+            }
+            let w = Wrapper::try_parse_from(&argv)?;
+            Ok(PipelineOp::Xdog(w.inner))
+        }
         _ => bail!(
-            "unknown operation '{}' (available: blur, sobel, resize, color, orient)",
+            "unknown operation '{}' (available: blur, sobel, resize, color, orient, xdog)",
             name
         ),
     }

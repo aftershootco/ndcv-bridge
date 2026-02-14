@@ -34,7 +34,7 @@ impl From<BorderTypeArg> for BorderType {
 pub struct BlurArgs {
     /// Gaussian kernel size (must be odd and positive)
     #[arg(short, long, default_value_t = 3)]
-    pub kernel: u8,
+    pub kernel: u16,
 
     /// Sigma value for X direction
     #[arg(short = 'x', long, default_value_t = 1.0)]
@@ -55,13 +55,13 @@ pub fn run(image: &NdImage, args: &BlurArgs) -> Result<NdImage> {
     }
 
     let sigma_y = args.sigma_y.unwrap_or(args.sigma);
-    let kernel = (args.kernel, args.kernel);
+    let kernel = (args.kernel as i32, args.kernel as i32);
     let border = BorderType::from(args.border);
 
     match image {
         NdImage::Color(arr) => {
             let result = arr
-                .gaussian_blur(kernel, args.sigma, sigma_y, border)
+                .gaussian_blur(kernel, (args.sigma, sigma_y), border)
                 .context("gaussian blur failed")?;
             Ok(NdImage::Color(result))
         }
@@ -70,7 +70,7 @@ pub fn run(image: &NdImage, args: &BlurArgs) -> Result<NdImage> {
                 .ensure_color()
                 .context("failed to convert to color for blur")?;
             let result = color
-                .gaussian_blur(kernel, args.sigma, sigma_y, border)
+                .gaussian_blur(kernel, (args.sigma, sigma_y), border)
                 .context("gaussian blur failed")?;
             // Convert back to gray
             let gray_img = NdImage::Color(result);

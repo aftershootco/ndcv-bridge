@@ -1260,6 +1260,7 @@ dependencies = [
  "anyhow",
  "clap",
  "clap_complete",
+ "glam 0.32.0",
  "image",
  "ndarray",
  "ndarray-image",

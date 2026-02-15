@@ -1,5 +1,7 @@
 use anyhow::{Context, Result, anyhow};
 use clap::Args;
+use glam::U8Vec2;
+use ndarray::Array3;
 
 use crate::io::NdImage;
 use crate::ops::blur::BorderTypeArg;
@@ -10,23 +12,27 @@ use ndcv_bridge::{BorderType, NdCvXDoG};
 pub struct XDoGArgs {
     /// Standard deviation of the smaller (detail) Gaussian
     #[arg(short = 'x', long)]
-    pub sigma: f64,
+    pub sigma: f32,
+
+    /// Gaussian kernel size (must be odd and positive)
+    #[arg(long, default_value_t = 5)]
+    pub kernel: u8,
 
     /// Ratio between the two Gaussian sigmas (k > 1)
     #[arg(short, long, default_value_t = 1.6)]
-    pub k: f64,
+    pub k: f32,
 
     /// Sharpness multiplier (p = 0 gives plain DoG)
     #[arg(short, long, default_value_t = 200.0)]
-    pub p: f64,
+    pub p: f32,
 
     /// Edge threshold for soft-thresholding step
     #[arg(short, long, default_value_t = 0.5)]
-    pub epsilon: f64,
+    pub epsilon: f32,
 
     /// Steepness of the tanh transition near the threshold
     #[arg(long, default_value_t = 10.0)]
-    pub phi: f64,
+    pub phi: f32,
 
     /// Enable soft-thresholding for stylised (ink-like) output
     #[arg(short, long, default_value_t = false)]
@@ -39,8 +45,10 @@ pub struct XDoGArgs {
 
 pub fn run(image: &NdImage, args: &XDoGArgs) -> Result<NdImage> {
     let border = BorderType::from(args.border);
+    let kernel_size = U8Vec2::new(args.kernel, args.kernel);
 
     let lib_args = LibXDoGArgs::sigma(args.sigma)
+        .kernel_size(kernel_size)
         .k(args.k)
         .p(args.p)
         .epsilon(args.epsilon)
@@ -53,22 +61,21 @@ pub fn run(image: &NdImage, args: &XDoGArgs) -> Result<NdImage> {
 
     match image {
         NdImage::Color(arr) => {
-            let result: ndarray::Array3<u8> =
-                arr.xdog(lib_args).context("XDoG operation failed")?;
-            // let result_u8 = to_u8_3d(&result, args.threshold);
-            Ok(NdImage::Color(result))
+            let arr_f32 = arr.mapv(|v| v as f32 / u8::MAX as f32);
+            let result: Array3<f32> = arr_f32.xdog(lib_args).context("XDoG operation failed")?;
+            let result_u8 = to_u8_3d(&result, args.threshold);
+            Ok(NdImage::Color(result_u8))
         }
         NdImage::Gray(_) => {
-            todo!();
-            // let color = image
-            //     .ensure_color()
-            //     .context("failed to convert to color for XDoG")?;
-            // let result: ndarray::Array3<f32> =
-            //     color.xdog(lib_args).context("XDoG operation failed")?;
-            // let result_u8 = to_u8_3d(&result, args.threshold);
-            // let gray_img = NdImage::Color(result_u8);
-            // let gray = gray_img.ensure_gray()?;
-            // Ok(NdImage::Gray(gray))
+            let color = image
+                .ensure_color()
+                .context("failed to convert to color for XDoG")?;
+            let color_f32 = color.mapv(|v| v as f32);
+            let result: Array3<f32> = color_f32.xdog(lib_args).context("XDoG operation failed")?;
+            let result_u8 = to_u8_3d(&result, args.threshold);
+            let gray_img = NdImage::Color(result_u8);
+            let gray = gray_img.ensure_gray()?;
+            Ok(NdImage::Gray(gray))
         }
     }
 }
@@ -77,7 +84,7 @@ pub fn run(image: &NdImage, args: &XDoGArgs) -> Result<NdImage> {
 ///
 /// When thresholding is enabled, the output is in `[0, 1]` and is scaled to
 /// `[0, 255]`. Otherwise, values are clamped to `[0, 255]` directly.
-fn to_u8_3d(arr: &ndarray::Array3<f32>, thresholded: bool) -> ndarray::Array3<u8> {
+fn to_u8_3d(arr: &Array3<f32>, thresholded: bool) -> Array3<u8> {
     if thresholded {
         arr.mapv(|v| (v * 255.0).clamp(0.0, 255.0) as u8)
     } else {

@@ -29,7 +29,6 @@
 
 use crate::{NdCvGaussianBlur, gaussian::BorderType};
 use ndarray::*;
-use opencv::core::AlgorithmHint as OpencvAlgorithmHint;
 
 #[derive(Debug, thiserror::Error)]
 pub enum XDoGError {
@@ -62,22 +61,22 @@ pub struct XDoGArgs<T: num::Float + num::FromPrimitive> {
 
     /// Ratio between the two Gaussian sigmas (`k > 1`). The larger Gaussian
     /// uses `sigma * k`.
-    #[builder(default = default_args::default_k::<T>())]
+    #[builder(default = default_t::<T>(1.6))]
     k: T,
 
     /// Sharpness multiplier.  `p = 0` gives a plain DoG; larger values
     /// sharpen the response.
-    #[builder(default = default_args::default_p::<T>())]
+    #[builder(default = default_t::<T>(0.0))]
     p: T,
 
     /// Threshold for the soft-thresholding step.  Only used when
     /// `thresholding` is enabled.
-    #[builder(default = default_args::default_epsilon::<T>())]
+    #[builder(default = default_t::<T>(0.0))]
     epsilon: T,
 
     /// Controls the steepness of the `tanh` transition near the threshold.
     /// Only used when `thresholding` is enabled.
-    #[builder(default = default_args::default_phi::<T>())]
+    #[builder(default = default_t::<T>(0.0))]
     phi: T,
 
     /// When `true`, apply the soft-thresholding step to produce a stylised
@@ -90,24 +89,8 @@ pub struct XDoGArgs<T: num::Float + num::FromPrimitive> {
     border_type: BorderType,
 }
 
-mod default_args {
-    use super::*;
-
-    pub fn default_k<T: num::Float + num::FromPrimitive>() -> T {
-        T::from_f64(1.6).expect("failed to convert default k to target type")
-    }
-
-    pub fn default_p<T: num::Float + num::FromPrimitive>() -> T {
-        T::from_f64(200.0).expect("failed to convert default p to target type")
-    }
-
-    pub fn default_epsilon<T: num::Float + num::FromPrimitive>() -> T {
-        T::from_f64(0.5).expect("failed to convert default epsilon to target type")
-    }
-
-    pub fn default_phi<T: num::Float + num::FromPrimitive>() -> T {
-        T::from_f64(10.0).expect("failed to convert default phi to target type")
-    }
+fn default_t<T: num::Float + num::FromPrimitive>(v: f64) -> T {
+    T::from_f64(v).expect("failed to convert default t to target type")
 }
 
 impl<T: num::Float + num::FromPrimitive> XDoGArgs<T> {
@@ -124,29 +107,32 @@ impl<T: num::Float + num::FromPrimitive> XDoGArgs<T> {
 
 impl<T: num::Float + num::FromPrimitive> XDoGArgsBuilder<T> {
     pub fn validate(&self) -> Result<(), String> {
-        // `self.sigma` is `Option<f64>` – it's `None` only when the caller
+        // `self.sigma` is `Option<T>` – it's `None` only when the caller
         // forgot to set it (which the builder already catches as a missing
         // required field).  We still guard against non-positive values.
-        self.sigma
-            .is_some_and(|s| !s.is_sign_negative())
-            .then_some(())
-            .ok_or_else(|| "sigma must be positive".to_string())?;
+        if let Some(s) = self.sigma
+            && s.is_sign_negative()
+        {
+            return Err("sigma must be positive".to_string());
+        }
 
-        // `self.k` is `Option<f64>` – `None` means the default (1.6) will be
+        // `self.k` is `Option<T>` – `None` means the default (1.6) will be
         // used, which is valid.  Only reject explicitly-set non-positive values.
-        self.k
-            .is_some_and(|k| !k.is_sign_negative())
-            .then_some(())
-            .ok_or_else(|| "k must be positive".to_string())?;
+        if let Some(k) = self.k
+            && k.is_sign_negative()
+        {
+            return Err("k must be positive".to_string());
+        }
+
+        if let Some(kernel_size) = self.kernel_size {
+            if kernel_size.x % 2 == 0 || kernel_size.y % 2 == 0 {
+                return Err("kernel size must be odd".to_string());
+            }
+        }
 
         Ok(())
     }
 }
-
-// ---------------------------------------------------------------------------
-// Sealed trait – restrict input types to those supported by OpenCV gaussian
-// blur, and output types to floats.
-// ---------------------------------------------------------------------------
 
 mod seal {
     pub trait Sealed {}
@@ -165,7 +151,6 @@ mod seal {
 ///
 /// * `T` – input element type (must implement [`CvType`] and be supported by
 ///   OpenCV's Gaussian blur).
-/// * `U` – output element type (`f32` or `f64`).
 /// * `D` – array dimensionality.
 pub trait NdCvXDoG<T, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 where
@@ -200,12 +185,10 @@ where
         + core::ops::Mul<Output = T>,
     T: crate::types::CvType + seal::Sealed + num::Float + num::FromPrimitive,
     D: ndarray::Dimension,
-    D: ndarray::Dimension,
     S: ndarray::RawData + ndarray::Data<Elem = T>,
     ndarray::ArrayBase<S, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>,
     ndarray::Array<T, D>: crate::conversions::NdAsImageMut<T, D>,
     ndarray::ArrayBase<S, D>: NdCvGaussianBlur<T, D>,
-    ndarray::Array<T, D>: NdProducer,
 {
     fn xdog(&self, args: XDoGArgs<T>) -> Result<ndarray::Array<T, D>, XDoGError>
     where
@@ -229,12 +212,7 @@ where
         )?;
 
         let one = T::one();
-        let dst = if !args.thresholding {
-            ndarray::Zip::from(&g1).and(&g2).par_map_collect(|v1, v2| {
-                let d = (one + args.p) * *v1 - args.p * *v2;
-                d
-            })
-        } else {
+        let dst = if args.thresholding {
             ndarray::Zip::from(&g1).and(&g2).par_map_collect(|v1, v2| {
                 let d = (one + args.p) * *v1 - args.p * *v2;
                 if d >= args.epsilon {
@@ -243,51 +221,64 @@ where
                     one + (args.phi * (d - args.epsilon)).tanh()
                 }
             })
+        } else {
+            ndarray::Zip::from(&g1)
+                .and(&g2)
+                .par_map_collect(|v1, v2| (one + args.p) * *v1 - args.p * *v2)
         };
         Ok(dst)
     }
 }
 
-// #[cfg(test)]
+#[cfg(test)]
 mod tests {
     use super::*;
-    use ndarray::{Array2, Array3};
+    use glam::U8Vec2;
+    use ndarray::Array3;
+
+    /// Default kernel size used across tests.
+    const KSIZE: U8Vec2 = U8Vec2::new(5, 5);
 
     // ── Shape preservation ───────────────────────────────────────────
 
     #[test]
-    fn xdog_2d_preserves_shape() {
-        let img = Array2::<f32>::from_shape_fn((20, 20), |(i, j)| (i * j) as f32);
-        let result: Array<f32, _> = img.xdog_def(1.0).unwrap();
-        assert_eq!(result.shape(), &[20, 20]);
-    }
-
-    #[test]
     fn xdog_3d_preserves_shape() {
-        let img = Array3::<u8>::ones((20, 30, 3));
-        let result: Array<f32, _> = img.xdog_def(1.0).unwrap();
+        let img = Array3::<f32>::ones((20, 30, 3));
+        let result = img
+            .xdog(XDoGArgs::sigma(1.0f32).kernel_size(KSIZE).build().unwrap())
+            .unwrap();
         assert_eq!(result.shape(), &[20, 30, 3]);
     }
 
     #[test]
-    fn xdog_non_square_image() {
-        let img = Array2::<u8>::zeros((15, 40));
-        let result: Array<f64, _> = img.xdog_def(1.0).unwrap();
-        assert_eq!(result.shape(), &[15, 40]);
+    fn xdog_non_square_3d() {
+        let img = Array3::<f32>::zeros((15, 40, 3));
+        let result = img
+            .xdog(XDoGArgs::sigma(1.0f32).kernel_size(KSIZE).build().unwrap())
+            .unwrap();
+        assert_eq!(result.shape(), &[15, 40, 3]);
     }
 
-    // ── Uniform image produces near-zero output ─────────────────────
+    #[test]
+    fn xdog_f64_preserves_shape() {
+        let img = Array3::<f64>::ones((10, 10, 3));
+        let result = img
+            .xdog(XDoGArgs::sigma(1.0f64).kernel_size(KSIZE).build().unwrap())
+            .unwrap();
+        assert_eq!(result.shape(), &[10, 10, 3]);
+    }
+
+    // ── Uniform image produces near-identity output ─────────────────
 
     #[test]
-    fn xdog_uniform_image_near_zero() {
-        let img = Array2::<u8>::from_elem((20, 20), 128);
-        let result: Array<f32, _> = img.xdog(XDoGArgs::sigma(1.0).build().unwrap()).unwrap();
+    fn xdog_uniform_image_near_identity() {
+        let img = Array3::<f32>::from_elem((20, 20, 3), 128.0);
+        let result = img
+            .xdog(XDoGArgs::sigma(1.0f32).kernel_size(KSIZE).build().unwrap())
+            .unwrap();
 
-        // On a uniform image both Gaussians are identical, so the
-        // difference is essentially (1+p)*v - p*v = v ≈ 128 everywhere.
-        // With default p=200, XDoG = (1+200)*128 - 200*128 = 128.
-        // But since both G1 and G2 are ~128 on a uniform image:
-        // D(x) = (1+p)*128 - p*128 = 128
+        // On a uniform image both Gaussians are identical, so
+        // D(x) = (1+p)*v - p*v = v ≈ 128 everywhere.
         for &v in result.iter() {
             assert!(
                 (v - 128.0).abs() < 1.0,
@@ -300,16 +291,23 @@ mod tests {
 
     #[test]
     fn xdog_detects_edges() {
-        let mut img = Array2::<u8>::zeros((40, 40));
-        img.slice_mut(s![.., 20..]).fill(255); // vertical edge
+        let mut img = Array3::<f32>::zeros((40, 40, 1));
+        img.slice_mut(s![.., 20.., ..]).fill(255.0); // vertical edge
 
-        let result: Array<f32, _> = img
-            .xdog(XDoGArgs::sigma(1.0).k(1.6).p(20.0).build().unwrap())
+        let result = img
+            .xdog(
+                XDoGArgs::sigma(1.0f32)
+                    .kernel_size(KSIZE)
+                    .k(1.6f32)
+                    .p(20.0f32)
+                    .build()
+                    .unwrap(),
+            )
             .unwrap();
 
         // The edge region should differ from the flat interior.
-        let interior_val = result[[5, 5]];
-        let edge_val = result[[20, 20]];
+        let interior_val = result[[5, 5, 0]];
+        let edge_val = result[[20, 20, 0]];
         assert!(
             (edge_val - interior_val).abs() > 1.0,
             "edge response ({edge_val}) should differ from interior ({interior_val})"
@@ -319,22 +317,27 @@ mod tests {
     // ── p=0 gives plain DoG ─────────────────────────────────────────
 
     #[test]
-    fn xdog_p_zero_is_dog() {
+    fn xdog_p_zero_is_gaussian() {
         // When p = 0, XDoG = (1+0)*G1 - 0*G2 = G1.
-        let img = Array2::<u8>::from_shape_fn((20, 20), |(i, j)| ((i + j) % 256) as u8);
-        let result: Array<f32, _> = img
-            .xdog(XDoGArgs::sigma(1.0).p(0.0).build().unwrap())
+        let img = Array3::<f32>::from_shape_fn((20, 20, 3), |(i, j, _c)| ((i + j) % 256) as f32);
+        let result = img
+            .xdog(
+                XDoGArgs::sigma(1.0f32)
+                    .kernel_size(KSIZE)
+                    .p(0.0f32)
+                    .build()
+                    .unwrap(),
+            )
             .unwrap();
 
         // Compare against a direct Gaussian blur with the same sigma.
         use crate::gaussian::NdCvGaussianBlur;
-        let g1 = img
+        let g1: Array3<f32> = img
             .gaussian_blur((5, 5), (1.0, 1.0), BorderType::BorderReflect101)
             .unwrap();
 
         for (r, g) in result.iter().zip(g1.iter()) {
-            let g = *g as f32;
-            assert!((r - g).abs() < 1.0, "p=0 XDoG ({r}) should match G1 ({g})");
+            assert!((r - g).abs() < 1e-3, "p=0 XDoG ({r}) should match G1 ({g})");
         }
     }
 
@@ -342,22 +345,23 @@ mod tests {
 
     #[test]
     fn xdog_thresholding_produces_bounded_output() {
-        let img = Array2::<u8>::from_shape_fn((30, 30), |(i, j)| ((i * 8 + j * 3) % 256) as u8);
+        let img =
+            Array3::<f32>::from_shape_fn((30, 30, 3), |(i, j, _c)| ((i * 8 + j * 3) % 256) as f32);
 
-        let result: Array<f32, _> = img
+        let result = img
             .xdog(
-                XDoGArgs::sigma(1.0)
-                    .p(200.0)
+                XDoGArgs::sigma(1.0f32)
+                    .kernel_size(KSIZE)
+                    .p(200.0f32)
                     .thresholding(true)
-                    .epsilon(0.5)
-                    .phi(10.0)
+                    .epsilon(0.5f32)
+                    .phi(10.0f32)
                     .build()
                     .unwrap(),
             )
             .unwrap();
 
         // The tanh-based thresholding should produce values in roughly (0, 1].
-        // `1 + tanh(...)` is in (0, 2), but typical values are near 0 or near 1.
         for &v in result.iter() {
             assert!(
                 (-0.01..=1.01).contains(&v),
@@ -370,12 +374,13 @@ mod tests {
     fn xdog_thresholding_uniform_all_ones() {
         // A uniform image should produce D(x) = v for all pixels.
         // With epsilon < v, all pixels should threshold to 1.0.
-        let img = Array2::<u8>::from_elem((10, 10), 200);
-        let result: Array<f32, _> = img
+        let img = Array3::<f32>::from_elem((10, 10, 3), 200.0);
+        let result = img
             .xdog(
-                XDoGArgs::sigma(1.0)
+                XDoGArgs::sigma(1.0f32)
+                    .kernel_size(KSIZE)
                     .thresholding(true)
-                    .epsilon(0.0)
+                    .epsilon(0.0f32)
                     .build()
                     .unwrap(),
             )
@@ -392,24 +397,21 @@ mod tests {
     // ── Different types ─────────────────────────────────────────────
 
     #[test]
-    fn xdog_f32_input() {
-        let img = Array2::<f32>::from_shape_fn((15, 15), |(i, j)| (i + j) as f32);
-        let result: Array<f32, _> = img.xdog_def(1.0).unwrap();
-        assert_eq!(result.shape(), &[15, 15]);
+    fn xdog_f32_input_output() {
+        let img = Array3::<f32>::from_shape_fn((15, 15, 3), |(i, j, _)| (i + j) as f32);
+        let result = img
+            .xdog(XDoGArgs::sigma(1.0f32).kernel_size(KSIZE).build().unwrap())
+            .unwrap();
+        assert_eq!(result.shape(), &[15, 15, 3]);
     }
 
     #[test]
-    fn xdog_f64_output() {
-        let img = Array2::<u8>::ones((10, 10));
-        let result: Array<f64, _> = img.xdog_def(1.0).unwrap();
-        assert_eq!(result.shape(), &[10, 10]);
-    }
-
-    #[test]
-    fn xdog_u16_input() {
-        let img = Array2::<u16>::from_elem((10, 10), 1000);
-        let result: Array<f32, _> = img.xdog_def(1.5).unwrap();
-        assert_eq!(result.shape(), &[10, 10]);
+    fn xdog_f64_input_output() {
+        let img = Array3::<f64>::from_shape_fn((15, 15, 3), |(i, j, _)| (i + j) as f64);
+        let result = img
+            .xdog(XDoGArgs::sigma(1.0f64).kernel_size(KSIZE).build().unwrap())
+            .unwrap();
+        assert_eq!(result.shape(), &[15, 15, 3]);
     }
 
     // ── Parameter validation ────────────────────────────────────────
@@ -417,14 +419,17 @@ mod tests {
     #[test]
     fn xdog_invalid_sigma() {
         // Negative sigma should be rejected at build time.
-        let result = XDoGArgs::sigma(-1.0f64).build();
+        let result = XDoGArgs::<f64>::sigma(-1.0f64).kernel_size(KSIZE).build();
         assert!(result.is_err(), "negative sigma should fail validation");
     }
 
     #[test]
     fn xdog_invalid_k() {
         // Negative k should be rejected at build time.
-        let result = XDoGArgs::sigma(1.0).k(-0.5).build();
+        let result = XDoGArgs::<f64>::sigma(1.0f64)
+            .kernel_size(KSIZE)
+            .k(-0.5f64)
+            .build();
         assert!(result.is_err(), "negative k should fail validation");
     }
 
@@ -432,13 +437,19 @@ mod tests {
 
     #[test]
     fn xdog_different_k_values() {
-        let img = Array2::<u8>::from_shape_fn((20, 20), |(i, j)| ((i * j) % 256) as u8);
+        let img = Array3::<f32>::from_shape_fn((20, 20, 3), |(i, j, _)| ((i * j) % 256) as f32);
 
-        for k in [1.2, 1.6, 2.0, 3.0] {
-            let result: Array<f32, _> = img
-                .xdog(XDoGArgs::sigma(1.0).k(k).build().unwrap())
+        for k in [1.2f32, 1.6, 2.0, 3.0] {
+            let result = img
+                .xdog(
+                    XDoGArgs::sigma(1.0f32)
+                        .kernel_size(KSIZE)
+                        .k(k)
+                        .build()
+                        .unwrap(),
+                )
                 .unwrap();
-            assert_eq!(result.shape(), &[20, 20], "failed for k={k}");
+            assert_eq!(result.shape(), &[20, 20, 3], "failed for k={k}");
         }
     }
 
@@ -446,7 +457,7 @@ mod tests {
 
     #[test]
     fn xdog_different_border_types() {
-        let img = Array2::<u8>::from_shape_fn((20, 20), |(i, j)| ((i + j) % 256) as u8);
+        let img = Array3::<f32>::from_shape_fn((20, 20, 3), |(i, j, _)| ((i + j) % 256) as f32);
 
         let border_types = [
             BorderType::BorderConstant,
@@ -456,10 +467,20 @@ mod tests {
         ];
 
         for bt in border_types {
-            let result: Array<f32, _> = img
-                .xdog(XDoGArgs::sigma(1.0).border_type(bt).build().unwrap())
+            let result = img
+                .xdog(
+                    XDoGArgs::sigma(1.0f32)
+                        .kernel_size(KSIZE)
+                        .border_type(bt)
+                        .build()
+                        .unwrap(),
+                )
                 .unwrap();
-            assert_eq!(result.shape(), &[20, 20], "failed for border type {bt:?}");
+            assert_eq!(
+                result.shape(),
+                &[20, 20, 3],
+                "failed for border type {bt:?}"
+            );
         }
     }
 
@@ -467,26 +488,41 @@ mod tests {
 
     #[test]
     fn xdog_builder_defaults() {
-        // sigma is the only required field
-        let args = XDoGArgs::sigma(1.0).build().unwrap();
-        let img = Array2::<u8>::zeros((10, 10));
-        let _result: Array<f32, _> = img.xdog(args).unwrap();
+        // sigma and kernel_size are the required fields
+        let args = XDoGArgs::sigma(1.0f32).kernel_size(KSIZE).build().unwrap();
+        let img = Array3::<f32>::zeros((10, 10, 3));
+        let _result = img.xdog(args).unwrap();
     }
 
     #[test]
     fn xdog_builder_all_fields() {
-        let args = XDoGArgs::sigma(1.5)
-            .k(2.0)
-            .p(100.0)
-            .epsilon(0.3)
-            .phi(5.0)
+        let args = XDoGArgs::sigma(1.5f32)
+            .kernel_size(U8Vec2::new(7, 7))
+            .k(2.0f32)
+            .p(100.0f32)
+            .epsilon(0.3f32)
+            .phi(5.0f32)
             .thresholding(true)
             .border_type(BorderType::BorderReplicate)
             .build()
             .unwrap();
 
-        let img = Array2::<u8>::from_elem((20, 20), 100);
-        let result: Array<f32, _> = img.xdog(args).unwrap();
-        assert_eq!(result.shape(), &[20, 20]);
+        let img = Array3::<f32>::from_elem((20, 20, 3), 100.0);
+        let result = img.xdog(args).unwrap();
+        assert_eq!(result.shape(), &[20, 20, 3]);
+    }
+
+    // ── Different kernel sizes ──────────────────────────────────────
+
+    #[test]
+    fn xdog_different_kernel_sizes() {
+        let img = Array3::<f32>::from_elem((20, 20, 3), 50.0);
+
+        for ksize in [U8Vec2::new(3, 3), U8Vec2::new(5, 5), U8Vec2::new(7, 7)] {
+            let result = img
+                .xdog(XDoGArgs::sigma(1.0f32).kernel_size(ksize).build().unwrap())
+                .unwrap();
+            assert_eq!(result.shape(), &[20, 20, 3], "failed for ksize={ksize:?}");
+        }
     }
 }

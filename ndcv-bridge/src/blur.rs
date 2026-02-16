@@ -28,10 +28,7 @@ pub trait NdCvBoxBlur<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
         kernel_size: (i32, i32),
         border_type: crate::gaussian::BorderType,
     ) -> Result<ndarray::Array<T, D>, BoxBlurError>;
-    fn box_blur_def(
-        &self,
-        kernel_size: (i32, i32),
-    ) -> Result<ndarray::Array<T, D>, BoxBlurError> {
+    fn box_blur_def(&self, kernel_size: (i32, i32)) -> Result<ndarray::Array<T, D>, BoxBlurError> {
         self.box_blur(kernel_size, crate::gaussian::BorderType::BorderConstant)
     }
 }
@@ -94,7 +91,9 @@ mod tests {
 
         let kernel_sizes = [(3, 3), (5, 5), (7, 7)];
         for &kernel_size in &kernel_sizes {
-            let res = arr.box_blur(kernel_size, BorderType::BorderConstant).unwrap();
+            let res = arr
+                .box_blur(kernel_size, BorderType::BorderConstant)
+                .unwrap();
             assert_eq!(res.shape(), &[20, 20, 3]);
         }
     }
@@ -123,7 +122,9 @@ mod tests {
         let arr_f32 = Array3::<f32>::ones((10, 10, 3));
 
         let res_u8 = arr_u8.box_blur((3, 3), BorderType::BorderConstant).unwrap();
-        let res_f32 = arr_f32.box_blur((3, 3), BorderType::BorderConstant).unwrap();
+        let res_f32 = arr_f32
+            .box_blur((3, 3), BorderType::BorderConstant)
+            .unwrap();
 
         assert_eq!(res_u8.shape(), &[10, 10, 3]);
         assert_eq!(res_f32.shape(), &[10, 10, 3]);

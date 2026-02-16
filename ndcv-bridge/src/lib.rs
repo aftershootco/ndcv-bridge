@@ -10,6 +10,8 @@ mod roi;
 pub use errors::NdCvError;
 
 #[cfg(feature = "opencv")]
+pub mod blur;
+#[cfg(feature = "opencv")]
 pub mod bounding_rect;
 #[cfg(feature = "opencv")]
 pub mod color_space;
@@ -20,8 +22,6 @@ pub mod contours;
 #[cfg(feature = "opencv")]
 pub mod conversions;
 #[cfg(feature = "opencv")]
-pub mod blur;
-#[cfg(feature = "opencv")]
 pub mod gaussian;
 #[cfg(feature = "opencv")]
 pub mod resize;
@@ -29,9 +29,9 @@ pub mod resize;
 // pub mod codec;
 pub mod orient;
 pub use blend::NdBlend;
+pub use blur::NdCvBoxBlur;
 pub use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 pub use fir::NdFir;
-pub use blur::NdCvBoxBlur;
 pub use gaussian::{BorderType, NdCvGaussianBlur, NdCvGaussianBlurInPlace};
 pub use roi::{NdRoiZeroPadded, Roi as NdRoi, RoiMut as NdRoiMut};
 

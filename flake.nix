@@ -144,6 +144,7 @@
                   stableToolchainWithRustAnalyzer
                   cargo-nextest
                   cargo-deny
+                  cargo-hack
                   just
                   cargo-llvm-cov
                 ]

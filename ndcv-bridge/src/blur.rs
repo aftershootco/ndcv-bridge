@@ -64,52 +64,6 @@ where
     }
 }
 
-pub trait NdCvBoxBlurInPlace<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
-    crate::image::NdImage + crate::conversions::NdAsImageMut<T, D>
-{
-    fn box_blur_inplace(
-        &mut self,
-        kernel_size: (i32, i32),
-        border_type: crate::gaussian::BorderType,
-    ) -> Result<&mut Self, BoxBlurError>;
-    fn box_blur_def_inplace(
-        &mut self,
-        kernel_size: (i32, i32),
-    ) -> Result<&mut Self, BoxBlurError> {
-        self.box_blur_inplace(kernel_size, crate::gaussian::BorderType::BorderConstant)
-    }
-}
-
-impl<
-    T: bytemuck::Pod + num::Zero + seal::Sealed,
-    S: ndarray::RawData + ndarray::DataMut<Elem = T>,
-    D: ndarray::Dimension,
-> NdCvBoxBlurInPlace<T, D> for ArrayBase<S, D>
-where
-    Self: crate::image::NdImage + crate::conversions::NdAsImageMut<T, D>,
-{
-    fn box_blur_inplace(
-        &mut self,
-        kernel_size: (i32, i32),
-        border_type: crate::gaussian::BorderType,
-    ) -> Result<&mut Self, BoxBlurError> {
-        let mut cv_self = self.as_image_mat_mut()?;
-
-        unsafe {
-            crate::inplace::op_inplace(&mut cv_self, |this, out| {
-                opencv::imgproc::blur(
-                    this,
-                    out,
-                    opencv::core::Size::new(kernel_size.0, kernel_size.1),
-                    opencv::core::Point::new(-1, -1),
-                    border_type as i32,
-                )
-            })
-        }?;
-        Ok(self)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -158,8 +112,7 @@ mod tests {
         ];
 
         for border_type in border_types {
-            let _res = arr.box_blur((3, 3), border_type).unwrap();
-            let res = arr.box_blur_inplace((3, 3), border_type).unwrap();
+            let res = arr.box_blur((3, 3), border_type).unwrap();
             assert_eq!(res.shape(), &[10, 10, 3]);
         }
     }

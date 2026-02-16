@@ -29,7 +29,7 @@ pub mod resize;
 // pub mod codec;
 pub mod orient;
 pub use blend::NdBlend;
-pub use blur::NdCvBoxBlur;
+pub use blur::NdCvBlur;
 pub use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 pub use fir::NdFir;
 pub use gaussian::{BorderType, NdCvGaussianBlur, NdCvGaussianBlurInPlace};

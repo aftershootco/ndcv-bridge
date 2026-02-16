@@ -1061,6 +1061,7 @@ dependencies = [
  "bounding-box",
  "bytemuck",
  "divan",
+ "error-stack",
  "fast_image_resize",
  "img-parts",
  "nalgebra",

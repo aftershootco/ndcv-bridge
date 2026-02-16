@@ -7,6 +7,7 @@ use ndcv_bridge::{Ksize, NdCvSobel, SobelArgs as LibSobelArgs};
 /// Kernel size for Sobel operator
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub enum KsizeArg {
+    Scharr = -1,
     #[value(name = "1")]
     K1,
     #[value(name = "3")]
@@ -20,6 +21,7 @@ pub enum KsizeArg {
 impl From<KsizeArg> for Ksize {
     fn from(k: KsizeArg) -> Self {
         match k {
+            KsizeArg::Scharr => Ksize::Scharr,
             KsizeArg::K1 => Ksize::K1,
             KsizeArg::K3 => Ksize::K3,
             KsizeArg::K5 => Ksize::K5,

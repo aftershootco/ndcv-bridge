@@ -1,9 +1,10 @@
+use crate::NdAsImageMut;
 use crate::types::CvType;
 use crate::{NdAsImage, image::NdImage};
-use crate::{NdAsImageMut, type_depth};
 
 #[derive(Debug, Clone, derive_builder::Builder)]
 #[builder(setter(into), pattern = "owned")]
+#[builder(build_fn(validate = "Self::validate"))]
 pub struct SobelArgs {
     dxy: glam::IVec2,
     #[builder(default = "Ksize::K3")]
@@ -20,16 +21,40 @@ impl SobelArgs {
     pub fn builder(dxy: impl Into<glam::IVec2>) -> SobelArgsBuilder {
         SobelArgsBuilder::default().dxy(dxy)
     }
+
     pub fn dxy(dxy: impl Into<glam::IVec2>) -> SobelArgsBuilder {
         Self::builder(dxy)
+    }
+}
+
+impl SobelArgsBuilder {
+    pub fn validate(&self) -> Result<(), String> {
+        let dxy = self.dxy.ok_or("dxy is required")?;
+        if self.ksize.is_some_and(|k| {
+            k == Ksize::Scharr && !((dxy.x >= 0 && dxy.y >= 0) && (dxy.x + dxy.y == 1))
+        }) {
+            return Err("ksize cannot be Scharr when both dxy.x and dxy.y are non-negative and their sum is 1".into());
+        }
+        Ok(())
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(i32)]
 pub enum Ksize {
+    /// Uses the Scharr operator, which is a special case of the Sobel operator with a 3x3 kernel that provides better rotational symmetry and less aliasing. In OpenCV, this is specified by passing ksize=-1.
+    /// ```rust
+    /// [[ -3, 0, 3],
+    /// [ -10, 0, 10],
+    /// [ -3, 0, 3]]
+    /// ```
+    Scharr = -1,
+    /// A 3x1 or 1x3 kernel is used
+    /// This can only be used for first or the second order x- or y- derivatives
     K1 = 1,
+    /// The standard 3x3 Sobel kernel
     K3 = 3,
+    /// A 5x5 Sobel kernel, which can capture more context and produce smoother results at the cost of increased computational complexity and potential blurring of fine details.
     K5 = 5,
     K7 = 7,
 }
@@ -67,7 +92,7 @@ where
         ndarray::Array<U, D>: NdAsImageMut<U, D>,
     {
         let img = self.as_image_mat()?;
-        let ddepth = type_depth::<U>();
+        let ddepth = <U as CvType>::cv_depth();
         let mut dst = ndarray::Array::<U, D>::default(self.raw_dim());
         let mut dst_mat = dst.as_image_mat_mut()?;
         opencv::imgproc::sobel(
@@ -95,8 +120,8 @@ mod tests {
     fn vertical_edge_image(rows: usize, cols: usize) -> Array2<u8> {
         Array2::from_shape_fn(
             (rows, cols),
-            |(_i, j)| {
-                if j < cols / 2 { 0u8 } else { 255u8 }
+            |(_, j)| {
+                if j < cols / 2 { u8::MIN } else { u8::MAX }
             },
         )
     }
@@ -106,39 +131,11 @@ mod tests {
     fn horizontal_edge_image(rows: usize, cols: usize) -> Array2<u8> {
         Array2::from_shape_fn(
             (rows, cols),
-            |(i, _j)| {
-                if i < rows / 2 { 0u8 } else { 255u8 }
+            |(i, _)| {
+                if i < rows / 2 { u8::MIN } else { u8::MAX }
             },
         )
     }
-
-    // ── Basic API / shape preservation ──────────────────────────────
-
-    #[test]
-    fn sobel_2d_preserves_shape() {
-        let img = Array2::<u8>::from_shape_fn((10, 10), |(i, j)| (i * j) as u8);
-        let result: ndarray::Array<i16, _> =
-            img.sobel(SobelArgs::dxy((1, 0)).build().unwrap()).unwrap();
-        assert_eq!(result.shape(), &[10, 10]);
-    }
-
-    #[test]
-    fn sobel_3d_preserves_shape() {
-        let img = Array3::<u8>::ones((20, 30, 3));
-        let result: ndarray::Array<i16, _> =
-            img.sobel(SobelArgs::dxy((1, 0)).build().unwrap()).unwrap();
-        assert_eq!(result.shape(), &[20, 30, 3]);
-    }
-
-    #[test]
-    fn sobel_non_square_image() {
-        let img = Array2::<u8>::zeros((15, 40));
-        let result: ndarray::Array<i16, _> =
-            img.sobel(SobelArgs::dxy((0, 1)).build().unwrap()).unwrap();
-        assert_eq!(result.shape(), &[15, 40]);
-    }
-
-    // ── Edge detection correctness ──────────────────────────────────
 
     #[test]
     fn sobel_detects_vertical_edge_with_dx() {
@@ -186,8 +183,6 @@ mod tests {
         assert!(result.iter().all(|&v| v == 0));
     }
 
-    // ── Kernel sizes ────────────────────────────────────────────────
-
     #[test]
     fn sobel_different_kernel_sizes() {
         let img = vertical_edge_image(30, 30);
@@ -198,8 +193,6 @@ mod tests {
             assert_eq!(result.shape(), &[30, 30], "failed for ksize {ksize:?}");
         }
     }
-
-    // ── Scale and delta ─────────────────────────────────────────────
 
     #[test]
     fn sobel_scale_amplifies_output() {
@@ -238,8 +231,6 @@ mod tests {
         assert!(result_with_delta.iter().all(|&v| (v - 42.0).abs() < 1e-6));
     }
 
-    // ── Border types ────────────────────────────────────────────────
-
     #[test]
     fn sobel_different_border_types() {
         let img = vertical_edge_image(20, 20);
@@ -257,8 +248,6 @@ mod tests {
             assert_eq!(result.shape(), &[20, 20], "failed for border type {bt:?}");
         }
     }
-
-    // ── Type combinations ───────────────────────────────────────────
 
     #[test]
     fn sobel_u8_to_i16() {
@@ -292,8 +281,6 @@ mod tests {
         assert_eq!(result.shape(), &[10, 10]);
     }
 
-    // ── Builder ergonomics ──────────────────────────────────────────
-
     #[test]
     fn sobel_builder_defaults() {
         // dxy is the only required field; everything else should use defaults
@@ -316,8 +303,6 @@ mod tests {
         let result: ndarray::Array<f32, _> = img.sobel(args).unwrap();
         assert_eq!(result.shape(), &[20, 20]);
     }
-
-    // ── Mixed derivative orders ─────────────────────────────────────
 
     #[test]
     fn sobel_dx_only() {

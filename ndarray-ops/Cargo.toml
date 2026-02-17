@@ -1,0 +1,19 @@
+[package]
+name = "ndarray-ops"
+version.workspace = true
+edition.workspace = true
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+bounding-box.workspace = true
+error-stack.workspace = true
+tap.workspace = true
+ndarray.workspace = true
+thiserror.workspace = true
+rayon.workspace = true
+wide = "1.1.1" # TODO: workspace?
+tracing = "0.1.41" # TODO: workspace?
+
+[dev-dependencies]
+ndarray-image = { path = "../ndarray-image" }
+image = "0.25.6"

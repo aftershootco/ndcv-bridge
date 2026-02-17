@@ -1032,6 +1032,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "ndarray-ops"
+version = "0.3.0"
+dependencies = [
+ "bounding-box",
+ "error-stack",
+ "image",
+ "ndarray",
+ "ndarray-image",
+ "rayon",
+ "tap",
+ "thiserror",
+ "tracing",
+ "wide 1.1.1",
+]
+
+[[package]]
 name = "ndarray-resize"
 version = "0.1.0"
 dependencies = [

@@ -5,6 +5,7 @@ members = [
   "ndarray-resize",
   "ndarray-safetensors",
   "ndcv-bridge",
+  "ndarray-ops",
 ]
 
 [workspace.package]
@@ -31,3 +32,4 @@ img-parts = "0.4.0"
 ndarray = { version = "0.16.1", features = ["rayon"] }
 num = "0.4"
 tap = "1.0.1"
+rayon = "1.10.0"

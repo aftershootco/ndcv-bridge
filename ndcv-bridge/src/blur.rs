@@ -25,11 +25,11 @@ pub trait NdCvBlur<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
 {
     fn blur(
         &self,
-        kernel_size: (i32, i32),
+        kernel_size: (u16, u16),
         anchor: (i32, i32),
         border_type: crate::gaussian::BorderType,
     ) -> Result<ndarray::Array<T, D>, BlurError>;
-    fn blur_def(&self, kernel_size: (i32, i32)) -> Result<ndarray::Array<T, D>, BlurError> {
+    fn blur_def(&self, kernel_size: (u16, u16)) -> Result<ndarray::Array<T, D>, BlurError> {
         self.blur(
             kernel_size,
             (-1, -1),
@@ -49,7 +49,7 @@ where
 {
     fn blur(
         &self,
-        kernel_size: (i32, i32),
+        kernel_size: (u16, u16),
         anchor: (i32, i32),
         border_type: crate::gaussian::BorderType,
     ) -> Result<ndarray::Array<T, D>, BlurError> {
@@ -59,7 +59,7 @@ where
         opencv::imgproc::blur(
             &*cv_self,
             &mut *cv_dst,
-            opencv::core::Size::new(kernel_size.0, kernel_size.1),
+            opencv::core::Size::new(kernel_size.0 as i32, kernel_size.1 as i32),
             opencv::core::Point::new(anchor.0, anchor.1),
             border_type as i32,
         )?;

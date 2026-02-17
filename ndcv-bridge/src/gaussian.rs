@@ -58,14 +58,14 @@ pub trait NdCvGaussianBlur<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimensio
 {
     fn gaussian_blur(
         &self,
-        kernel_size: (u8, u8),
+        kernel_size: (u16, u16),
         sigma_x: f64,
         sigma_y: f64,
         border_type: BorderType,
     ) -> Result<ndarray::Array<T, D>, GaussianBlurError>;
     fn gaussian_blur_def(
         &self,
-        kernel: (u8, u8),
+        kernel: (u16, u16),
         sigma_x: f64,
     ) -> Result<ndarray::Array<T, D>, GaussianBlurError> {
         self.gaussian_blur(kernel, sigma_x, sigma_x, BorderType::BorderConstant)
@@ -83,7 +83,7 @@ where
 {
     fn gaussian_blur(
         &self,
-        kernel_size: (u8, u8),
+        kernel_size: (u16, u16),
         sigma_x: f64,
         sigma_y: f64,
         border_type: BorderType,
@@ -178,14 +178,14 @@ pub trait NdCvGaussianBlurInPlace<T: bytemuck::Pod + seal::Sealed, D: ndarray::D
 {
     fn gaussian_blur_inplace(
         &mut self,
-        kernel_size: (u8, u8),
+        kernel_size: (u16, u16),
         sigma_x: f64,
         sigma_y: f64,
         border_type: BorderType,
     ) -> Result<&mut Self, GaussianBlurError>;
     fn gaussian_blur_def_inplace(
         &mut self,
-        kernel: (u8, u8),
+        kernel: (u16, u16),
         sigma_x: f64,
     ) -> Result<&mut Self, GaussianBlurError> {
         self.gaussian_blur_inplace(kernel, sigma_x, sigma_x, BorderType::BorderConstant)
@@ -202,7 +202,7 @@ where
 {
     fn gaussian_blur_inplace(
         &mut self,
-        kernel_size: (u8, u8),
+        kernel_size: (u16, u16),
         sigma_x: f64,
         sigma_y: f64,
         border_type: BorderType,

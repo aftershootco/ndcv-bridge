@@ -59,7 +59,7 @@ mod sizes {
 }
 
 #[divan::bench(args = [(3, 3), (5, 5), (7, 7), (9, 9), (11, 11)])]
-fn bench_blur_kernels(kernel_size: (i32, i32)) {
+fn bench_blur_kernels(kernel_size: (u16, u16)) {
     let arr = Array3::<u8>::ones((1000, 1000, 3));
     let _out = black_box(
         arr.blur(kernel_size, (-1, -1), BorderType::BorderConstant)

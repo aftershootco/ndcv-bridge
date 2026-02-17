@@ -26,10 +26,11 @@ pub trait NdCvBlur<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
     fn blur(
         &self,
         kernel_size: (i32, i32),
+        anchor: (i32, i32),
         border_type: crate::gaussian::BorderType,
     ) -> Result<ndarray::Array<T, D>, BlurError>;
     fn blur_def(&self, kernel_size: (i32, i32)) -> Result<ndarray::Array<T, D>, BlurError> {
-        self.blur(kernel_size, crate::gaussian::BorderType::BorderConstant)
+        self.blur(kernel_size, (-1, -1), crate::gaussian::BorderType::BorderConstant)
     }
 }
 
@@ -45,6 +46,7 @@ where
     fn blur(
         &self,
         kernel_size: (i32, i32),
+        anchor: (i32, i32),
         border_type: crate::gaussian::BorderType,
     ) -> Result<ndarray::Array<T, D>, BlurError> {
         let mut dst = ndarray::Array::zeros(self.dim());
@@ -54,7 +56,7 @@ where
             &*cv_self,
             &mut *cv_dst,
             opencv::core::Size::new(kernel_size.0, kernel_size.1),
-            opencv::core::Point::new(-1, -1),
+            opencv::core::Point::new(anchor.0, anchor.1),
             border_type as i32,
         )?;
         Ok(dst)
@@ -70,7 +72,9 @@ mod tests {
     #[test]
     fn test_blur_basic() {
         let arr = Array3::<u8>::ones((10, 10, 3));
-        let res = arr.blur((3, 3), BorderType::BorderConstant).unwrap();
+        let res = arr
+            .blur((3, 3), (-1, -1), BorderType::BorderConstant)
+            .unwrap();
         assert_eq!(res.shape(), &[10, 10, 3]);
     }
 
@@ -79,7 +83,9 @@ mod tests {
         let mut arr = Array3::<u8>::zeros((10, 10, 3));
         arr.slice_mut(s![..5, .., ..]).fill(255);
 
-        let res = arr.blur((3, 3), BorderType::BorderConstant).unwrap();
+        let res = arr
+            .blur((3, 3), (-1, -1), BorderType::BorderConstant)
+            .unwrap();
 
         let middle_row = res.slice(s![4..6, 5, 0]);
         assert!(middle_row.iter().all(|&x| x > 0 && x < 255));
@@ -91,7 +97,9 @@ mod tests {
 
         let kernel_sizes = [(3, 3), (5, 5), (7, 7)];
         for &kernel_size in &kernel_sizes {
-            let res = arr.blur(kernel_size, BorderType::BorderConstant).unwrap();
+            let res = arr
+                .blur(kernel_size, (-1, -1), BorderType::BorderConstant)
+                .unwrap();
             assert_eq!(res.shape(), &[20, 20, 3]);
         }
     }
@@ -109,7 +117,7 @@ mod tests {
         ];
 
         for border_type in border_types {
-            let res = arr.blur((3, 3), border_type).unwrap();
+            let res = arr.blur((3, 3), (-1, -1), border_type).unwrap();
             assert_eq!(res.shape(), &[10, 10, 3]);
         }
     }
@@ -119,11 +127,24 @@ mod tests {
         let arr_u8 = Array3::<u8>::ones((10, 10, 3));
         let arr_f32 = Array3::<f32>::ones((10, 10, 3));
 
-        let res_u8 = arr_u8.blur((3, 3), BorderType::BorderConstant).unwrap();
-        let res_f32 = arr_f32.blur((3, 3), BorderType::BorderConstant).unwrap();
+        let res_u8 = arr_u8
+            .blur((3, 3), (-1, -1), BorderType::BorderConstant)
+            .unwrap();
+        let res_f32 = arr_f32
+            .blur((3, 3), (-1, -1), BorderType::BorderConstant)
+            .unwrap();
 
         assert_eq!(res_u8.shape(), &[10, 10, 3]);
         assert_eq!(res_f32.shape(), &[10, 10, 3]);
+    }
+
+    #[test]
+    fn test_blur_custom_anchor() {
+        let arr = Array3::<u8>::ones((10, 10, 3));
+        let res = arr
+            .blur((3, 3), (0, 0), BorderType::BorderConstant)
+            .unwrap();
+        assert_eq!(res.shape(), &[10, 10, 3]);
     }
 
     #[test]

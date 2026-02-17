@@ -42,20 +42,20 @@ mod sizes {
     #[divan::bench(args = [512, 1024, 2048, 4096, 8096, 12000])]
     fn bench_blur_sizes_u8(size: usize) {
         let arr = Array3::<u8>::ones((size, size, 3));
-        let _out = black_box(arr.blur((3, 3), BorderType::BorderConstant).unwrap());
+        let _out = black_box(arr.blur((3, 3), (-1, -1), BorderType::BorderConstant).unwrap());
     }
 
     #[divan::bench(args = [512, 1024, 2048, 4096, 8096, 12000])]
     fn bench_blur_sizes_f32(size: usize) {
         let arr = Array3::<f32>::ones((size, size, 3));
-        let _out = black_box(arr.blur((3, 3), BorderType::BorderConstant).unwrap());
+        let _out = black_box(arr.blur((3, 3), (-1, -1), BorderType::BorderConstant).unwrap());
     }
 }
 
 #[divan::bench(args = [(3, 3), (5, 5), (7, 7), (9, 9), (11, 11)])]
 fn bench_blur_kernels(kernel_size: (i32, i32)) {
     let arr = Array3::<u8>::ones((1000, 1000, 3));
-    let _out = black_box(arr.blur(kernel_size, BorderType::BorderConstant).unwrap());
+    let _out = black_box(arr.blur(kernel_size, (-1, -1), BorderType::BorderConstant).unwrap());
 }
 
 #[divan::bench]
@@ -71,7 +71,7 @@ fn bench_blur_border_types() -> Vec<()> {
     border_types
         .iter()
         .map(|border_type| {
-            let _out = black_box(arr.blur((3, 3), *border_type).unwrap());
+            let _out = black_box(arr.blur((3, 3), (-1, -1), *border_type).unwrap());
         })
         .collect()
 }
@@ -82,7 +82,7 @@ fn bench_blur_patterns() {
 
     patterns.iter().for_each(|&pattern| {
         let arr = create_test_image(1000, pattern);
-        let _out = black_box(arr.blur((3, 3), BorderType::BorderConstant).unwrap());
+        let _out = black_box(arr.blur((3, 3), (-1, -1), BorderType::BorderConstant).unwrap());
     })
 }
 
@@ -93,60 +93,60 @@ mod realistic {
     #[divan::bench]
     fn small_800_600_3x3() {
         let arr = Array3::<u8>::ones((800, 600, 3));
-        let _blurred = black_box(arr.blur((3, 3), BorderType::BorderConstant).unwrap());
+        let _blurred = black_box(arr.blur((3, 3), (-1, -1), BorderType::BorderConstant).unwrap());
     }
 
     #[divan::bench]
     fn medium_1920x1080_5x5() {
         let arr = Array3::<u8>::ones((1920, 1080, 3));
-        let _blurred = black_box(arr.blur((5, 5), BorderType::BorderConstant).unwrap());
+        let _blurred = black_box(arr.blur((5, 5), (-1, -1), BorderType::BorderConstant).unwrap());
     }
 
     #[divan::bench]
     fn large_3840x2160_9x9() {
         let arr = Array3::<u8>::ones((3840, 2160, 3));
-        let _blurred = black_box(arr.blur((9, 9), BorderType::BorderConstant).unwrap());
+        let _blurred = black_box(arr.blur((9, 9), (-1, -1), BorderType::BorderConstant).unwrap());
     }
 
     #[divan::bench]
     fn xlarge_8096x4320_9x9() {
         let arr = Array3::<u8>::ones((8096, 4320, 3));
-        let _blurred = black_box(arr.blur((9, 9), BorderType::BorderConstant).unwrap());
+        let _blurred = black_box(arr.blur((9, 9), (-1, -1), BorderType::BorderConstant).unwrap());
     }
 
     #[divan::bench]
     fn xxlarge_12000x6000_9x9() {
         let arr = Array3::<u8>::ones((12000, 6000, 3));
-        let _blurred = black_box(arr.blur((9, 9), BorderType::BorderConstant).unwrap());
+        let _blurred = black_box(arr.blur((9, 9), (-1, -1), BorderType::BorderConstant).unwrap());
     }
 
     #[divan::bench]
     fn small_800_600_3x3_f32() {
         let arr = Array3::<f32>::ones((800, 600, 3));
-        let _blurred = black_box(arr.blur((3, 3), BorderType::BorderConstant).unwrap());
+        let _blurred = black_box(arr.blur((3, 3), (-1, -1), BorderType::BorderConstant).unwrap());
     }
 
     #[divan::bench]
     fn medium_1920x1080_5x5_f32() {
         let arr = Array3::<f32>::ones((1920, 1080, 3));
-        let _blurred = black_box(arr.blur((5, 5), BorderType::BorderConstant).unwrap());
+        let _blurred = black_box(arr.blur((5, 5), (-1, -1), BorderType::BorderConstant).unwrap());
     }
 
     #[divan::bench]
     fn large_3840x2160_9x9_f32() {
         let arr = Array3::<f32>::ones((3840, 2160, 3));
-        let _blurred = black_box(arr.blur((9, 9), BorderType::BorderConstant).unwrap());
+        let _blurred = black_box(arr.blur((9, 9), (-1, -1), BorderType::BorderConstant).unwrap());
     }
 
     #[divan::bench]
     fn xlarge_8096x4320_9x9_f32() {
         let arr = Array3::<f32>::ones((8096, 4320, 3));
-        let _blurred = black_box(arr.blur((9, 9), BorderType::BorderConstant).unwrap());
+        let _blurred = black_box(arr.blur((9, 9), (-1, -1), BorderType::BorderConstant).unwrap());
     }
 
     #[divan::bench]
     fn xxlarge_12000x6000_9x9_f32() {
         let arr = Array3::<f32>::ones((12000, 6000, 3));
-        let _blurred = black_box(arr.blur((9, 9), BorderType::BorderConstant).unwrap());
+        let _blurred = black_box(arr.blur((9, 9), (-1, -1), BorderType::BorderConstant).unwrap());
     }
 }

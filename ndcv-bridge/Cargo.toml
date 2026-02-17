@@ -9,7 +9,7 @@ bounding-box.workspace = true
 nalgebra.workspace = true
 bytemuck.workspace = true
 error-stack.workspace = true
-fast_image_resize.workspace = true
+fast_image_resize = { workspace = true, features = ["bytemuck"] }
 ndarray = { workspace = true, features = ["rayon"] }
 num.workspace = true
 opencv = { workspace = true, optional = true }
@@ -23,6 +23,8 @@ pretty_assertions = "1.4.1"
 
 [dev-dependencies]
 divan.workspace = true
+image = "0.25.9"
+ndarray-image = { path = "../ndarray-image" }
 ndarray-npy.workspace = true
 
 [features]

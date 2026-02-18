@@ -142,7 +142,7 @@
             // {
               packages = with pkgs;
                 [
-                  packages.default
+                  #packages.default
                   stableToolchainWithRustAnalyzer
                   cargo-nextest
                   cargo-deny

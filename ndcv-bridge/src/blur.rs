@@ -1,5 +1,5 @@
 //! <https://docs.rs/opencv/latest/opencv/imgproc/fn.blur.html>
-use crate::conversions::*;
+use crate::{conversions::*, types::CvType};
 use ndarray::*;
 
 #[derive(Debug, thiserror::Error)]
@@ -20,7 +20,7 @@ mod seal {
     impl Sealed for f64 {}
 }
 
-pub trait NdCvBlur<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
+pub trait NdCvBlur<T: bytemuck::Pod + CvType + seal::Sealed, D: ndarray::Dimension>:
     crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
     fn blur(
@@ -39,7 +39,7 @@ pub trait NdCvBlur<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
 }
 
 impl<
-    T: bytemuck::Pod + num::Zero + seal::Sealed,
+    T: bytemuck::Pod + num::Zero + seal::Sealed + CvType,
     S: ndarray::RawData + ndarray::Data<Elem = T>,
     D: ndarray::Dimension,
 > NdCvBlur<T, D> for ArrayBase<S, D>

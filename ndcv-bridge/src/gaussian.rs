@@ -1,6 +1,6 @@
 //! <https://docs.rs/opencv/latest/opencv/imgproc/fn.gaussian_blur.html>
 use crate::conversions::*;
-use glam::{DVec2, IVec2, U8Vec2, U16Vec2};
+use glam::{DVec2, U16Vec2};
 use ndarray::*;
 use opencv::core::AlgorithmHint as OpencvAlgorithmHint;
 
@@ -121,7 +121,7 @@ pub trait NdCvGaussianBlurInPlace<T: crate::types::CvType + seal::Sealed, D: nda
     ) -> Result<&mut Self, GaussianBlurError>;
     fn gaussian_blur_def_inplace(
         &mut self,
-        kernel: impl Into<IVec2>,
+        kernel: impl Into<U16Vec2>,
         sigma: f64,
     ) -> Result<&mut Self, GaussianBlurError> {
         self.gaussian_blur_inplace(kernel, (sigma, sigma), BorderType::BorderConstant)

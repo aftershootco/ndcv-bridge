@@ -55,7 +55,7 @@ pub fn run(image: &NdImage, args: &BlurArgs) -> Result<NdImage> {
     }
 
     let sigma_y = args.sigma_y.unwrap_or(args.sigma);
-    let kernel = (args.kernel as i32, args.kernel as i32);
+    let kernel = (args.kernel, args.kernel);
     let border = BorderType::from(args.border);
 
     match image {

@@ -1,24 +1,32 @@
-use bounding_box::nalgebra::Point2;
 use error_stack::ResultExt;
-use ndarray::{Array3, ArrayView2, Axis, s};
+use ndarray::{Array2, Array3, ArrayView2, Axis, Zip, s};
 
-use super::traits::{Paste, PasteConfig, PasteError};
-use super::{AnchoredPos, Bounds, NormalisedPos};
+use super::traits::{Paste, PasteConfig};
+use super::{AnchoredPos, Bounds, PasteError};
 
 #[derive(Debug, Clone, Copy)]
 pub struct ChannelPaster<'a> {
-    to_paste: ArrayView2<'a, u8>,
+    data: ArrayView2<'a, u8>,
     channel_idx: usize,
     position: AnchoredPos,
+    alpha: f32,
+    pow: f32,
 }
 
 impl<'a> ChannelPaster<'a> {
-    pub fn new(to_paste: ArrayView2<'a, u8>) -> Self {
+    pub fn new(data: ArrayView2<'a, u8>) -> Self {
         Self {
-            to_paste: to_paste,
-            channel_idx: 4,
+            data,
+            channel_idx: 3,
             position: AnchoredPos::default(),
+            alpha: 1.,
+            pow: 1.,
         }
+    }
+
+    pub fn with_data(mut self, data: ArrayView2<'a, u8>) -> Self {
+        self.data = data;
+        self
     }
 
     /// On which channel of Array3, to paste the array on.
@@ -47,6 +55,16 @@ impl<'a> ChannelPaster<'a> {
         self.position = pos;
         self
     }
+
+    pub fn with_alpha(mut self, alpha: f32) -> Self {
+        self.alpha = alpha;
+        self
+    }
+
+    pub fn with_pow(mut self, pow: f32) -> Self {
+        self.pow = pow;
+        self
+    }
 }
 
 impl<'a, 'b> Paste<ChannelPaster<'b>> for &'a mut Array3<u8>
@@ -57,22 +75,21 @@ where
 
     fn paste(self, other: ChannelPaster) -> error_stack::Result<Self::Out, PasteError> {
         let ChannelPaster {
-            to_paste,
+            data,
             channel_idx,
             position,
+            alpha,
+            pow,
         } = other;
 
         let channel = channel_idx + 1;
-        let (mh, mw) = to_paste.dim();
+        let (mh, mw) = data.dim();
         let (ih, iw, ic) = self.dim();
 
         let c = if channel > ic {
             let filled_3d_arrray = Array3::ones((ih as usize, iw as usize, 1)) * 255_u8;
             *self = ndarray::concatenate(Axis(2), &[self.view(), filled_3d_arrray.view()])
                 .change_context(PasteError)?;
-            // TODO: sus
-            // .as_standard_layout()
-            // .to_owned();
 
             self.dim().2
         } else {
@@ -93,26 +110,122 @@ where
 
             // safe to cast to usize because img_bounds lies in the 1st quadrant, which means any
             // intersection with it will also have positive coords
-            let mut cropped_src = self.slice_mut(s![
+            let cropped_src = self.slice_mut(s![
                 img_bounds.h_min() as usize..img_bounds.h_max() as usize,
                 img_bounds.w_min() as usize..img_bounds.w_max() as usize,
-                c
+                c - 1
             ]);
 
-            // safe to cast to mask bounds (which were originally in 1st quadrant) were first translated by mask_translation,
-            // any intersection with it will also be atleast be moved by this translation,
+            // safe to cast to usize as mask bounds (which were originally in 1st quadrant) were first translated by mask_translation,
+            // any intersection with it will also be be moved by this translation,
             // so reversing this translation will result in positive coords
-            let cropped_mask = to_paste.slice(s![
+            let cropped_mask = data.slice(s![
                 mask_bounds.h_min() as usize..mask_bounds.h_max() as usize,
                 mask_bounds.w_min() as usize..mask_bounds.w_max() as usize
             ]);
 
-            // TODO: no need now
-            assert_eq!(cropped_src.dim(), cropped_mask.dim());
+            Zip::from(cropped_src)
+                .and(cropped_mask)
+                .par_for_each(|this, other| {
+                    let res = super::blend_f32(
+                        super::convert_to_f32(*this),
+                        super::convert_to_f32(*other).powf(pow),
+                        1.,
+                        alpha,
+                    );
 
-            cropped_src.assign(&cropped_mask);
+                    *this = super::convert_to_u8(res);
+                });
         }
 
         Ok(self)
+    }
+}
+
+// Paste Config impls
+impl<'a> PasteConfig<'a> for ArrayView2<'a, u8> {
+    type Out = ChannelPaster<'a>;
+
+    fn with_opts(self) -> Self::Out {
+        ChannelPaster::new(self)
+    }
+}
+
+impl<'a> PasteConfig<'a> for &'a Array2<u8> {
+    type Out = ChannelPaster<'a>;
+
+    fn with_opts(self) -> Self::Out {
+        ChannelPaster::new(self.view())
+    }
+}
+
+// On &mut Array3
+impl<'a> Paste<ArrayView2<'a, u8>> for &'a mut Array3<u8> {
+    type Out = &'a mut Array3<u8>;
+
+    fn paste(self, other: ArrayView2<'a, u8>) -> error_stack::Result<Self::Out, PasteError> {
+        let paster: ChannelPaster = other.with_opts();
+        self.paste(paster)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::test_utils::*;
+
+    #[test]
+    pub fn test_alpha_chan_equal_dim_centered() {
+        let mut this = Array3::ones((512, 512, 3)) * 255;
+        let mask = circular_wave_mask(512, 512, 20., 20.);
+
+        this.paste(mask.view()).unwrap();
+
+        assert_eq!(this.dim().2, 4);
+
+        save_rgba(
+            this.as_standard_layout().view(),
+            "test_alpha_chan_equal_dim_centered.png",
+        );
+    }
+
+    #[test]
+    pub fn test_panned_alpha_channel() {
+        let mut this = Array3::ones((3072, 4096, 4)) * 255;
+        let mask = circular_wave_mask(1900, 2540, 100., 100.);
+
+        this.paste(
+            mask.with_opts()
+                .with_position(AnchoredPos::new(0.5, 0.5, crate::paste::Anchor::TopLeft))
+                .with_alpha(0.7)
+                .with_pow(2.),
+        )
+        .unwrap();
+
+        save_rgba(
+            this.as_standard_layout().view(),
+            "test_panned_alpha_channel.png",
+        );
+    }
+
+    #[test]
+    pub fn test_pasting_color_channel() {
+        let mut this = Array3::ones((3072, 4096, 4)) * 255;
+        let mask = circular_wave_mask(1900, 2540, 100., 100.);
+
+        this.paste(
+            mask.with_opts()
+                .with_position(AnchoredPos::new(0.5, 0.5, crate::paste::Anchor::TopLeft))
+                .with_channel_idx(1)
+                .with_alpha(0.7)
+                .with_pow(2.),
+        )
+        .unwrap();
+
+        save_rgba(
+            this.as_standard_layout().view(),
+            "test_pasting_color_channel.png",
+        );
     }
 }

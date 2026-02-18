@@ -1,12 +1,20 @@
 //! Methods and type conversions for ndarray to opencv and vice versa
+
+#[cfg(all(feature = "ndarray_0_16", not(feature = "ndarray_0_17")))]
+extern crate ndarray_0_16 as ndarray;
+#[cfg(feature = "ndarray_0_17")]
+extern crate ndarray_0_17 as ndarray;
+
+#[cfg(all(not(feature = "ndarray_0_17"), not(feature = "ndarray_0_16")))]
+compile_error!(
+    "Either 'ndarray_0_16' or 'ndarray_0_17' feature is required for this crate to work. Please enable either"
+);
+
 mod blend;
 mod errors;
-// mod dilate;
 pub mod fir;
 mod image;
-mod inplace;
 pub mod percentile;
-mod roi;
 pub use errors::NdCvError;
 
 #[cfg(feature = "opencv")]
@@ -24,16 +32,21 @@ pub mod conversions;
 #[cfg(feature = "opencv")]
 pub mod gaussian;
 #[cfg(feature = "opencv")]
+mod inplace;
+#[cfg(feature = "opencv")]
+pub mod orient;
+#[cfg(feature = "opencv")]
 pub mod resize;
 
-// pub mod codec;
-pub mod orient;
+#[cfg(feature = "roi")]
+mod roi;
+#[cfg(feature = "roi")]
+pub use roi::{NdRoiZeroPadded, Roi as NdRoi, RoiMut as NdRoiMut};
+
 pub use blend::NdBlend;
 pub use blur::NdCvBlur;
 pub use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 pub use fir::NdFir;
-pub use gaussian::{BorderType, NdCvGaussianBlur, NdCvGaussianBlurInPlace};
-pub use roi::{NdRoiZeroPadded, Roi as NdRoi, RoiMut as NdRoiMut};
 
 #[cfg(feature = "opencv")]
 pub use contours::{
@@ -41,15 +54,16 @@ pub use contours::{
     NdCvContourArea, NdCvFindContours,
 };
 
-#[allow(deprecated)]
-pub use conversions::NdCvConversion;
-
 #[cfg(feature = "opencv")]
 pub use bounding_rect::BoundingRect;
 #[cfg(feature = "opencv")]
 pub use connected_components::{Connectivity, NdCvConnectedComponents};
 #[cfg(feature = "opencv")]
+pub use conversions::NdCvConversion;
+#[cfg(feature = "opencv")]
 pub use conversions::{MatAsNd, NdAsImage, NdAsImageMut, NdAsMat, NdAsMatMut};
+#[cfg(feature = "opencv")]
+pub use gaussian::{BorderType, NdCvGaussianBlur, NdCvGaussianBlurInPlace};
 #[cfg(feature = "opencv")]
 pub use resize::{Interpolation, NdCvResize};
 

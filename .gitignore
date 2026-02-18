@@ -1,3 +1,7 @@
 /result
 /target
 .direnv
+*.jpg
+*.png
+.env
+justfile

@@ -1,4 +1,4 @@
-mod paste;
+pub mod paste;
 
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone)]

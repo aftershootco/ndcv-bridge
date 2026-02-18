@@ -1,6 +1,6 @@
+use error_stack::Report;
+use ndarray::{Array3, ArrayView, ArrayView2, ArrayViewMut3, Axis, Zip, s};
 use std::ops::Div;
-
-use ndarray::{Array3, ArrayView, ArrayView2, ArrayView3, ArrayViewMut3, Axis, Zip, s};
 use tap::Pipe;
 
 use crate::Rgb;
@@ -97,7 +97,7 @@ where
     ///
     /// If the dimensions of other or mask don't match with self, their common intersection is
     /// pasted on self
-    fn paste(mut self, other: ColorPaster) -> error_stack::Result<Self::Out, PasteError> {
+    fn paste(mut self, other: ColorPaster) -> Result<Self::Out, Report<PasteError>> {
         let ColorPaster {
             data,
             position,
@@ -143,8 +143,6 @@ where
         let Some(img_bounds) = img_bounds else {
             return Ok(self);
         };
-
-        let other_bounds = img_bounds.translate(-other_translation);
 
         // safe to cast to usize because img_bounds lies in the 1st quadrant, which means any
         // intersection with it will also have positive coords
@@ -215,7 +213,7 @@ where
 {
     type Out = ArrayViewMut3<'a, u8>;
 
-    fn paste(self, other: Rgb<u8>) -> error_stack::Result<Self::Out, PasteError> {
+    fn paste(self, other: Rgb<u8>) -> Result<Self::Out, Report<PasteError>> {
         let paster: ColorPaster = other.with_opts().into();
         self.view_mut().paste(paster)
     }
@@ -227,7 +225,7 @@ where
 {
     type Out = ArrayViewMut3<'a, u8>;
 
-    fn paste(self, other: ColorPaster<'b>) -> error_stack::Result<Self::Out, PasteError> {
+    fn paste(self, other: ColorPaster<'b>) -> Result<Self::Out, Report<PasteError>> {
         self.view_mut().paste(other)
     }
 }
@@ -239,7 +237,7 @@ where
 {
     type Out = ArrayViewMut3<'a, u8>;
 
-    fn paste(self, other: Rgb<u8>) -> error_stack::Result<Self::Out, PasteError> {
+    fn paste(self, other: Rgb<u8>) -> Result<Self::Out, Report<PasteError>> {
         let paster: ColorPaster = other.with_opts().into();
         self.paste(paster)
     }
@@ -247,8 +245,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::f64;
-
     use super::*;
 
     use crate::test_utils::*;
@@ -274,7 +270,7 @@ mod tests {
                 .with_opts()
                 .with_alpha(0.3)
                 .with_size(512, 512)
-                .with_position(AnchoredPos::new(0.5, 1., crate::paste::Anchor::Center)),
+                .with_position(AnchoredPos::from_dim(0.5, 1., crate::paste::Anchor::Center)),
         )
         .unwrap();
 
@@ -292,9 +288,17 @@ mod tests {
                 .with_opts()
                 .with_alpha(0.7)
                 .with_size(1900, 2540)
-                .with_position(AnchoredPos::new(0.5, 0.5, crate::paste::Anchor::Center))
+                .with_position(AnchoredPos::from_dim(
+                    0.5,
+                    0.5,
+                    crate::paste::Anchor::Center,
+                ))
                 .with_mask(mask.view())
-                .with_mask_position(AnchoredPos::new(0.3, 0.5, crate::paste::Anchor::Center))
+                .with_mask_position(AnchoredPos::from_dim(
+                    0.3,
+                    0.5,
+                    crate::paste::Anchor::Center,
+                ))
                 .with_pow(0.7),
         )
         .unwrap();

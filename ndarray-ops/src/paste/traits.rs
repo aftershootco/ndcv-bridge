@@ -1,9 +1,10 @@
 use super::PasteError;
+use error_stack::Report;
 
 pub trait Paste<T> {
     type Out;
 
-    fn paste(self, other: T) -> error_stack::Result<Self::Out, PasteError>;
+    fn paste(self, other: T) -> Result<Self::Out, Report<PasteError>>;
 }
 
 pub trait PasteConfig<'a> {

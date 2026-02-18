@@ -1,20 +1,26 @@
-use std::{
-    borrow::Borrow,
-    ops::{Div, Mul},
-};
+use std::{borrow::Borrow, ops::Mul};
 
 use bounding_box::{
     Aabb2,
     nalgebra::{Point2, Vector2},
 };
-use error_stack::ResultExt;
-use ndarray::{Array3, ArrayView2, ArrayViewMut3, Axis, s};
-use tap::{Pipe, TapOptional};
 
 mod channel_paster;
 mod color_paster;
 mod image_paster;
 mod traits;
+
+pub mod prelude {
+    pub use super::Anchor;
+    pub use super::AnchoredPos;
+    pub use super::channel_paster::ChannelPaster;
+    pub use super::color_paster::ColorPaster;
+    pub use super::image_paster::ImagePaster;
+    // TODO:
+    // pub use super::traits::TryPaste;
+    pub use super::traits::Paste;
+    pub use super::traits::PasteConfig;
+}
 
 #[derive(Debug, thiserror::Error)]
 #[error("Paste Error")]
@@ -48,14 +54,18 @@ impl Default for AnchoredPos {
 }
 
 impl AnchoredPos {
-    pub fn new(normalised_h: f64, normalised_w: f64, anchor: Anchor) -> Self {
+    pub fn new(normalised_pos: NormalisedPos, anchor: Anchor) -> Self {
         Self {
-            normalised_pos: NormalisedPos::new(normalised_h, normalised_w),
+            normalised_pos,
             anchor,
         }
     }
 
-    pub fn get_top_left_pos(&self, src_bounds: Bounds, to_paste_bounds: Bounds) -> Point2<i128> {
+    pub fn from_dim(normalised_h: f64, normalised_w: f64, anchor: Anchor) -> Self {
+        Self::new(NormalisedPos::new(normalised_h, normalised_w), anchor)
+    }
+
+    fn get_top_left_pos(&self, src_bounds: Bounds, to_paste_bounds: Bounds) -> Point2<i128> {
         let h =
             // TODO: use bounds.len
             (src_bounds.h_max() - src_bounds.h_min()) as f64 * self.normalised_pos.h + src_bounds.h_min() as f64;
@@ -101,54 +111,48 @@ impl NormalisedPos {
 struct Bounds(Aabb2<i128>);
 
 impl Bounds {
-    pub fn from_dim(height: usize, width: usize) -> Self {
+    fn from_dim(height: usize, width: usize) -> Self {
         Self::new(0, 0, height, width)
     }
 
-    /// Panics if min values > max values
+    /// If min values > max values, finds the correct min points for the bbox
     fn new(h_min: usize, w_min: usize, h_max: usize, w_max: usize) -> Self {
-        let bbox = Aabb2::new(
-            Point2::new(h_min as i128, w_min as i128),
-            Point2::new(h_max as i128, w_max as i128),
-        );
+        let min_point = Point2::new(h_min as i128, w_min as i128);
+        let max_point = Point2::new(h_max as i128, w_max as i128);
+
+        let (min_point, max_point) = min_point.inf_sup(&max_point);
+
+        let bbox = Aabb2::new(min_point, max_point);
 
         Self(bbox)
     }
 
-    fn try_new(h_min: usize, w_min: usize, h_max: usize, w_max: usize) -> Option<Self> {
-        let bbox = Aabb2::try_new(
-            Point2::new(h_min as i128, w_min as i128),
-            Point2::new(h_max as i128, w_max as i128),
-        )?;
-
-        Some(Self(bbox))
-    }
-
-    pub fn h_min(&self) -> i128 {
+    fn h_min(&self) -> i128 {
         self.0.min_vertex().x
     }
 
-    pub fn h_max(&self) -> i128 {
+    fn h_max(&self) -> i128 {
         self.0.max_vertex().x
     }
 
-    pub fn w_min(&self) -> i128 {
+    fn w_min(&self) -> i128 {
         self.0.min_vertex().y
     }
 
-    pub fn w_max(&self) -> i128 {
+    fn w_max(&self) -> i128 {
         self.0.max_vertex().y
     }
 
-    pub fn intersection(self, other: Self) -> Option<Self> {
+    fn intersection(self, other: Self) -> Option<Self> {
         self.0.intersection(other.0).map(Self)
     }
 
-    pub fn translate(&self, translation: Vector2<i128>) -> Self {
+    fn translate(&self, translation: Vector2<i128>) -> Self {
         Self(self.0.translate(translation))
     }
 }
 
+#[expect(dead_code)]
 #[inline(always)]
 fn convert_to_f32_4(x: [u8; 4]) -> [f32; 4] {
     std::array::from_fn(|i| convert_to_f32(x[i]))
@@ -172,11 +176,11 @@ fn convert_to_u8(x: f32) -> u8 {
 fn from_iter_to_f32_4<T: Borrow<u8>>(it: impl IntoIterator<Item = T>) -> [f32; 4] {
     let mut it = it
         .into_iter()
-        .map(|x| (*x.borrow() as f32) / 255.)
+        .map(|x| convert_to_f32(*x.borrow()))
         .chain(std::iter::repeat(0.));
 
     // Safety:
-    // it is infinite iterator because its chained with repeat, so it will never return none
+    // 'it' is an infinite iterator because its chained with repeat, so it will never return none
     std::array::from_fn(|_| unsafe { it.next().unwrap_unchecked() })
 }
 

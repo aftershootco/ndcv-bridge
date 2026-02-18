@@ -1,4 +1,4 @@
-use error_stack::ResultExt;
+use error_stack::{Report, ResultExt};
 use ndarray::{Array2, Array3, ArrayView2, Axis, Zip, s};
 
 use super::traits::{Paste, PasteConfig};
@@ -73,7 +73,7 @@ where
 {
     type Out = &'a mut Array3<u8>;
 
-    fn paste(self, other: ChannelPaster) -> error_stack::Result<Self::Out, PasteError> {
+    fn paste(self, other: ChannelPaster) -> core::result::Result<Self::Out, Report<PasteError>> {
         let ChannelPaster {
             data,
             channel_idx,
@@ -163,7 +163,10 @@ impl<'a> PasteConfig<'a> for &'a Array2<u8> {
 impl<'a> Paste<ArrayView2<'a, u8>> for &'a mut Array3<u8> {
     type Out = &'a mut Array3<u8>;
 
-    fn paste(self, other: ArrayView2<'a, u8>) -> error_stack::Result<Self::Out, PasteError> {
+    fn paste(
+        self,
+        other: ArrayView2<'a, u8>,
+    ) -> core::result::Result<Self::Out, Report<PasteError>> {
         let paster: ChannelPaster = other.with_opts();
         self.paste(paster)
     }
@@ -197,7 +200,11 @@ mod tests {
 
         this.paste(
             mask.with_opts()
-                .with_position(AnchoredPos::new(0.5, 0.5, crate::paste::Anchor::TopLeft))
+                .with_position(AnchoredPos::from_dim(
+                    0.5,
+                    0.5,
+                    crate::paste::Anchor::TopLeft,
+                ))
                 .with_alpha(0.7)
                 .with_pow(2.),
         )
@@ -216,7 +223,11 @@ mod tests {
 
         this.paste(
             mask.with_opts()
-                .with_position(AnchoredPos::new(0.5, 0.5, crate::paste::Anchor::TopLeft))
+                .with_position(AnchoredPos::from_dim(
+                    0.5,
+                    0.5,
+                    crate::paste::Anchor::TopLeft,
+                ))
                 .with_channel_idx(1)
                 .with_alpha(0.7)
                 .with_pow(2.),

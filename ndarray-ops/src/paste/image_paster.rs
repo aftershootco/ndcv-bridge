@@ -1,6 +1,6 @@
-use std::ops::Div;
-
+use error_stack::Report;
 use ndarray::{Array3, ArrayView, ArrayView2, ArrayView3, ArrayViewMut3, Axis, Zip, s};
+use std::ops::Div;
 use tap::Pipe;
 
 use crate::paste::{AnchoredPos, Bounds, PasteError};
@@ -90,7 +90,7 @@ where
     ///
     /// If the dimensions of other or mask don't match with self, their common intersection is
     /// pasted on self
-    fn paste(mut self, other: ImagePaster) -> error_stack::Result<Self::Out, PasteError> {
+    fn paste(mut self, other: ImagePaster) -> Result<Self::Out, Report<PasteError>> {
         let ImagePaster {
             data,
             position,
@@ -224,7 +224,7 @@ where
 {
     type Out = ArrayViewMut3<'a, u8>;
 
-    fn paste(self, other: ArrayView3<'b, u8>) -> error_stack::Result<Self::Out, PasteError> {
+    fn paste(self, other: ArrayView3<'b, u8>) -> Result<Self::Out, Report<PasteError>> {
         let paster: ImagePaster = other.with_opts().into();
         self.view_mut().paste(paster)
     }
@@ -236,7 +236,7 @@ where
 {
     type Out = ArrayViewMut3<'a, u8>;
 
-    fn paste(self, other: ImagePaster<'b>) -> error_stack::Result<Self::Out, PasteError> {
+    fn paste(self, other: ImagePaster<'b>) -> Result<Self::Out, Report<PasteError>> {
         self.view_mut().paste(other)
     }
 }
@@ -248,7 +248,7 @@ where
 {
     type Out = ArrayViewMut3<'a, u8>;
 
-    fn paste(self, other: ArrayView3<'b, u8>) -> error_stack::Result<Self::Out, PasteError> {
+    fn paste(self, other: ArrayView3<'b, u8>) -> Result<Self::Out, Report<PasteError>> {
         let paster: ImagePaster = other.with_opts().into();
         self.paste(paster)
     }
@@ -256,8 +256,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::f64;
-
     use super::*;
 
     use crate::test_utils::*;
@@ -281,7 +279,7 @@ mod tests {
             other
                 .with_opts()
                 .with_alpha(0.3)
-                .with_position(AnchoredPos::new(0., 0., crate::paste::Anchor::TopLeft)),
+                .with_position(AnchoredPos::from_dim(0., 0., crate::paste::Anchor::TopLeft)),
         )
         .unwrap();
 
@@ -298,9 +296,17 @@ mod tests {
             other
                 .with_opts()
                 .with_alpha(0.7)
-                .with_position(AnchoredPos::new(0.5, 0.5, crate::paste::Anchor::Center))
+                .with_position(AnchoredPos::from_dim(
+                    0.5,
+                    0.5,
+                    crate::paste::Anchor::Center,
+                ))
                 .with_mask(mask.view())
-                .with_mask_position(AnchoredPos::new(0.3, 0.5, crate::paste::Anchor::Center))
+                .with_mask_position(AnchoredPos::from_dim(
+                    0.3,
+                    0.5,
+                    crate::paste::Anchor::Center,
+                ))
                 .with_pow(0.7),
         )
         .unwrap();

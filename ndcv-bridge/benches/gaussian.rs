@@ -89,7 +89,7 @@ mod sizes {
 
 // Benchmark different kernel sizes
 #[divan::bench(args = [(3, 3), (5, 5), (7, 7), (9, 9), (11, 11)])]
-fn bench_gaussian_kernels(kernel_size: (u8, u8)) {
+fn bench_gaussian_kernels(kernel_size: (u16, u16)) {
     let mut arr = Array3::<u8>::ones((1000, 1000, 3));
     arr.gaussian_blur_inplace(kernel_size, 1.0, 1.0, BorderType::BorderConstant)
         .unwrap();

@@ -67,10 +67,11 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
     }
 
     pub fn try_new(min_point: Point<T, D>, max_point: Point<T, D>) -> Option<Self> {
-        if max_point < min_point {
-            return None;
+        if min_point <= max_point {
+            Some(Self::from_min_max_vertices(min_point, max_point))
+        } else {
+            None
         }
-        Some(Self::from_min_max_vertices(min_point, max_point))
     }
 
     pub fn new_point_size(point: Point<T, D>, size: SVector<T, D>) -> Self {
@@ -783,5 +784,13 @@ mod boudning_box_tests {
         let scaled = bbox.scale(Vector2::new(2, 2));
         let expected = Aabb2::from_xywh(0, 0, 8, 8);
         assert_eq!(scaled, expected);
+    }
+
+    #[test]
+    pub fn test_improper_min_and_max_vertices() {
+        let bb1 = Aabb2::new(Point2::new(0, 1024), Point2::new(4096, 3072));
+        let bb2 = Aabb2::new(Point2::new(0, 0), Point2::new(512, 512));
+
+        assert!(bb1.intersection(bb2).is_none());
     }
 }

@@ -18,6 +18,8 @@ pub mod percentile;
 pub use errors::NdCvError;
 
 #[cfg(feature = "opencv")]
+pub mod blur;
+#[cfg(feature = "opencv")]
 pub mod bounding_rect;
 #[cfg(feature = "opencv")]
 pub mod color_space;
@@ -42,6 +44,7 @@ mod roi;
 pub use roi::{NdRoiZeroPadded, Roi as NdRoi, RoiMut as NdRoiMut};
 
 pub use blend::NdBlend;
+pub use blur::NdCvBlur;
 pub use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 pub use fir::NdFir;
 

@@ -3,35 +3,42 @@ use std::ops::Div;
 use ndarray::{Array3, ArrayView, ArrayView2, ArrayView3, ArrayViewMut3, Axis, Zip, s};
 use tap::Pipe;
 
+use crate::Rgb;
 use crate::paste::{AnchoredPos, Bounds, PasteError};
 
 use super::traits::{Paste, PasteConfig};
 
 #[derive(Debug, Clone, Copy)]
-pub struct ImagePaster<'a> {
-    // TODO: use getset?
-    data: ArrayView3<'a, u8>,
+pub struct ColorPaster<'a> {
+    data: Rgb<u8>,
     position: AnchoredPos,
+    size: Bounds,
     mask: Option<ArrayView2<'a, u8>>,
     mask_position: AnchoredPos,
     alpha: f32,
     pow: f32,
 }
 
-impl<'a> ImagePaster<'a> {
-    pub fn new(data: ArrayView3<'a, u8>) -> Self {
+impl<'a> ColorPaster<'a> {
+    pub fn new(data: Rgb<u8>) -> Self {
         Self {
             data,
             position: AnchoredPos::default(),
+            size: Bounds::from_dim(1, 1),
             mask: None,
-            alpha: 1.,
             mask_position: AnchoredPos::default(),
+            alpha: 1.,
             pow: 1.,
         }
     }
 
-    pub fn with_data(mut self, data: ArrayView3<'a, u8>) -> Self {
+    pub fn with_data(mut self, data: Rgb<u8>) -> Self {
         self.data = data;
+        self
+    }
+
+    pub fn with_size(mut self, h: usize, w: usize) -> Self {
+        self.size = Bounds::from_dim(h, w);
         self
     }
 
@@ -79,7 +86,7 @@ impl<'a> ImagePaster<'a> {
     }
 }
 
-impl<'a, 'b> Paste<ImagePaster<'b>> for ArrayViewMut3<'a, u8>
+impl<'a, 'b> Paste<ColorPaster<'b>> for ArrayViewMut3<'a, u8>
 where
     'a: 'b,
 {
@@ -90,18 +97,19 @@ where
     ///
     /// If the dimensions of other or mask don't match with self, their common intersection is
     /// pasted on self
-    fn paste(mut self, other: ImagePaster) -> error_stack::Result<Self::Out, PasteError> {
-        let ImagePaster {
+    fn paste(mut self, other: ColorPaster) -> error_stack::Result<Self::Out, PasteError> {
+        let ColorPaster {
             data,
             position,
+            size,
             mask,
-            alpha,
             mask_position,
+            alpha,
             pow,
         } = other;
 
         let (ih, iw, ic) = self.dim();
-        let (oh, ow, oc) = data.dim();
+        let oc = data.channels();
 
         // blend uses wide::f32x4 so only works till 4 channels
         let c = ic.min(oc).min(4);
@@ -110,7 +118,7 @@ where
         }
 
         let img_bounds = Bounds::from_dim(ih, iw);
-        let other_bounds = Bounds::from_dim(oh, ow);
+        let other_bounds = size;
 
         let other_translation = position.get_top_left_pos(img_bounds, other_bounds).coords;
 
@@ -146,12 +154,6 @@ where
             0..c
         ]);
 
-        let cropped_other = data.slice(s![
-            other_bounds.h_min() as usize..other_bounds.h_max() as usize,
-            other_bounds.w_min() as usize..other_bounds.w_max() as usize,
-            0..c
-        ]);
-
         if let Some(mask) = mask {
             let (oh, ow) = mask.dim();
             let mask_bounds = Bounds::from_dim(oh, ow);
@@ -167,12 +169,11 @@ where
             ]);
 
             Zip::from(cropped_src.lanes_mut(Axis(2)))
-                .and(cropped_other.lanes(Axis(2)))
                 .and(cropped_mask)
-                .par_for_each(|mut this, other, mask| {
+                .par_for_each(|mut this, mask| {
                     let res = super::blend_f32_4(
                         super::from_iter_to_f32_4(&this),
-                        super::from_iter_to_f32_4(other),
+                        super::from_iter_to_f32_4(data.0),
                         (*mask as f32).div(255.).powf(pow),
                         alpha,
                     )
@@ -181,19 +182,17 @@ where
                     this.assign(&ArrayView::from(&res[..c]));
                 });
         } else {
-            Zip::from(cropped_src.lanes_mut(Axis(2)))
-                .and(cropped_other.lanes(Axis(2)))
-                .par_for_each(|mut this, other| {
-                    let res = super::blend_f32_4(
-                        super::from_iter_to_f32_4(&this),
-                        super::from_iter_to_f32_4(other),
-                        1.,
-                        alpha,
-                    )
-                    .pipe(super::convert_to_u8_4);
+            Zip::from(cropped_src.lanes_mut(Axis(2))).par_for_each(|mut this| {
+                let res = super::blend_f32_4(
+                    super::from_iter_to_f32_4(&this),
+                    super::from_iter_to_f32_4(data.0),
+                    1.,
+                    alpha,
+                )
+                .pipe(super::convert_to_u8_4);
 
-                    this.assign(&ArrayView::from(&res[0..c]));
-                });
+                this.assign(&ArrayView::from(&res[0..c]));
+            });
         }
 
         Ok(self)
@@ -201,55 +200,47 @@ where
 }
 
 // PasteConfig impls
-impl<'a> PasteConfig<'a> for ArrayView3<'a, u8> {
-    type Out = ImagePaster<'a>;
+impl<'a> PasteConfig<'a> for Rgb<u8> {
+    type Out = ColorPaster<'a>;
 
     fn with_opts(self) -> Self::Out {
-        ImagePaster::new(self)
-    }
-}
-
-impl<'a> PasteConfig<'a> for &'a Array3<u8> {
-    type Out = ImagePaster<'a>;
-
-    fn with_opts(self) -> Self::Out {
-        ImagePaster::new(self.view())
+        ColorPaster::new(self)
     }
 }
 
 // On &mut Array3
-impl<'a, 'b> Paste<ArrayView3<'b, u8>> for &'a mut Array3<u8>
+impl<'a, 'b> Paste<Rgb<u8>> for &'a mut Array3<u8>
 where
     'a: 'b,
 {
     type Out = ArrayViewMut3<'a, u8>;
 
-    fn paste(self, other: ArrayView3<'b, u8>) -> error_stack::Result<Self::Out, PasteError> {
-        let paster: ImagePaster = other.with_opts().into();
+    fn paste(self, other: Rgb<u8>) -> error_stack::Result<Self::Out, PasteError> {
+        let paster: ColorPaster = other.with_opts().into();
         self.view_mut().paste(paster)
     }
 }
 
-impl<'a, 'b> Paste<ImagePaster<'b>> for &'a mut Array3<u8>
+impl<'a, 'b> Paste<ColorPaster<'b>> for &'a mut Array3<u8>
 where
     'a: 'b,
 {
     type Out = ArrayViewMut3<'a, u8>;
 
-    fn paste(self, other: ImagePaster<'b>) -> error_stack::Result<Self::Out, PasteError> {
+    fn paste(self, other: ColorPaster<'b>) -> error_stack::Result<Self::Out, PasteError> {
         self.view_mut().paste(other)
     }
 }
 
 // On ArrayViewMut3
-impl<'a, 'b> Paste<ArrayView3<'b, u8>> for ArrayViewMut3<'a, u8>
+impl<'a, 'b> Paste<Rgb<u8>> for ArrayViewMut3<'a, u8>
 where
     'a: 'b,
 {
     type Out = ArrayViewMut3<'a, u8>;
 
-    fn paste(self, other: ArrayView3<'b, u8>) -> error_stack::Result<Self::Out, PasteError> {
-        let paster: ImagePaster = other.with_opts().into();
+    fn paste(self, other: Rgb<u8>) -> error_stack::Result<Self::Out, PasteError> {
+        let paster: ColorPaster = other.with_opts().into();
         self.paste(paster)
     }
 }
@@ -263,41 +254,44 @@ mod tests {
     use crate::test_utils::*;
 
     #[test]
-    pub fn test_paste_equal_dim_centered() {
+    pub fn test_color_equal_dim_centered() {
         let mut this = Array3::zeros((512, 512, 3));
-        let other = Array3::ones((512, 512, 3)) * 255_u8;
+        let other = Rgb::new(128, 0, 128);
 
-        this.paste(other.with_opts().with_alpha(0.5)).unwrap();
+        this.paste(other.with_opts().with_alpha(0.5).with_size(512, 512))
+            .unwrap();
 
-        save_rgb(this.view(), "test_paste_equal_dim_centered.jpg");
+        save_rgb(this.view(), "test_color_equal_dim_centered.jpg");
     }
 
     #[test]
-    pub fn test_paste_bg_pan_50() {
+    pub fn test_color_pan_50() {
         let mut this = Array3::zeros((4096, 4096, 3));
-        let other = Array3::ones((512, 512, 3)) * 255_u8;
+        let other = Rgb::new(128, 0, 128);
 
         this.paste(
             other
                 .with_opts()
                 .with_alpha(0.3)
-                .with_position(AnchoredPos::new(0., 0., crate::paste::Anchor::TopLeft)),
+                .with_size(512, 512)
+                .with_position(AnchoredPos::new(0.5, 1., crate::paste::Anchor::Center)),
         )
         .unwrap();
 
-        save_rgb(this.view(), "test_paste_bg_pan_50.jpg");
+        save_rgb(this.view(), "test_color_pan_50.jpg");
     }
 
     #[test]
-    pub fn test_paste_bg_pan_with_mask() {
+    pub fn test_color_pan_with_mask() {
         let mut this = Array3::zeros((4096, 4096, 3));
-        let other = Array3::ones((2048, 2048, 3)) * 255_u8;
+        let other = Rgb::new(128, 0, 128);
         let mask = circular_wave_mask(4096, 2048, 30., 30.);
 
         this.paste(
             other
                 .with_opts()
                 .with_alpha(0.7)
+                .with_size(1900, 2540)
                 .with_position(AnchoredPos::new(0.5, 0.5, crate::paste::Anchor::Center))
                 .with_mask(mask.view())
                 .with_mask_position(AnchoredPos::new(0.3, 0.5, crate::paste::Anchor::Center))
@@ -305,6 +299,6 @@ mod tests {
         )
         .unwrap();
 
-        save_rgb(this.view(), "test_paste_bg_pan_with_mask.jpg");
+        save_rgb(this.view(), "test_color_pan_with_mask.jpg");
     }
 }

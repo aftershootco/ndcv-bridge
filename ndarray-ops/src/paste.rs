@@ -12,8 +12,13 @@ use ndarray::{Array3, ArrayView2, ArrayViewMut3, Axis, s};
 use tap::{Pipe, TapOptional};
 
 mod channel_paster;
+mod color_paster;
 mod image_paster;
 mod traits;
+
+#[derive(Debug, thiserror::Error)]
+#[error("Paste Error")]
+pub struct PasteError;
 
 #[derive(Debug, Clone, Copy)]
 pub struct AnchoredPos {
@@ -43,9 +48,9 @@ impl Default for AnchoredPos {
 }
 
 impl AnchoredPos {
-    pub fn new(normalised_pos: NormalisedPos, anchor: Anchor) -> Self {
+    pub fn new(normalised_h: f64, normalised_w: f64, anchor: Anchor) -> Self {
         Self {
-            normalised_pos,
+            normalised_pos: NormalisedPos::new(normalised_h, normalised_w),
             anchor,
         }
     }
@@ -93,11 +98,15 @@ impl NormalisedPos {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Bounds(Aabb2<i128>);
+struct Bounds(Aabb2<i128>);
 
 impl Bounds {
+    pub fn from_dim(height: usize, width: usize) -> Self {
+        Self::new(0, 0, height, width)
+    }
+
     /// Panics if min values > max values
-    pub fn new(h_min: usize, w_min: usize, h_max: usize, w_max: usize) -> Self {
+    fn new(h_min: usize, w_min: usize, h_max: usize, w_max: usize) -> Self {
         let bbox = Aabb2::new(
             Point2::new(h_min as i128, w_min as i128),
             Point2::new(h_max as i128, w_max as i128),
@@ -106,11 +115,7 @@ impl Bounds {
         Self(bbox)
     }
 
-    pub fn from_dim(height: usize, width: usize) -> Self {
-        Self::new(0, 0, height, width)
-    }
-
-    pub fn try_new(h_min: usize, w_min: usize, h_max: usize, w_max: usize) -> Option<Self> {
+    fn try_new(h_min: usize, w_min: usize, h_max: usize, w_max: usize) -> Option<Self> {
         let bbox = Aabb2::try_new(
             Point2::new(h_min as i128, w_min as i128),
             Point2::new(h_max as i128, w_max as i128),
@@ -146,12 +151,22 @@ impl Bounds {
 
 #[inline(always)]
 fn convert_to_f32_4(x: [u8; 4]) -> [f32; 4] {
-    std::array::from_fn(|i| (x[i] as f32) / 255.)
+    std::array::from_fn(|i| convert_to_f32(x[i]))
 }
 
 #[inline(always)]
 fn convert_to_u8_4(x: [f32; 4]) -> [u8; 4] {
-    std::array::from_fn(|i| x[i].clamp(0., 1.).mul(255.) as u8)
+    std::array::from_fn(|i| convert_to_u8(x[i]))
+}
+
+#[inline(always)]
+fn convert_to_f32(x: u8) -> f32 {
+    (x as f32) / 255.
+}
+
+#[inline(always)]
+fn convert_to_u8(x: f32) -> u8 {
+    x.clamp(0., 1.).mul(255.) as u8
 }
 
 fn from_iter_to_f32_4<T: Borrow<u8>>(it: impl IntoIterator<Item = T>) -> [f32; 4] {
@@ -165,13 +180,16 @@ fn from_iter_to_f32_4<T: Borrow<u8>>(it: impl IntoIterator<Item = T>) -> [f32; 4
     std::array::from_fn(|_| unsafe { it.next().unwrap_unchecked() })
 }
 
-use rayon::prelude::*;
-
 #[inline(always)]
-fn blend(this: [f32; 4], other: [f32; 4], mask: f32, alpha: f32) -> [f32; 4] {
+fn blend_f32_4(this: [f32; 4], other: [f32; 4], mask: f32, alpha: f32) -> [f32; 4] {
     let this = wide::f32x4::from(this);
     let other = wide::f32x4::from(other);
     let mask = wide::f32x4::splat(mask * alpha);
 
     (this * (1.0 - mask) + other * mask).to_array()
+}
+
+fn blend_f32(this: f32, other: f32, mask: f32, alpha: f32) -> f32 {
+    let mask = mask * alpha;
+    this * (1.0 - mask) + other * mask
 }

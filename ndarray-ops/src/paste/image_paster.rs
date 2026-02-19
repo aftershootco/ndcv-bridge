@@ -116,7 +116,7 @@ where
 
         let other_translated = other_bounds.translate(other_translation);
 
-        let img_bounds = if let Some(mask) = mask {
+        let (img_bounds, mask_info) = if let Some(mask) = mask {
             let (oh, ow) = mask.dim();
             let mask_bounds = Bounds::from_dim(oh, ow);
             let mask_translation = mask_position
@@ -125,11 +125,13 @@ where
 
             let mask_translated = mask_bounds.translate(mask_translation);
 
-            img_bounds
+            let img_bounds = img_bounds
                 .intersection(other_translated)
-                .and_then(|x| x.intersection(mask_translated))
+                .and_then(|x| x.intersection(mask_translated));
+            (img_bounds, Some((mask, mask_translation)))
         } else {
-            img_bounds.intersection(other_translated)
+            let img_bounds = img_bounds.intersection(other_translated);
+            (img_bounds, None)
         };
 
         let Some(img_bounds) = img_bounds else {
@@ -152,18 +154,15 @@ where
             0..c
         ]);
 
-        if let Some(mask) = mask {
-            let (oh, ow) = mask.dim();
-            let mask_bounds = Bounds::from_dim(oh, ow);
-            let mask_translation = mask_position
-                .get_top_left_pos(img_bounds, mask_bounds)
-                .coords;
-
+        if let Some((mask, mask_translation)) = mask_info {
+            dbg!(img_bounds);
+            dbg!(mask_translation);
             let mask_bounds = img_bounds.translate(-mask_translation);
+            dbg!(mask_bounds);
 
             let cropped_mask = mask.slice(s![
-                mask_bounds.h_min() as usize..mask_bounds.h_max() as usize,
-                mask_bounds.w_min() as usize..mask_bounds.w_max() as usize
+                dbg!(mask_bounds.h_min()) as usize..dbg!(mask_bounds.h_max()) as usize,
+                dbg!(mask_bounds.w_min()) as usize..dbg!(mask_bounds.w_max()) as usize
             ]);
 
             Zip::from(cropped_src.lanes_mut(Axis(2)))
@@ -289,22 +288,18 @@ mod tests {
     #[test]
     pub fn test_paste_bg_pan_with_mask() {
         let mut this = Array3::zeros((4096, 4096, 3));
-        let other = Array3::ones((2048, 2048, 3)) * 255_u8;
-        let mask = circular_wave_mask(4096, 2048, 30., 30.);
+        let other = Array3::ones((4096, 4096, 3)) * 255_u8;
+        let mask = circular_wave_mask(4096, 4096, 1024., 1024.);
 
         this.paste(
             other
                 .with_opts()
+                .with_mask(mask.view())
+                .with_mask_position(AnchoredPos::from_dim(0., 0., crate::paste::Anchor::TopLeft))
                 .with_alpha(0.7)
                 .with_position(AnchoredPos::from_dim(
-                    0.5,
-                    0.5,
-                    crate::paste::Anchor::Center,
-                ))
-                .with_mask(mask.view())
-                .with_mask_position(AnchoredPos::from_dim(
-                    0.3,
-                    0.5,
+                    1.2,
+                    0.75,
                     crate::paste::Anchor::Center,
                 ))
                 .with_pow(0.7),

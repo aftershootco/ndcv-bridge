@@ -124,7 +124,7 @@ where
 
         let other_translated = other_bounds.translate(other_translation);
 
-        let img_bounds = if let Some(mask) = mask {
+        let (img_bounds, mask_info) = if let Some(mask) = mask {
             let (oh, ow) = mask.dim();
             let mask_bounds = Bounds::from_dim(oh, ow);
             let mask_translation = mask_position
@@ -133,11 +133,13 @@ where
 
             let mask_translated = mask_bounds.translate(mask_translation);
 
-            img_bounds
+            let img_bounds = img_bounds
                 .intersection(other_translated)
-                .and_then(|x| x.intersection(mask_translated))
+                .and_then(|x| x.intersection(mask_translated));
+            (img_bounds, Some((mask, mask_translation)))
         } else {
-            img_bounds.intersection(other_translated)
+            let img_bounds = img_bounds.intersection(other_translated);
+            (img_bounds, None)
         };
 
         let Some(img_bounds) = img_bounds else {
@@ -152,13 +154,7 @@ where
             0..c
         ]);
 
-        if let Some(mask) = mask {
-            let (oh, ow) = mask.dim();
-            let mask_bounds = Bounds::from_dim(oh, ow);
-            let mask_translation = mask_position
-                .get_top_left_pos(img_bounds, mask_bounds)
-                .coords;
-
+        if let Some((mask, mask_translation)) = mask_info {
             let mask_bounds = img_bounds.translate(-mask_translation);
 
             let cropped_mask = mask.slice(s![

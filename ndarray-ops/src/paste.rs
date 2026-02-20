@@ -10,22 +10,11 @@ use bounding_box::{
 };
 use ndarray::ArrayView2;
 
-pub mod algos;
-mod channel_paster;
-mod color_paster;
-mod image_paster;
-mod traits;
-
-pub mod prelude {
-    pub use super::Anchor;
-    pub use super::AnchoredPos;
-    pub use super::PasteOpts;
-    pub use super::channel_paster::ChannelPaster;
-    pub use super::color_paster::ColorPaster;
-    pub use super::image_paster::ImagePaster;
-    pub use super::traits::Paste;
-    pub use super::traits::PasteConfig;
-}
+pub mod channel_paster;
+pub mod color_paster;
+pub mod image_paster;
+pub mod paste_algos;
+pub mod traits;
 
 #[derive(Debug, thiserror::Error)]
 #[error("Paste Error")]
@@ -181,7 +170,7 @@ where
             mask_info: None,
             alpha: 1.,
             pos: AnchoredPos::default(),
-            paste_algo: algos::blend,
+            paste_algo: paste_algos::blend,
             phantom_t: PhantomData::default(),
         }
     }
@@ -211,7 +200,7 @@ where
     /// # Example
     /// ```ignore
     /// // algos::blend is the default paste algo
-    /// let opts = PasteOpts::new().with_paste_algo(ndarray_ops::paste::algos::blend);
+    /// let opts = PasteOpts::new().with_paste_algo(ndarray_ops::paste::paste_algos::blend);
     /// ```
     pub fn with_paste_algo<F2>(self, algo: F2) -> PasteOpts<'a, A, T, F2>
     where

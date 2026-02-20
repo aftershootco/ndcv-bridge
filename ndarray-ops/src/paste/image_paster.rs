@@ -256,7 +256,7 @@ mod tests {
                     ))
                     .with_paste_algo(|mut input| {
                         input.mask = input.mask.powf(5.);
-                        crate::paste::algos::blend(input)
+                        crate::paste::paste_algos::blend(input)
                     }),
             ),
         )

@@ -270,7 +270,7 @@ mod tests {
                         .with_alpha(0.7)
                         .with_paste_algo(|mut i| {
                             i.mask = i.mask.powf(2.);
-                            crate::paste::algos::blend(i)
+                            crate::paste::paste_algos::blend(i)
                         }),
                 ),
             ),
@@ -300,7 +300,7 @@ mod tests {
                         ))
                         .with_paste_algo(|mut i| {
                             i.mask = i.mask.powf(2.);
-                            crate::paste::algos::blend(i)
+                            crate::paste::paste_algos::blend(i)
                         }),
                 ),
             ),

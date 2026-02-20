@@ -1,5 +1,21 @@
 pub mod paste;
 
+pub mod prelude {
+    pub use super::paste::Anchor;
+    pub use super::paste::AnchoredPos;
+    pub use super::paste::PasteOpts;
+    pub use super::paste::channel_paster::ChannelOpts;
+    pub use super::paste::channel_paster::ChannelPaster;
+    pub use super::paste::color_paster::ColorOpts;
+    pub use super::paste::color_paster::ColorPaster;
+    pub use super::paste::image_paster::ImagePaster;
+    pub use super::paste::paste_algos;
+    pub use super::paste::traits::Paste;
+    pub use super::paste::traits::PasteConfig;
+
+    pub use super::Rgb;
+}
+
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone)]
 pub struct Rgb<T>(pub [T; 3]);

@@ -1,3 +1,5 @@
+pub use wide;
+
 pub mod paste;
 
 pub mod prelude {

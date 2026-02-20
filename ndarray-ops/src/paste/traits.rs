@@ -7,8 +7,8 @@ pub trait Paste<T> {
     fn paste(self, other: T) -> Result<Self::Out, Report<PasteError>>;
 }
 
-pub trait PasteConfig<'a> {
+pub trait PasteConfig<I> {
     type Out;
 
-    fn with_opts(self) -> Self::Out;
+    fn with_opts(self, opts: I) -> Self::Out;
 }

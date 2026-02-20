@@ -1,10 +1,16 @@
-use std::{borrow::Borrow, ops::Mul};
+use std::{
+    borrow::Borrow,
+    marker::PhantomData,
+    ops::{Add, Mul},
+};
 
 use bounding_box::{
     Aabb2,
     nalgebra::{Point2, Vector2},
 };
+use ndarray::ArrayView2;
 
+pub mod algos;
 mod channel_paster;
 mod color_paster;
 mod image_paster;
@@ -13,11 +19,10 @@ mod traits;
 pub mod prelude {
     pub use super::Anchor;
     pub use super::AnchoredPos;
+    pub use super::PasteOpts;
     pub use super::channel_paster::ChannelPaster;
     pub use super::color_paster::ColorPaster;
     pub use super::image_paster::ImagePaster;
-    // TODO:
-    // pub use super::traits::TryPaste;
     pub use super::traits::Paste;
     pub use super::traits::PasteConfig;
 }
@@ -47,8 +52,8 @@ pub struct AnchoredPos {
 impl Default for AnchoredPos {
     fn default() -> Self {
         Self {
-            normalised_pos: NormalisedPos::mid_point(),
-            anchor: Anchor::Center,
+            normalised_pos: NormalisedPos::zero(),
+            anchor: Anchor::TopLeft,
         }
     }
 }
@@ -105,6 +110,121 @@ impl NormalisedPos {
     pub fn mid_point() -> Self {
         Self::new(0.5, 0.5)
     }
+
+    pub fn zero() -> Self {
+        Self::new(0., 0.)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct PasteOpts<'a, A, T, F>
+where
+    F: Fn(PasteInput<T>) -> T + Send + Sync,
+{
+    pub mask_info: Option<MaskInfo<'a, A>>,
+    pub alpha: f32,
+    pub pos: AnchoredPos,
+    pub paste_algo: F,
+    phantom_t: PhantomData<T>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct MaskInfo<'a, A> {
+    pub mask: ArrayView2<'a, A>,
+    pub pos: AnchoredPos,
+}
+
+pub struct PasteInput<T> {
+    pub this: T,
+    pub other: T,
+    pub mask: f32,
+    pub alpha: f32,
+}
+
+impl<T> PasteInput<T> {
+    pub fn into<O>(self) -> PasteInput<O>
+    where
+        T: Into<O>,
+    {
+        PasteInput {
+            this: self.this.into(),
+            other: self.other.into(),
+            mask: self.mask,
+            alpha: self.alpha,
+        }
+    }
+}
+
+impl<O, T> From<(O, O, f32, f32)> for PasteInput<T>
+where
+    O: Into<T>,
+{
+    fn from(value: (O, O, f32, f32)) -> Self {
+        Self {
+            this: value.0.into(),
+            other: value.1.into(),
+            mask: value.2,
+            alpha: value.3,
+        }
+    }
+}
+
+impl<'a, A, T> PasteOpts<'a, A, T, fn(PasteInput<T>) -> T>
+where
+    T: Copy,
+    T: Add<T, Output = T>,
+    T: Mul<T, Output = T>,
+    T: Mul<f32, Output = T>,
+{
+    pub fn new() -> Self {
+        Self {
+            mask_info: None,
+            alpha: 1.,
+            pos: AnchoredPos::default(),
+            paste_algo: algos::blend,
+            phantom_t: PhantomData::default(),
+        }
+    }
+}
+
+impl<'a, A, T, F> PasteOpts<'a, A, T, F>
+where
+    F: Fn(PasteInput<T>) -> T + Send + Sync,
+{
+    pub fn with_mask(mut self, mask: ArrayView2<'a, A>, pos: AnchoredPos) -> Self {
+        self.mask_info = Some(MaskInfo { mask: mask, pos });
+        self
+    }
+
+    pub fn with_alpha(mut self, alpha: f32) -> Self {
+        self.alpha = alpha;
+        self
+    }
+
+    pub fn with_pos(mut self, pos: AnchoredPos) -> Self {
+        self.pos = pos;
+        self
+    }
+
+    /// Change the algo which blends other with self
+    ///
+    /// # Example
+    /// ```ignore
+    /// // algos::blend is the default paste algo
+    /// let opts = PasteOpts::new().with_paste_algo(ndarray_ops::paste::algos::blend);
+    /// ```
+    pub fn with_paste_algo<F2>(self, algo: F2) -> PasteOpts<'a, A, T, F2>
+    where
+        F2: Fn(PasteInput<T>) -> T + Send + Sync,
+    {
+        PasteOpts {
+            mask_info: self.mask_info,
+            alpha: self.alpha,
+            pos: self.pos,
+            paste_algo: algo,
+            phantom_t: self.phantom_t,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -152,6 +272,12 @@ impl Bounds {
     }
 }
 
+struct Sections<'a, A> {
+    this_bounds: Bounds,
+    other_translation: Vector2<i128>,
+    mask_with_translation: Option<(ArrayView2<'a, A>, Vector2<i128>)>,
+}
+
 #[expect(dead_code)]
 #[inline(always)]
 fn convert_to_f32_4(x: [u8; 4]) -> [f32; 4] {
@@ -184,16 +310,41 @@ fn from_iter_to_f32_4<T: Borrow<u8>>(it: impl IntoIterator<Item = T>) -> [f32; 4
     std::array::from_fn(|_| unsafe { it.next().unwrap_unchecked() })
 }
 
-#[inline(always)]
-fn blend_f32_4(this: [f32; 4], other: [f32; 4], mask: f32, alpha: f32) -> [f32; 4] {
-    let this = wide::f32x4::from(this);
-    let other = wide::f32x4::from(other);
-    let mask = wide::f32x4::splat(mask * alpha);
+fn get_tri_intersection<'a, A>(
+    this_bounds: Bounds,
+    other_bounds: Bounds,
+    mask_info: Option<MaskInfo<'a, A>>,
+    pos: AnchoredPos,
+) -> Option<Sections<'a, A>> {
+    let other_translation = pos.get_top_left_pos(this_bounds, other_bounds).coords;
 
-    (this * (1.0 - mask) + other * mask).to_array()
-}
+    let other_translated = other_bounds.translate(other_translation);
 
-fn blend_f32(this: f32, other: f32, mask: f32, alpha: f32) -> f32 {
-    let mask = mask * alpha;
-    this * (1.0 - mask) + other * mask
+    let (this_bounds, mask_info) = if let Some(MaskInfo {
+        mask,
+        pos: mask_position,
+    }) = mask_info
+    {
+        let (mh, mw) = mask.dim();
+        let mask_bounds = Bounds::from_dim(mh, mw);
+        let mask_translation = mask_position
+            .get_top_left_pos(this_bounds, mask_bounds)
+            .coords;
+
+        let mask_translated = mask_bounds.translate(mask_translation);
+
+        let img_bounds = this_bounds
+            .intersection(other_translated)
+            .and_then(|x| x.intersection(mask_translated));
+        (img_bounds, Some((mask, mask_translation)))
+    } else {
+        let img_bounds = this_bounds.intersection(other_translated);
+        (img_bounds, None)
+    };
+
+    this_bounds.map(|x| Sections {
+        this_bounds: x,
+        other_translation: other_translation,
+        mask_with_translation: mask_info,
+    })
 }

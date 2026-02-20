@@ -10,9 +10,9 @@ use bounding_box::{
 };
 use ndarray::ArrayView2;
 
-pub mod channel_paster;
-pub mod color_paster;
-pub mod image_paster;
+pub mod channel;
+pub mod color;
+pub mod image;
 pub mod paste_algos;
 pub mod traits;
 

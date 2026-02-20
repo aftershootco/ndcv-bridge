@@ -4,11 +4,11 @@ pub mod prelude {
     pub use super::paste::Anchor;
     pub use super::paste::AnchoredPos;
     pub use super::paste::PasteOpts;
-    pub use super::paste::channel_paster::ChannelOpts;
-    pub use super::paste::channel_paster::ChannelPaster;
-    pub use super::paste::color_paster::ColorOpts;
-    pub use super::paste::color_paster::ColorPaster;
-    pub use super::paste::image_paster::ImagePaster;
+    pub use super::paste::channel::ChannelOpts;
+    pub use super::paste::channel::ChannelPaster;
+    pub use super::paste::color::ColorOpts;
+    pub use super::paste::color::ColorPaster;
+    pub use super::paste::image::ImagePaster;
     pub use super::paste::paste_algos;
     pub use super::paste::traits::Paste;
     pub use super::paste::traits::PasteConfig;

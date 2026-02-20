@@ -1,112 +1,100 @@
 use error_stack::Report;
-use ndarray::{Array3, ArrayView, ArrayView2, ArrayViewMut3, Axis, Zip, s};
-use std::ops::Div;
+use ndarray::{Array3, ArrayView, ArrayViewMut3, Axis, Zip, s};
+use std::ops::{Add, Div, Mul};
 use tap::Pipe;
 
-use crate::Rgb;
-use crate::paste::{AnchoredPos, Bounds, PasteError};
-
-use super::traits::{Paste, PasteConfig};
+use crate::{
+    Rgb,
+    paste::{
+        Bounds, PasteError, PasteInput, PasteOpts, Sections, traits::Paste, traits::PasteConfig,
+    },
+};
 
 #[derive(Debug, Clone, Copy)]
-pub struct ColorPaster<'a> {
-    data: Rgb<u8>,
-    position: AnchoredPos,
-    size: Bounds,
-    mask: Option<ArrayView2<'a, u8>>,
-    mask_position: AnchoredPos,
-    alpha: f32,
-    pow: f32,
+pub struct ColorOpts<'a, A, T, F>
+where
+    F: Fn(PasteInput<T>) -> T + Send + Sync,
+{
+    pub opts: PasteOpts<'a, A, T, F>,
+    pub size_h: usize,
+    pub size_w: usize,
 }
 
-impl<'a> ColorPaster<'a> {
-    pub fn new(data: Rgb<u8>) -> Self {
+impl<'a, A, T> ColorOpts<'a, A, T, fn(PasteInput<T>) -> T>
+where
+    T: Copy,
+    T: Add<T, Output = T>,
+    T: Mul<T, Output = T>,
+    T: Mul<f32, Output = T>,
+{
+    pub fn new() -> Self {
         Self {
-            data,
-            position: AnchoredPos::default(),
-            size: Bounds::from_dim(1, 1),
-            mask: None,
-            mask_position: AnchoredPos::default(),
-            alpha: 1.,
-            pow: 1.,
+            opts: PasteOpts::new(),
+            size_h: 1,
+            size_w: 1,
         }
+    }
+}
+
+impl<'a, A, T, F> ColorOpts<'a, A, T, F>
+where
+    F: Fn(PasteInput<T>) -> T + Send + Sync,
+{
+    pub fn with_paste_opts<F2>(self, opts: PasteOpts<'a, A, T, F2>) -> ColorOpts<'a, A, T, F2>
+    where
+        F2: Fn(PasteInput<T>) -> T + Send + Sync,
+    {
+        ColorOpts {
+            opts: opts,
+            size_h: self.size_h,
+            size_w: self.size_w,
+        }
+    }
+
+    pub fn with_size(mut self, h: usize, w: usize) -> Self {
+        self.size_h = h;
+        self.size_w = w;
+        self
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ColorPaster<'b, F>
+where
+    F: Fn(PasteInput<wide::f32x4>) -> wide::f32x4 + Send + Sync,
+{
+    data: Rgb<u8>,
+    opts: ColorOpts<'b, u8, wide::f32x4, F>,
+}
+
+impl<'b, F> ColorPaster<'b, F>
+where
+    F: Fn(PasteInput<wide::f32x4>) -> wide::f32x4 + Send + Sync,
+{
+    pub fn new(data: Rgb<u8>, opts: ColorOpts<'b, u8, wide::f32x4, F>) -> Self {
+        Self { data, opts }
     }
 
     pub fn with_data(mut self, data: Rgb<u8>) -> Self {
         self.data = data;
         self
     }
-
-    pub fn with_size(mut self, h: usize, w: usize) -> Self {
-        self.size = Bounds::from_dim(h, w);
-        self
-    }
-
-    /// On which channel of Array3, to paste the array on.
-    /// If channel is out of bounds, a channel will be appeneded to the array
-    /// with default values of 255_u8.
-    ///
-    /// # Example
-    /// ```ignore
-    /// // Paste at 4th channel
-    /// let mask = ndarray::Array2::ones((100, 100)) * 255_u8;
-    /// ChannelPaster::new(mask.view()).with_channel_idx(3);
-    /// ```
-    pub fn with_mask(mut self, mask: impl Into<Option<ArrayView2<'a, u8>>>) -> Self {
-        self.mask = mask.into();
-        self
-    }
-
-    pub fn with_mask_position(mut self, pos: AnchoredPos) -> Self {
-        self.mask_position = pos;
-        self
-    }
-
-    pub fn with_alpha(mut self, alpha: f32) -> Self {
-        self.alpha = alpha;
-        self
-    }
-
-    pub fn with_pow(mut self, pow: f32) -> Self {
-        self.pow = pow;
-        self
-    }
-
-    /// Where should the center of the mask be on the image
-    ///
-    /// # Example
-    /// ```ignore
-    /// let mask = ndarray::Array2::ones((100, 100)) * 255_u8;
-    /// ChannelPaster::new(mask.view()).with_center_position(NormalisedPos::mid_point());
-    /// ```
-    // TODO: trait for this?
-    pub fn with_position(mut self, pos: AnchoredPos) -> Self {
-        self.position = pos;
-        self
-    }
 }
 
-impl<'a, 'b> Paste<ColorPaster<'b>> for ArrayViewMut3<'a, u8>
+impl<'t, 'b, F> Paste<ColorPaster<'b, F>> for ArrayViewMut3<'t, u8>
 where
-    'a: 'b,
+    F: Fn(PasteInput<wide::f32x4>) -> wide::f32x4 + Send + Sync,
+    't: 'b,
 {
-    type Out = ArrayViewMut3<'a, u8>;
+    type Out = ArrayViewMut3<'t, u8>;
 
     // TODO: this doesn't return error, so paste and try_paste?
     /// Paste an image over self, only works till 4 channels and rest are ignored.
     ///
     /// If the dimensions of other or mask don't match with self, their common intersection is
     /// pasted on self
-    fn paste(mut self, other: ColorPaster) -> Result<Self::Out, Report<PasteError>> {
-        let ColorPaster {
-            data,
-            position,
-            size,
-            mask,
-            mask_position,
-            alpha,
-            pow,
-        } = other;
+    fn paste(mut self, other: ColorPaster<'b, F>) -> Result<Self::Out, Report<PasteError>> {
+        let ColorPaster { data, opts } = other;
 
         let (ih, iw, ic) = self.dim();
         let oc = data.channels();
@@ -118,33 +106,23 @@ where
         }
 
         let img_bounds = Bounds::from_dim(ih, iw);
-        let other_bounds = size;
+        let other_bounds = Bounds::from_dim(opts.size_h, opts.size_w);
 
-        let other_translation = position.get_top_left_pos(img_bounds, other_bounds).coords;
-
-        let other_translated = other_bounds.translate(other_translation);
-
-        let (img_bounds, mask_info) = if let Some(mask) = mask {
-            let (oh, ow) = mask.dim();
-            let mask_bounds = Bounds::from_dim(oh, ow);
-            let mask_translation = mask_position
-                .get_top_left_pos(img_bounds, mask_bounds)
-                .coords;
-
-            let mask_translated = mask_bounds.translate(mask_translation);
-
-            let img_bounds = img_bounds
-                .intersection(other_translated)
-                .and_then(|x| x.intersection(mask_translated));
-            (img_bounds, Some((mask, mask_translation)))
-        } else {
-            let img_bounds = img_bounds.intersection(other_translated);
-            (img_bounds, None)
-        };
-
-        let Some(img_bounds) = img_bounds else {
+        let Some(Sections {
+            this_bounds: img_bounds,
+            other_translation: _,
+            mask_with_translation: mask_info,
+        }) = super::get_tri_intersection(
+            img_bounds,
+            other_bounds,
+            opts.opts.mask_info,
+            opts.opts.pos,
+        )
+        else {
             return Ok(self);
         };
+        let paste_algo = opts.opts.paste_algo;
+        let alpha = opts.opts.alpha;
 
         // safe to cast to usize because img_bounds lies in the 1st quadrant, which means any
         // intersection with it will also have positive coords
@@ -165,25 +143,31 @@ where
             Zip::from(cropped_src.lanes_mut(Axis(2)))
                 .and(cropped_mask)
                 .par_for_each(|mut this, mask| {
-                    let res = super::blend_f32_4(
-                        super::from_iter_to_f32_4(&this),
-                        super::from_iter_to_f32_4(data.0),
-                        (*mask as f32).div(255.).powf(pow),
-                        alpha,
+                    let res = paste_algo(
+                        (
+                            super::from_iter_to_f32_4(&this),
+                            super::from_iter_to_f32_4(data.0),
+                            (*mask as f32).div(255.),
+                            alpha,
+                        )
+                            .into(),
                     )
-                    .pipe(super::convert_to_u8_4);
+                    .pipe(|x| super::convert_to_u8_4(x.to_array()));
 
                     this.assign(&ArrayView::from(&res[..c]));
                 });
         } else {
             Zip::from(cropped_src.lanes_mut(Axis(2))).par_for_each(|mut this| {
-                let res = super::blend_f32_4(
-                    super::from_iter_to_f32_4(&this),
-                    super::from_iter_to_f32_4(data.0),
-                    1.,
-                    alpha,
+                let res = paste_algo(
+                    (
+                        super::from_iter_to_f32_4(&this),
+                        super::from_iter_to_f32_4(data.0),
+                        1.,
+                        alpha,
+                    )
+                        .into(),
                 )
-                .pipe(super::convert_to_u8_4);
+                .pipe(|x| super::convert_to_u8_4(x.to_array()));
 
                 this.assign(&ArrayView::from(&res[0..c]));
             });
@@ -194,47 +178,45 @@ where
 }
 
 // PasteConfig impls
-impl<'a> PasteConfig<'a> for Rgb<u8> {
-    type Out = ColorPaster<'a>;
+impl<'p, F> PasteConfig<ColorOpts<'p, u8, wide::f32x4, F>> for Rgb<u8>
+where
+    F: Fn(PasteInput<wide::f32x4>) -> wide::f32x4 + Send + Sync,
+{
+    type Out = ColorPaster<'p, F>;
 
-    fn with_opts(self) -> Self::Out {
-        ColorPaster::new(self)
+    fn with_opts(self, opts: ColorOpts<'p, u8, wide::f32x4, F>) -> Self::Out {
+        ColorPaster::new(self, opts)
     }
 }
 
 // On &mut Array3
-impl<'a, 'b> Paste<Rgb<u8>> for &'a mut Array3<u8>
-where
-    'a: 'b,
-{
+impl<'a> Paste<Rgb<u8>> for &'a mut Array3<u8> {
     type Out = ArrayViewMut3<'a, u8>;
 
     fn paste(self, other: Rgb<u8>) -> Result<Self::Out, Report<PasteError>> {
-        let paster: ColorPaster = other.with_opts().into();
+        let paster = other.with_opts(ColorOpts::new());
         self.view_mut().paste(paster)
     }
 }
 
-impl<'a, 'b> Paste<ColorPaster<'b>> for &'a mut Array3<u8>
+impl<'t, 'b, F> Paste<ColorPaster<'b, F>> for &'t mut Array3<u8>
 where
-    'a: 'b,
+    F: Fn(PasteInput<wide::f32x4>) -> wide::f32x4 + Send + Sync,
+    't: 'b,
 {
-    type Out = ArrayViewMut3<'a, u8>;
+    type Out = ArrayViewMut3<'t, u8>;
 
-    fn paste(self, other: ColorPaster<'b>) -> Result<Self::Out, Report<PasteError>> {
+    fn paste(self, other: ColorPaster<'b, F>) -> Result<Self::Out, Report<PasteError>> {
         self.view_mut().paste(other)
     }
 }
 
 // On ArrayViewMut3
-impl<'a, 'b> Paste<Rgb<u8>> for ArrayViewMut3<'a, u8>
-where
-    'a: 'b,
-{
+impl<'a> Paste<Rgb<u8>> for ArrayViewMut3<'a, u8> {
     type Out = ArrayViewMut3<'a, u8>;
 
     fn paste(self, other: Rgb<u8>) -> Result<Self::Out, Report<PasteError>> {
-        let paster: ColorPaster = other.with_opts().into();
+        let paster = other.with_opts(ColorOpts::new());
         self.paste(paster)
     }
 }
@@ -242,6 +224,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::paste::AnchoredPos;
 
     use crate::test_utils::*;
 
@@ -250,8 +233,14 @@ mod tests {
         let mut this = Array3::zeros((512, 512, 3));
         let other = Rgb::new(128, 0, 128);
 
-        this.paste(other.with_opts().with_alpha(0.5).with_size(512, 512))
-            .unwrap();
+        this.paste(
+            other.with_opts(
+                ColorOpts::new()
+                    .with_size(512, 512)
+                    .with_paste_opts(PasteOpts::new().with_alpha(0.5)),
+            ),
+        )
+        .unwrap();
 
         save_rgb(this.view(), "test_color_equal_dim_centered.jpg");
     }
@@ -262,11 +251,13 @@ mod tests {
         let other = Rgb::new(128, 0, 128);
 
         this.paste(
-            other
-                .with_opts()
-                .with_alpha(0.3)
-                .with_size(512, 512)
-                .with_position(AnchoredPos::from_dim(0.5, 1., crate::paste::Anchor::Center)),
+            other.with_opts(
+                ColorOpts::new().with_size(512, 512).with_paste_opts(
+                    PasteOpts::new()
+                        .with_alpha(0.3)
+                        .with_pos(AnchoredPos::from_dim(0.5, 1., crate::paste::Anchor::Center)),
+                ),
+            ),
         )
         .unwrap();
 
@@ -280,22 +271,25 @@ mod tests {
         let mask = circular_wave_mask(4096, 2048, 30., 30.);
 
         this.paste(
-            other
-                .with_opts()
-                .with_alpha(0.7)
-                .with_size(1900, 2540)
-                .with_position(AnchoredPos::from_dim(
-                    0.5,
-                    0.5,
-                    crate::paste::Anchor::Center,
-                ))
-                .with_mask(mask.view())
-                .with_mask_position(AnchoredPos::from_dim(
-                    0.3,
-                    0.5,
-                    crate::paste::Anchor::Center,
-                ))
-                .with_pow(0.7),
+            other.with_opts(
+                ColorOpts::new().with_size(1900, 2540).with_paste_opts(
+                    PasteOpts::new()
+                        .with_alpha(0.7)
+                        .with_pos(AnchoredPos::from_dim(
+                            0.5,
+                            0.8,
+                            crate::paste::Anchor::Center,
+                        ))
+                        .with_mask(
+                            mask.view(),
+                            AnchoredPos::from_dim(0.3, 0.5, crate::paste::Anchor::Center),
+                        )
+                        .with_paste_algo(|mut input| {
+                            input.mask = input.mask.powf(0.7);
+                            crate::paste::algos::blend(input)
+                        }),
+                ),
+            ),
         )
         .unwrap();
 

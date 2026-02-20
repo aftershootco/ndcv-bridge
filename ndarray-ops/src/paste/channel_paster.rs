@@ -1,32 +1,49 @@
+use std::ops::{Add, Div, Mul};
+
 use error_stack::{Report, ResultExt};
 use ndarray::{Array2, Array3, ArrayView2, Axis, Zip, s};
 
-use super::traits::{Paste, PasteConfig};
-use super::{AnchoredPos, Bounds, PasteError};
+use crate::paste::{
+    Bounds, PasteError, PasteInput, PasteOpts, Sections,
+    traits::{Paste, PasteConfig},
+};
 
 #[derive(Debug, Clone, Copy)]
-pub struct ChannelPaster<'a> {
-    data: ArrayView2<'a, u8>,
-    channel_idx: usize,
-    position: AnchoredPos,
-    alpha: f32,
-    pow: f32,
+pub struct ChannelOpts<'a, A, T, F>
+where
+    F: Fn(PasteInput<T>) -> T + Send + Sync,
+{
+    pub opts: PasteOpts<'a, A, T, F>,
+    pub channel_idx: usize,
 }
 
-impl<'a> ChannelPaster<'a> {
-    pub fn new(data: ArrayView2<'a, u8>) -> Self {
+impl<'a, A, T> ChannelOpts<'a, A, T, fn(PasteInput<T>) -> T>
+where
+    T: Copy,
+    T: Add<T, Output = T>,
+    T: Mul<T, Output = T>,
+    T: Mul<f32, Output = T>,
+{
+    pub fn new() -> Self {
         Self {
-            data,
+            opts: PasteOpts::new(),
             channel_idx: 3,
-            position: AnchoredPos::default(),
-            alpha: 1.,
-            pow: 1.,
         }
     }
+}
 
-    pub fn with_data(mut self, data: ArrayView2<'a, u8>) -> Self {
-        self.data = data;
-        self
+impl<'a, A, T, F> ChannelOpts<'a, A, T, F>
+where
+    F: Fn(PasteInput<T>) -> T + Send + Sync,
+{
+    pub fn with_paste_opts<F2>(self, opts: PasteOpts<'a, A, T, F2>) -> ChannelOpts<'a, A, T, F2>
+    where
+        F2: Fn(PasteInput<T>) -> T + Send + Sync,
+    {
+        ChannelOpts {
+            opts: opts,
+            channel_idx: self.channel_idx,
+        }
     }
 
     /// On which channel of Array3, to paste the array on.
@@ -36,53 +53,50 @@ impl<'a> ChannelPaster<'a> {
     /// # Example
     /// ```ignore
     /// // Paste at 4th channel
-    /// let mask = ndarray::Array2::ones((100, 100)) * 255_u8;
-    /// ChannelPaster::new(mask.view()).with_channel_idx(3);
+    /// ChannelOpts::new().with_channel_idx(3);
     /// ```
     pub fn with_channel_idx(mut self, channel_idx: usize) -> Self {
         self.channel_idx = channel_idx;
         self
     }
+}
 
-    /// Where should the center of the mask be on the image
-    ///
-    /// # Example
-    /// ```ignore
-    /// let mask = ndarray::Array2::ones((100, 100)) * 255_u8;
-    /// ChannelPaster::new(mask.view()).with_center_position(NormalisedPos::mid_point());
-    /// ```
-    pub fn with_position(mut self, pos: AnchoredPos) -> Self {
-        self.position = pos;
-        self
+#[derive(Debug, Clone, Copy)]
+pub struct ChannelPaster<'a, 'b, F>
+where
+    F: Fn(PasteInput<f32>) -> f32 + Send + Sync,
+    'a: 'b,
+{
+    data: ArrayView2<'a, u8>,
+    opts: ChannelOpts<'b, u8, f32, F>,
+}
+
+impl<'a, 'b, F> ChannelPaster<'a, 'b, F>
+where
+    F: Fn(PasteInput<f32>) -> f32 + Send + Sync,
+{
+    pub fn new(data: ArrayView2<'a, u8>, opts: ChannelOpts<'b, u8, f32, F>) -> Self {
+        Self { data, opts }
     }
 
-    pub fn with_alpha(mut self, alpha: f32) -> Self {
-        self.alpha = alpha;
-        self
-    }
-
-    pub fn with_pow(mut self, pow: f32) -> Self {
-        self.pow = pow;
+    pub fn with_data(mut self, data: ArrayView2<'a, u8>) -> Self {
+        self.data = data;
         self
     }
 }
 
-impl<'a, 'b> Paste<ChannelPaster<'b>> for &'a mut Array3<u8>
+impl<'t, 'a, 'b, F> Paste<ChannelPaster<'a, 'b, F>> for &'t mut Array3<u8>
 where
+    F: Fn(PasteInput<f32>) -> f32 + Send + Sync,
     'a: 'b,
+    't: 'a,
 {
-    type Out = &'a mut Array3<u8>;
+    type Out = &'t mut Array3<u8>;
 
-    fn paste(self, other: ChannelPaster) -> core::result::Result<Self::Out, Report<PasteError>> {
-        let ChannelPaster {
-            data,
-            channel_idx,
-            position,
-            alpha,
-            pow,
-        } = other;
+    fn paste(self, other: ChannelPaster<'a, 'b, F>) -> Result<Self::Out, Report<PasteError>> {
+        let ChannelPaster { data, opts } = other;
 
-        let channel = channel_idx + 1;
+        let channel = opts.channel_idx + 1;
         let (mh, mw) = data.dim();
         let (ih, iw, ic) = self.dim();
 
@@ -97,41 +111,78 @@ where
         };
 
         let img_bounds = Bounds::from_dim(ih, iw);
-        let mask_bounds = Bounds::from_dim(mh, mw);
+        let other_bounds = Bounds::from_dim(mh, mw);
 
-        let mask_translation = position.get_top_left_pos(img_bounds, mask_bounds);
+        let Some(Sections {
+            this_bounds: img_bounds,
+            other_translation,
+            mask_with_translation: mask_info,
+        }) = super::get_tri_intersection(
+            img_bounds,
+            other_bounds,
+            opts.opts.mask_info,
+            opts.opts.pos,
+        )
+        else {
+            return Ok(self);
+        };
+        let paste_algo = opts.opts.paste_algo;
+        let alpha = opts.opts.alpha;
 
-        let mask_translated = mask_bounds.translate(mask_translation.coords);
+        let other_bounds = img_bounds.translate(-other_translation);
 
-        let img_bounds = img_bounds.intersection(mask_translated);
+        // safe to cast to usize because img_bounds lies in the 1st quadrant, which means any
+        // intersection with it will also have positive coords
+        let cropped_src = self.slice_mut(s![
+            img_bounds.h_min() as usize..img_bounds.h_max() as usize,
+            img_bounds.w_min() as usize..img_bounds.w_max() as usize,
+            c - 1
+        ]);
 
-        if let Some(img_bounds) = img_bounds {
-            let mask_bounds = img_bounds.translate(-mask_translation.coords);
+        let cropped_other = data.slice(s![
+            other_bounds.h_min() as usize..other_bounds.h_max() as usize,
+            other_bounds.w_min() as usize..other_bounds.w_max() as usize,
+        ]);
 
-            // safe to cast to usize because img_bounds lies in the 1st quadrant, which means any
-            // intersection with it will also have positive coords
-            let cropped_src = self.slice_mut(s![
-                img_bounds.h_min() as usize..img_bounds.h_max() as usize,
-                img_bounds.w_min() as usize..img_bounds.w_max() as usize,
-                c - 1
-            ]);
+        if let Some((mask, mask_translation)) = mask_info {
+            let mask_bounds = img_bounds.translate(-mask_translation);
 
             // safe to cast to usize as mask bounds (which were originally in 1st quadrant) were first translated by mask_translation,
             // any intersection with it will also be be moved by this translation,
             // so reversing this translation will result in positive coords
-            let cropped_mask = data.slice(s![
+            let cropped_mask = mask.slice(s![
                 mask_bounds.h_min() as usize..mask_bounds.h_max() as usize,
                 mask_bounds.w_min() as usize..mask_bounds.w_max() as usize
             ]);
 
             Zip::from(cropped_src)
+                .and(cropped_other)
                 .and(cropped_mask)
+                .par_for_each(|this, other, mask| {
+                    let res = paste_algo(
+                        (
+                            super::convert_to_f32(*this),
+                            super::convert_to_f32(*other),
+                            (*mask as f32).div(255.),
+                            alpha,
+                        )
+                            .into(),
+                    );
+
+                    *this = super::convert_to_u8(res);
+                });
+        } else {
+            Zip::from(cropped_src)
+                .and(cropped_other)
                 .par_for_each(|this, other| {
-                    let res = super::blend_f32(
-                        super::convert_to_f32(*this),
-                        super::convert_to_f32(*other).powf(pow),
-                        1.,
-                        alpha,
+                    let res = paste_algo(
+                        (
+                            super::convert_to_f32(*this),
+                            super::convert_to_f32(*other),
+                            1.,
+                            alpha,
+                        )
+                            .into(),
                     );
 
                     *this = super::convert_to_u8(res);
@@ -143,31 +194,39 @@ where
 }
 
 // Paste Config impls
-impl<'a> PasteConfig<'a> for ArrayView2<'a, u8> {
-    type Out = ChannelPaster<'a>;
+impl<'a, 'p, F> PasteConfig<ChannelOpts<'p, u8, f32, F>> for ArrayView2<'a, u8>
+where
+    F: Fn(PasteInput<f32>) -> f32 + Send + Sync,
+    'a: 'p,
+{
+    type Out = ChannelPaster<'a, 'p, F>;
 
-    fn with_opts(self) -> Self::Out {
-        ChannelPaster::new(self)
+    fn with_opts(self, opts: ChannelOpts<'p, u8, f32, F>) -> Self::Out {
+        ChannelPaster::new(self, opts)
     }
 }
 
-impl<'a> PasteConfig<'a> for &'a Array2<u8> {
-    type Out = ChannelPaster<'a>;
+impl<'a, 'p, F> PasteConfig<ChannelOpts<'p, u8, f32, F>> for &'a Array2<u8>
+where
+    F: Fn(PasteInput<f32>) -> f32 + Send + Sync,
+    'a: 'p,
+{
+    type Out = ChannelPaster<'a, 'p, F>;
 
-    fn with_opts(self) -> Self::Out {
-        ChannelPaster::new(self.view())
+    fn with_opts(self, opts: ChannelOpts<'p, u8, f32, F>) -> Self::Out {
+        ChannelPaster::new(self.view(), opts)
     }
 }
 
 // On &mut Array3
-impl<'a> Paste<ArrayView2<'a, u8>> for &'a mut Array3<u8> {
+impl<'a, 'b> Paste<ArrayView2<'b, u8>> for &'a mut Array3<u8>
+where
+    'a: 'b,
+{
     type Out = &'a mut Array3<u8>;
 
-    fn paste(
-        self,
-        other: ArrayView2<'a, u8>,
-    ) -> core::result::Result<Self::Out, Report<PasteError>> {
-        let paster: ChannelPaster = other.with_opts();
+    fn paste(self, other: ArrayView2<'b, u8>) -> Result<Self::Out, Report<PasteError>> {
+        let paster = other.with_opts(ChannelOpts::new());
         self.paste(paster)
     }
 }
@@ -175,6 +234,7 @@ impl<'a> Paste<ArrayView2<'a, u8>> for &'a mut Array3<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::paste::AnchoredPos;
 
     use crate::test_utils::*;
 
@@ -199,14 +259,21 @@ mod tests {
         let mask = circular_wave_mask(1900, 2540, 100., 100.);
 
         this.paste(
-            mask.with_opts()
-                .with_position(AnchoredPos::from_dim(
-                    0.5,
-                    0.5,
-                    crate::paste::Anchor::TopLeft,
-                ))
-                .with_alpha(0.7)
-                .with_pow(2.),
+            mask.with_opts(
+                ChannelOpts::new().with_paste_opts(
+                    PasteOpts::new()
+                        .with_pos(AnchoredPos::from_dim(
+                            0.5,
+                            0.5,
+                            crate::paste::Anchor::TopLeft,
+                        ))
+                        .with_alpha(0.7)
+                        .with_paste_algo(|mut i| {
+                            i.mask = i.mask.powf(2.);
+                            crate::paste::algos::blend(i)
+                        }),
+                ),
+            ),
         )
         .unwrap();
 
@@ -222,15 +289,21 @@ mod tests {
         let mask = circular_wave_mask(1900, 2540, 100., 100.);
 
         this.paste(
-            mask.with_opts()
-                .with_position(AnchoredPos::from_dim(
-                    0.5,
-                    0.5,
-                    crate::paste::Anchor::TopLeft,
-                ))
-                .with_channel_idx(1)
-                .with_alpha(0.7)
-                .with_pow(2.),
+            mask.with_opts(
+                ChannelOpts::new().with_channel_idx(1).with_paste_opts(
+                    PasteOpts::new()
+                        .with_alpha(0.7)
+                        .with_pos(AnchoredPos::from_dim(
+                            0.5,
+                            0.5,
+                            crate::paste::Anchor::TopLeft,
+                        ))
+                        .with_paste_algo(|mut i| {
+                            i.mask = i.mask.powf(2.);
+                            crate::paste::algos::blend(i)
+                        }),
+                ),
+            ),
         )
         .unwrap();
 

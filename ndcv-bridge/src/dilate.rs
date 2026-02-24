@@ -36,7 +36,7 @@ pub trait NdCvDilate<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
         &self,
         kernel: ndarray::ArrayView2<u8>,
         anchor: (i32, i32),
-        iterations: i32,
+        iterations: u16,
         border_type: crate::gaussian::BorderType,
         border_value: [f64; 4],
     ) -> Result<ndarray::Array<T, D>, DilateError>;
@@ -46,7 +46,7 @@ pub trait NdCvDilate<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
     fn dilate_def(
         &self,
         kernel: ndarray::ArrayView2<u8>,
-        iterations: i32,
+        iterations: u16,
     ) -> Result<ndarray::Array<T, D>, DilateError> {
         let border_value = opencv::imgproc::morphology_default_border_value()?.0;
         self.dilate(
@@ -72,7 +72,7 @@ where
         &self,
         kernel: ndarray::ArrayView2<u8>,
         anchor: (i32, i32),
-        iterations: i32,
+        iterations: u16,
         border_type: crate::gaussian::BorderType,
         border_value: [f64; 4],
     ) -> Result<ndarray::Array<T, D>, DilateError> {
@@ -85,7 +85,7 @@ where
             &mut *cv_dst,
             &*cv_kernel,
             opencv::core::Point::new(anchor.0, anchor.1),
-            iterations,
+            iterations as i32,
             border_type as i32,
             opencv::core::VecN(border_value),
         )?;
@@ -101,7 +101,7 @@ pub trait NdCvDilateInPlace<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimensi
         &mut self,
         kernel: ndarray::ArrayView2<u8>,
         anchor: (i32, i32),
-        iterations: i32,
+        iterations: u16,
         border_type: crate::gaussian::BorderType,
         border_value: [f64; 4],
     ) -> Result<&mut Self, DilateError>;
@@ -109,7 +109,7 @@ pub trait NdCvDilateInPlace<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimensi
     fn dilate_def_inplace(
         &mut self,
         kernel: ndarray::ArrayView2<u8>,
-        iterations: i32,
+        iterations: u16,
     ) -> Result<&mut Self, DilateError> {
         let border_value = opencv::imgproc::morphology_default_border_value()?.0;
         self.dilate_inplace(
@@ -134,7 +134,7 @@ where
         &mut self,
         kernel: ndarray::ArrayView2<u8>,
         anchor: (i32, i32),
-        iterations: i32,
+        iterations: u16,
         border_type: crate::gaussian::BorderType,
         border_value: [f64; 4],
     ) -> Result<&mut Self, DilateError> {
@@ -147,7 +147,7 @@ where
                     out,
                     &*cv_kernel,
                     opencv::core::Point::new(anchor.0, anchor.1),
-                    iterations,
+                    iterations as i32,
                     border_type as i32,
                     opencv::core::VecN(border_value),
                 )

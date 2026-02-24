@@ -1,6 +1,7 @@
 //! <https://docs.rs/opencv/latest/opencv/imgproc/fn.dilate.html>
 //! <https://docs.opencv.org/4.x/d4/d86/group__imgproc__filter.html#ga4ff0f3318642c4f469d0e11f242f3b6c>
 use crate::conversions::*;
+use nalgebra::Point2;
 use ndarray::*;
 
 #[derive(Debug, thiserror::Error)]
@@ -35,7 +36,7 @@ pub trait NdCvDilate<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
     fn dilate(
         &self,
         kernel: ndarray::ArrayView2<u8>,
-        anchor: (i32, i32),
+        anchor: Point2<i32>,
         iterations: u16,
         border_type: crate::gaussian::BorderType,
         border_value: [f64; 4],
@@ -51,7 +52,7 @@ pub trait NdCvDilate<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
         let border_value = opencv::imgproc::morphology_default_border_value()?.0;
         self.dilate(
             kernel,
-            (-1, -1),
+            Point2::new(-1, -1),
             iterations,
             crate::gaussian::BorderType::BorderConstant,
             border_value,
@@ -71,7 +72,7 @@ where
     fn dilate(
         &self,
         kernel: ndarray::ArrayView2<u8>,
-        anchor: (i32, i32),
+        anchor: Point2<i32>,
         iterations: u16,
         border_type: crate::gaussian::BorderType,
         border_value: [f64; 4],
@@ -84,7 +85,7 @@ where
             &*cv_self,
             &mut *cv_dst,
             &*cv_kernel,
-            opencv::core::Point::new(anchor.0, anchor.1),
+            opencv::core::Point::new(anchor.x, anchor.y),
             iterations as i32,
             border_type as i32,
             opencv::core::VecN(border_value),
@@ -100,7 +101,7 @@ pub trait NdCvDilateInPlace<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimensi
     fn dilate_inplace(
         &mut self,
         kernel: ndarray::ArrayView2<u8>,
-        anchor: (i32, i32),
+        anchor: Point2<i32>,
         iterations: u16,
         border_type: crate::gaussian::BorderType,
         border_value: [f64; 4],
@@ -114,7 +115,7 @@ pub trait NdCvDilateInPlace<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimensi
         let border_value = opencv::imgproc::morphology_default_border_value()?.0;
         self.dilate_inplace(
             kernel,
-            (-1, -1),
+            Point2::new(-1, -1),
             iterations,
             crate::gaussian::BorderType::BorderConstant,
             border_value,
@@ -133,7 +134,7 @@ where
     fn dilate_inplace(
         &mut self,
         kernel: ndarray::ArrayView2<u8>,
-        anchor: (i32, i32),
+        anchor: Point2<i32>,
         iterations: u16,
         border_type: crate::gaussian::BorderType,
         border_value: [f64; 4],
@@ -146,7 +147,7 @@ where
                     this,
                     out,
                     &*cv_kernel,
-                    opencv::core::Point::new(anchor.0, anchor.1),
+                    opencv::core::Point::new(anchor.x, anchor.y),
                     iterations as i32,
                     border_type as i32,
                     opencv::core::VecN(border_value),
@@ -183,7 +184,7 @@ mod tests {
         let res = arr
             .dilate(
                 rect_kernel(3).view(),
-                (-1, -1),
+                Point2::new(-1, -1),
                 1,
                 BorderType::BorderConstant,
                 border_value,
@@ -199,7 +200,7 @@ mod tests {
         let res = arr
             .dilate(
                 rect_kernel(3).view(),
-                (-1, -1),
+                Point2::new(-1, -1),
                 1,
                 BorderType::BorderConstant,
                 [0.0; 4],
@@ -215,7 +216,7 @@ mod tests {
         let res = arr
             .dilate(
                 rect_kernel(3).view(),
-                (-1, -1),
+                Point2::new(-1, -1),
                 1,
                 BorderType::BorderConstant,
                 [255.0; 4],
@@ -235,7 +236,7 @@ mod tests {
         let res = arr
             .dilate(
                 rect_kernel(3).view(),
-                (-1, -1),
+                Point2::new(-1, -1),
                 1,
                 BorderType::BorderConstant,
                 [1.0; 4],
@@ -252,7 +253,7 @@ mod tests {
         let res = arr
             .dilate(
                 rect_kernel(3).view(),
-                (-1, -1),
+                Point2::new(-1, -1),
                 1,
                 BorderType::BorderConstant,
                 [128.0, 64.0, 32.0, 0.0],
@@ -302,7 +303,7 @@ mod tests {
             let res = arr
                 .dilate(
                     rect_kernel(3).view(),
-                    (-1, -1),
+                    Point2::new(-1, -1),
                     1,
                     border_type,
                     border_value,
@@ -332,7 +333,7 @@ mod tests {
         let arr = Array3::<u8>::ones((10, 10, 3));
         let res = arr.dilate(
             rect_kernel(3).view(),
-            (10, 10),
+            Point2::new(10, 10),
             1,
             BorderType::BorderConstant,
             [0.0; 4],
@@ -345,7 +346,7 @@ mod tests {
         let mut arr = Array3::<u8>::ones((10, 10, 3));
         let res = arr.dilate_inplace(
             rect_kernel(3).view(),
-            (10, 10),
+            Point2::new(10, 10),
             1,
             BorderType::BorderConstant,
             [0.0; 4],

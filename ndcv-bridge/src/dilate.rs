@@ -325,4 +325,31 @@ mod tests {
         arr.dilate_def_inplace(rect_kernel(3).view(), 1).unwrap();
         assert_eq!(arr.shape(), &[10, 10, 3]);
     }
+
+    // An anchor outside the kernel bounds causes OpenCV to return an error.
+    #[test]
+    fn test_dilate_invalid_anchor_returns_err() {
+        let arr = Array3::<u8>::ones((10, 10, 3));
+        let res = arr.dilate(
+            rect_kernel(3).view(),
+            (10, 10),
+            1,
+            BorderType::BorderConstant,
+            [0.0; 4],
+        );
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_dilate_inplace_invalid_anchor_returns_err() {
+        let mut arr = Array3::<u8>::ones((10, 10, 3));
+        let res = arr.dilate_inplace(
+            rect_kernel(3).view(),
+            (10, 10),
+            1,
+            BorderType::BorderConstant,
+            [0.0; 4],
+        );
+        assert!(res.is_err());
+    }
 }

@@ -27,24 +27,26 @@
 //!
 //! <https://docs.rs/opencv/latest/opencv/imgproc/fn.gaussian_blur.html>
 
-use crate::{NdCvGaussianBlur, gaussian::BorderType};
 use ndarray::*;
+use ndcv_bridge::{NdCvGaussianBlur, gaussian::BorderType};
 
 #[derive(Debug, thiserror::Error)]
 pub enum XDoGError {
     #[error("Conversion error: {0}")]
-    ConversionError(#[from] crate::conversions::ConversionError),
+    ConversionError(#[from] ndcv_bridge::conversions::ConversionError),
     #[error("OpenCV error: {0}")]
     OpenCvError(#[from] opencv::Error),
     #[error("Invalid parameter: {0}")]
     BuilderError(#[from] XDoGArgsBuilderError),
 }
 
-impl From<crate::gaussian::GaussianBlurError> for XDoGError {
-    fn from(e: crate::gaussian::GaussianBlurError) -> Self {
+impl From<ndcv_bridge::gaussian::GaussianBlurError> for XDoGError {
+    fn from(e: ndcv_bridge::gaussian::GaussianBlurError) -> Self {
         match e {
-            crate::gaussian::GaussianBlurError::ConversionError(e) => Self::ConversionError(e),
-            crate::gaussian::GaussianBlurError::OpenCvError(e) => Self::OpenCvError(e),
+            ndcv_bridge::gaussian::GaussianBlurError::ConversionError(e) => {
+                Self::ConversionError(e)
+            }
+            ndcv_bridge::gaussian::GaussianBlurError::OpenCvError(e) => Self::OpenCvError(e),
         }
     }
 }
@@ -152,21 +154,22 @@ mod seal {
 /// * `T` – input element type (must implement [`CvType`] and be supported by
 ///   OpenCV's Gaussian blur).
 /// * `D` – array dimensionality.
-pub trait NdCvXDoG<T, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>
+pub trait NdCvXDoG<T, D>:
+    ndcv_bridge::image::NdImage + ndcv_bridge::conversions::NdAsImage<T, D>
 where
-    T: crate::types::CvType + seal::Sealed + num::Float + num::FromPrimitive,
+    T: ndcv_bridge::types::CvType + seal::Sealed + num::Float + num::FromPrimitive,
     D: ndarray::Dimension,
 {
     /// Compute XDoG with full control over all parameters.
     fn xdog(&self, args: XDoGArgs<T>) -> Result<ndarray::Array<T, D>, XDoGError>
     where
-        ndarray::Array<T, D>: crate::conversions::NdAsImageMut<T, D>;
+        ndarray::Array<T, D>: ndcv_bridge::conversions::NdAsImageMut<T, D>;
 
     /// Convenience: compute a plain (un-thresholded) XDoG with default
     /// parameters, only requiring `sigma`.
     fn xdog_def(&self, sigma: T) -> Result<ndarray::Array<T, D>, XDoGError>
     where
-        ndarray::Array<T, D>: crate::conversions::NdAsImageMut<T, D>,
+        ndarray::Array<T, D>: ndcv_bridge::conversions::NdAsImageMut<T, D>,
     {
         self.xdog(XDoGArgs::sigma(sigma).build()?)
     }
@@ -174,25 +177,26 @@ where
 
 impl<T, D, S> NdCvXDoG<T, D> for ArrayBase<S, D>
 where
-    T: crate::types::CvType
+    T: ndcv_bridge::types::CvType
         + Send
         + Sync
         + num::Zero
         + num::One
         + num::ToPrimitive
         + seal::Sealed
-        + crate::gaussian::seal::Sealed
+        + ndcv_bridge::gaussian::seal::Sealed
         + core::ops::Mul<Output = T>,
-    T: crate::types::CvType + seal::Sealed + num::Float + num::FromPrimitive,
+    T: ndcv_bridge::types::CvType + seal::Sealed + num::Float + num::FromPrimitive,
     D: ndarray::Dimension,
     S: ndarray::RawData + ndarray::Data<Elem = T>,
-    ndarray::ArrayBase<S, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>,
-    ndarray::Array<T, D>: crate::conversions::NdAsImageMut<T, D>,
+    ndarray::ArrayBase<S, D>:
+        ndcv_bridge::image::NdImage + ndcv_bridge::conversions::NdAsImage<T, D>,
+    ndarray::Array<T, D>: ndcv_bridge::conversions::NdAsImageMut<T, D>,
     ndarray::ArrayBase<S, D>: NdCvGaussianBlur<T, D>,
 {
     fn xdog(&self, args: XDoGArgs<T>) -> Result<ndarray::Array<T, D>, XDoGError>
     where
-        ndarray::Array<T, D>: crate::conversions::NdAsImageMut<T, D>,
+        ndarray::Array<T, D>: ndcv_bridge::conversions::NdAsImageMut<T, D>,
     {
         let sigma = args.sigma;
         let k_x_sigma = args.k * sigma;
@@ -331,7 +335,7 @@ mod tests {
             .unwrap();
 
         // Compare against a direct Gaussian blur with the same sigma.
-        use crate::gaussian::NdCvGaussianBlur;
+        use ndcv_bridge::gaussian::NdCvGaussianBlur;
         let g1: Array3<f32> = img
             .gaussian_blur((5, 5), (1.0, 1.0), BorderType::BorderReflect101)
             .unwrap();

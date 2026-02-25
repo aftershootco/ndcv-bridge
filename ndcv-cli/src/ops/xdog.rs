@@ -5,8 +5,10 @@ use ndarray::Array3;
 
 use crate::io::NdImage;
 use crate::ops::blur::BorderTypeArg;
-use ndcv_bridge::xdog::XDoGArgs as LibXDoGArgs;
-use ndcv_bridge::{BorderType, NdCvXDoG};
+use ndarray_image::NdCvXDoG;
+use ndarray_image::xdog::XDoGArgs as LibXDoGArgs;
+
+use ndcv_bridge::BorderType;
 
 #[derive(Debug, Clone, Args)]
 pub struct XDoGArgs {

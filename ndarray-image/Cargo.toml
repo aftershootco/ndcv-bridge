@@ -5,5 +5,10 @@ edition = "2024"
 license = "MIT"
 
 [dependencies]
+derive_builder = "0.20.2"
 image = "0.25.6"
 ndarray = { workspace = true }
+ndcv-bridge = { version = "0.4.0", path = "../ndcv-bridge" }
+num.workspace = true
+opencv.workspace = true
+thiserror.workspace = true

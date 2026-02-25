@@ -89,7 +89,12 @@ where
             opencv::core::Point::new(anchor.x, anchor.y),
             iterations as i32,
             border_type as i32,
-            opencv::core::VecN([border_value.x, border_value.y, border_value.z, border_value.w]),
+            opencv::core::VecN([
+                border_value.x,
+                border_value.y,
+                border_value.z,
+                border_value.w,
+            ]),
         )?;
         Ok(dst)
     }
@@ -152,7 +157,12 @@ where
                     opencv::core::Point::new(anchor.x, anchor.y),
                     iterations as i32,
                     border_type as i32,
-                    opencv::core::VecN([border_value.x, border_value.y, border_value.z, border_value.w]),
+                    opencv::core::VecN([
+                        border_value.x,
+                        border_value.y,
+                        border_value.z,
+                        border_value.w,
+                    ]),
                 )
             })
         }?;
@@ -180,7 +190,9 @@ mod tests {
     #[test]
     fn test_dilate_full_params_cv2_default_border_value() {
         let arr = Array3::<u8>::ones((10, 10, 3));
-        let bv = opencv::imgproc::morphology_default_border_value().unwrap().0;
+        let bv = opencv::imgproc::morphology_default_border_value()
+            .unwrap()
+            .0;
         let border_value = Vector4::new(bv[0], bv[1], bv[2], bv[3]);
         let res = arr
             .dilate(
@@ -292,7 +304,9 @@ mod tests {
     #[test]
     fn test_dilate_different_border_types() {
         let arr = Array3::<u8>::ones((10, 10, 3));
-        let bv = opencv::imgproc::morphology_default_border_value().unwrap().0;
+        let bv = opencv::imgproc::morphology_default_border_value()
+            .unwrap()
+            .0;
         let border_value = Vector4::new(bv[0], bv[1], bv[2], bv[3]);
         for border_type in [
             BorderType::BorderConstant,

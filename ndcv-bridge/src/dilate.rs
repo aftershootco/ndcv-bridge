@@ -29,10 +29,10 @@ pub trait NdCvDilate<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
     /// Dilates an image using a structuring element with all parameters exposed.
     ///
     /// - `kernel`: 2-D structuring element
-    /// - `anchor`: position of the anchor within the element; `(-1, -1)` means the center
+    /// - `anchor`: position of the anchor within the element; `Point2::new(-1, -1)` means the center
     /// - `iterations`: number of times dilation is applied
-    /// - `border_type`: pixel extrapolation method
-    /// - `border_value`: border value used when `border_type` is `BorderConstant`, as `[v0, v1, v2, v3]`
+    /// - `border_type`: pixel extrapolation method (`BORDER_WRAP` is not supported by OpenCV dilate)
+    /// - `border_value`: per-channel border constant used when `border_type` is `BorderConstant`
     fn dilate(
         &self,
         kernel: ndarray::ArrayView2<u8>,
@@ -50,7 +50,7 @@ pub trait NdCvDilate<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
         iterations: u16,
     ) -> Result<ndarray::Array<T, D>, DilateError> {
         let bv = opencv::imgproc::morphology_default_border_value()?.0;
-        let border_value = Vector4::new(bv[0], bv[1], bv[2], bv[3]);
+        let border_value = bytemuck::cast::<[f64; 4], Vector4<f64>>(bv);
         self.dilate(
             kernel,
             Point2::new(-1, -1),
@@ -119,7 +119,7 @@ pub trait NdCvDilateInPlace<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimensi
         iterations: u16,
     ) -> Result<&mut Self, DilateError> {
         let bv = opencv::imgproc::morphology_default_border_value()?.0;
-        let border_value = Vector4::new(bv[0], bv[1], bv[2], bv[3]);
+        let border_value = bytemuck::cast::<[f64; 4], Vector4<f64>>(bv);
         self.dilate_inplace(
             kernel,
             Point2::new(-1, -1),
@@ -193,7 +193,7 @@ mod tests {
         let bv = opencv::imgproc::morphology_default_border_value()
             .unwrap()
             .0;
-        let border_value = Vector4::new(bv[0], bv[1], bv[2], bv[3]);
+        let border_value = bytemuck::cast::<[f64; 4], Vector4<f64>>(bv);
         let res = arr
             .dilate(
                 rect_kernel(3).view(),
@@ -307,7 +307,7 @@ mod tests {
         let bv = opencv::imgproc::morphology_default_border_value()
             .unwrap()
             .0;
-        let border_value = Vector4::new(bv[0], bv[1], bv[2], bv[3]);
+        let border_value = bytemuck::cast::<[f64; 4], Vector4<f64>>(bv);
         for border_type in [
             BorderType::BorderConstant,
             BorderType::BorderReplicate,

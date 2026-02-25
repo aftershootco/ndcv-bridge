@@ -67,12 +67,12 @@ impl AnchoredPos {
             + src_bounds.w_min() as f64;
 
         match self.anchor {
-            Anchor::TopLeft => Point2::new(h as i128, w as i128),
+            Anchor::TopLeft => Point2::new(h.round() as i128, w.round() as i128),
             Anchor::Center => Point2::new(
                 // TODO: use bounds.len
-                (h - ((to_paste_bounds.h_max() - to_paste_bounds.h_min()) as f64) / 2.).floor()
+                (h - ((to_paste_bounds.h_max() - to_paste_bounds.h_min()) as f64) / 2.).round()
                     as i128,
-                (w - ((to_paste_bounds.w_max() - to_paste_bounds.w_min()) as f64) / 2.).floor()
+                (w - ((to_paste_bounds.w_max() - to_paste_bounds.w_min()) as f64) / 2.).round()
                     as i128,
             ),
         }

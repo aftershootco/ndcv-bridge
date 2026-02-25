@@ -1,7 +1,7 @@
 //! <https://docs.rs/opencv/latest/opencv/imgproc/fn.dilate.html>
 //! <https://docs.opencv.org/4.x/d4/d86/group__imgproc__filter.html#ga4ff0f3318642c4f469d0e11f242f3b6c>
 use crate::conversions::*;
-use nalgebra::Point2;
+use nalgebra::{Point2, Vector4};
 use ndarray::*;
 
 #[derive(Debug, thiserror::Error)]
@@ -39,7 +39,7 @@ pub trait NdCvDilate<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
         anchor: Point2<i32>,
         iterations: u16,
         border_type: crate::gaussian::BorderType,
-        border_value: [f64; 4],
+        border_value: Vector4<f64>,
     ) -> Result<ndarray::Array<T, D>, DilateError>;
 
     /// Dilates an image with default parameters: anchor at center, `BORDER_CONSTANT` border,
@@ -49,7 +49,8 @@ pub trait NdCvDilate<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
         kernel: ndarray::ArrayView2<u8>,
         iterations: u16,
     ) -> Result<ndarray::Array<T, D>, DilateError> {
-        let border_value = opencv::imgproc::morphology_default_border_value()?.0;
+        let bv = opencv::imgproc::morphology_default_border_value()?.0;
+        let border_value = Vector4::new(bv[0], bv[1], bv[2], bv[3]);
         self.dilate(
             kernel,
             Point2::new(-1, -1),
@@ -75,7 +76,7 @@ where
         anchor: Point2<i32>,
         iterations: u16,
         border_type: crate::gaussian::BorderType,
-        border_value: [f64; 4],
+        border_value: Vector4<f64>,
     ) -> Result<ndarray::Array<T, D>, DilateError> {
         let mut dst = ndarray::Array::zeros(self.dim());
         let cv_self = self.as_image_mat()?;
@@ -88,7 +89,7 @@ where
             opencv::core::Point::new(anchor.x, anchor.y),
             iterations as i32,
             border_type as i32,
-            opencv::core::VecN(border_value),
+            opencv::core::VecN([border_value.x, border_value.y, border_value.z, border_value.w]),
         )?;
         Ok(dst)
     }
@@ -104,7 +105,7 @@ pub trait NdCvDilateInPlace<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimensi
         anchor: Point2<i32>,
         iterations: u16,
         border_type: crate::gaussian::BorderType,
-        border_value: [f64; 4],
+        border_value: Vector4<f64>,
     ) -> Result<&mut Self, DilateError>;
 
     fn dilate_def_inplace(
@@ -112,7 +113,8 @@ pub trait NdCvDilateInPlace<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimensi
         kernel: ndarray::ArrayView2<u8>,
         iterations: u16,
     ) -> Result<&mut Self, DilateError> {
-        let border_value = opencv::imgproc::morphology_default_border_value()?.0;
+        let bv = opencv::imgproc::morphology_default_border_value()?.0;
+        let border_value = Vector4::new(bv[0], bv[1], bv[2], bv[3]);
         self.dilate_inplace(
             kernel,
             Point2::new(-1, -1),
@@ -137,7 +139,7 @@ where
         anchor: Point2<i32>,
         iterations: u16,
         border_type: crate::gaussian::BorderType,
-        border_value: [f64; 4],
+        border_value: Vector4<f64>,
     ) -> Result<&mut Self, DilateError> {
         let cv_kernel = kernel.as_image_mat()?;
         let mut cv_self = self.as_image_mat_mut()?;
@@ -150,7 +152,7 @@ where
                     opencv::core::Point::new(anchor.x, anchor.y),
                     iterations as i32,
                     border_type as i32,
-                    opencv::core::VecN(border_value),
+                    opencv::core::VecN([border_value.x, border_value.y, border_value.z, border_value.w]),
                 )
             })
         }?;
@@ -178,9 +180,8 @@ mod tests {
     #[test]
     fn test_dilate_full_params_cv2_default_border_value() {
         let arr = Array3::<u8>::ones((10, 10, 3));
-        let border_value = opencv::imgproc::morphology_default_border_value()
-            .unwrap()
-            .0;
+        let bv = opencv::imgproc::morphology_default_border_value().unwrap().0;
+        let border_value = Vector4::new(bv[0], bv[1], bv[2], bv[3]);
         let res = arr
             .dilate(
                 rect_kernel(3).view(),
@@ -203,7 +204,7 @@ mod tests {
                 Point2::new(-1, -1),
                 1,
                 BorderType::BorderConstant,
-                [0.0; 4],
+                Vector4::zeros(),
             )
             .unwrap();
         assert!(res.iter().all(|&v| v == 255));
@@ -219,7 +220,7 @@ mod tests {
                 Point2::new(-1, -1),
                 1,
                 BorderType::BorderConstant,
-                [255.0; 4],
+                Vector4::repeat(255.0),
             )
             .unwrap();
         // Border pixels see the 255 padding through the kernel, so they must be 255
@@ -239,7 +240,7 @@ mod tests {
                 Point2::new(-1, -1),
                 1,
                 BorderType::BorderConstant,
-                [1.0; 4],
+                Vector4::repeat(1.0),
             )
             .unwrap();
         assert_eq!(res[[0, 0, 0]], 1.0);
@@ -256,7 +257,7 @@ mod tests {
                 Point2::new(-1, -1),
                 1,
                 BorderType::BorderConstant,
-                [128.0, 64.0, 32.0, 0.0],
+                Vector4::new(128.0, 64.0, 32.0, 0.0),
             )
             .unwrap();
         assert_eq!(res[[0, 0, 0]], 128);
@@ -291,9 +292,8 @@ mod tests {
     #[test]
     fn test_dilate_different_border_types() {
         let arr = Array3::<u8>::ones((10, 10, 3));
-        let border_value = opencv::imgproc::morphology_default_border_value()
-            .unwrap()
-            .0;
+        let bv = opencv::imgproc::morphology_default_border_value().unwrap().0;
+        let border_value = Vector4::new(bv[0], bv[1], bv[2], bv[3]);
         for border_type in [
             BorderType::BorderConstant,
             BorderType::BorderReplicate,
@@ -336,7 +336,7 @@ mod tests {
             Point2::new(10, 10),
             1,
             BorderType::BorderConstant,
-            [0.0; 4],
+            Vector4::zeros(),
         );
         assert!(res.is_err());
     }
@@ -349,7 +349,7 @@ mod tests {
             Point2::new(10, 10),
             1,
             BorderType::BorderConstant,
-            [0.0; 4],
+            Vector4::zeros(),
         );
         assert!(res.is_err());
     }

@@ -5,7 +5,10 @@ pub trait CvDepth: seal::Sealed + bytemuck::Pod + Default {
 
 /// Types that can be used as OpenCV Mat types (combination of depth and channels).
 pub trait CvType: seal::Sealed + bytemuck::Pod + Default {
-    fn cv_depth() -> i32;
+    type Depth: CvDepth;
+    fn cv_depth() -> i32 {
+        Self::Depth::cv_depth()
+    }
     fn channels() -> i32 {
         1
     }
@@ -64,11 +67,7 @@ pub(crate) mod seal {
 
     #[cfg(feature = "nalgebra")]
     const _: () = {
-        impl<T: Sealed> Sealed for nalgebra::Vector2<T> {}
-        impl<T: Sealed> Sealed for nalgebra::Vector3<T> {}
-        impl<T: Sealed> Sealed for nalgebra::Vector4<T> {}
-        impl<T: Sealed> Sealed for nalgebra::Vector5<T> {}
-        impl<T: Sealed> Sealed for nalgebra::Vector6<T> {}
+        impl<T: Sealed, const N: usize> Sealed for nalgebra::SVector<T, N> {}
     };
 }
 
@@ -95,32 +94,23 @@ impl_cv_depth!(
 );
 
 macro_rules! impl_cv_type {
-    ($($t:ty => $cv_const:ident $(=> $channels: expr)?),*) => {
+    ($($t:ty),*) => {
         $(
             impl CvType for $t {
-                fn cv_depth() -> i32 {
-                    opencv::core::$cv_const
-                }
-                $(fn channels() -> i32 {
-                    $channels
-                })?
+                type Depth = $t;
             }
         )*
     };
-        ($($t:tt => $channels: expr => ($($u:tt),*)),*) => {
-            $(
-                $(
-                impl CvType for $t <$u> {
-                    fn cv_depth() -> i32 {
-                        <$u as CvType>::cv_depth()
-                    }
-                    fn channels() -> i32 {
-                        $channels
-                    }
+    (glam: $($t:ty => $depth:ty => $channels:expr),*) => {
+        $(
+            impl CvType for $t {
+                type Depth = $depth;
+                fn channels() -> i32 {
+                    $channels
                 }
-                )*
-            )*
-        };
+            }
+        )*
+    };
 }
 
 impl<T, const N: usize> CvType for [T; N]
@@ -128,48 +118,37 @@ where
     T: CvDepth,
     [T; N]: seal::Sealed + Default + bytemuck::Pod,
 {
-    fn cv_depth() -> i32 {
-        T::cv_depth()
-    }
-
+    type Depth = T;
     fn channels() -> i32 {
         N as i32
     }
 }
 
-impl_cv_type!(
-    u8 => CV_8U,
-    i8 => CV_8S,
-    u16 => CV_16U,
-    i16 => CV_16S,
-    i32 => CV_32S,
-    f32 => CV_32F,
-    f64 => CV_64F
-);
+impl_cv_type!(u8, i8, u16, i16, i32, f32, f64);
 
 #[cfg(feature = "glam")]
-impl_cv_type!(
-    glam::Vec2 => CV_32F => 2,
-    glam::Vec3 => CV_32F => 3,
-    glam::Vec4 => CV_32F => 4,
-    glam::DVec2 => CV_64F => 2,
-    glam::DVec3 => CV_64F => 3,
-    glam::DVec4 => CV_64F => 4,
-    glam::U8Vec2 => CV_8U => 2,
-    glam::U8Vec3 => CV_8U => 3,
-    glam::U8Vec4 => CV_8U => 4,
-    glam::I8Vec2 => CV_8S => 2,
-    glam::I8Vec3 => CV_8S => 3,
-    glam::I8Vec4 => CV_8S => 4,
-    glam::U16Vec2 => CV_16U => 2,
-    glam::U16Vec3 => CV_16U => 3,
-    glam::U16Vec4 => CV_16U => 4,
-    glam::I16Vec2 => CV_16S => 2,
-    glam::I16Vec3 => CV_16S => 3,
-    glam::I16Vec4 => CV_16S => 4,
-    glam::IVec2 => CV_32S => 2,
-    glam::IVec3 => CV_32S => 3,
-    glam::IVec4 => CV_32S => 4
+impl_cv_type!(glam:
+    glam::Vec2 => f32 => 2,
+    glam::Vec3 => f32 => 3,
+    glam::Vec4 => f32 => 4,
+    glam::DVec2 => f64 => 2,
+    glam::DVec3 => f64 => 3,
+    glam::DVec4 => f64 => 4,
+    glam::U8Vec2 => u8 => 2,
+    glam::U8Vec3 => u8 => 3,
+    glam::U8Vec4 => u8 => 4,
+    glam::I8Vec2 => i8 => 2,
+    glam::I8Vec3 => i8 => 3,
+    glam::I8Vec4 => i8 => 4,
+    glam::U16Vec2 => u16 => 2,
+    glam::U16Vec3 => u16 => 3,
+    glam::U16Vec4 => u16 => 4,
+    glam::I16Vec2 => i16 => 2,
+    glam::I16Vec3 => i16 => 3,
+    glam::I16Vec4 => i16 => 4,
+    glam::IVec2 => i32 => 2,
+    glam::IVec3 => i32 => 3,
+    glam::IVec4 => i32 => 4
 );
 
 #[cfg(feature = "nalgebra")]
@@ -181,21 +160,14 @@ const _: () = {
         T: CvDepth,
         SVector<T, N>: seal::Sealed + Default + bytemuck::Pod,
     {
-        fn cv_depth() -> i32 {
-            T::cv_depth()
-        }
-
+        type Depth = T;
         fn channels() -> i32 {
+            if N > opencv::core::CV_CN_MAX as usize {
+                panic!("Number of channels exceeds OpenCV's maximum");
+            }
             N as i32
         }
     }
-    // impl_cv_type!(
-    //     Vector2 => 2 => (u8, i8, u16, i16, i32, f32, f64),
-    //     Vector3 => 3 => (u8, i8, u16, i16, i32, f32, f64),
-    //     Vector4 => 4 => (u8, i8, u16, i16, i32, f32, f64),
-    //     Vector5 => 5 => (u8, i8, u16, i16, i32, f32, f64),
-    //     Vector6 => 6 => (u8, i8, u16, i16, i32, f32, f64)
-    // );
 };
 
 #[test]

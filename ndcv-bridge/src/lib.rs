@@ -1,7 +1,8 @@
 //! Methods and type conversions for ndarray to opencv and vice versa
 mod blend;
+#[cfg(feature = "opencv")]
+pub mod dilate;
 mod errors;
-// mod dilate;
 pub mod fir;
 mod image;
 mod inplace;
@@ -38,6 +39,7 @@ pub mod types;
 pub mod orient;
 pub use blend::NdBlend;
 pub use blur::NdCvBlur;
+pub use dilate::{DilateError, NdCvDilate, NdCvDilateInPlace};
 pub use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 pub use fir::NdFir;
 pub use gaussian::{BorderType, NdCvGaussianBlur, NdCvGaussianBlurInPlace};

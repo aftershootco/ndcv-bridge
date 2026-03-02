@@ -18,7 +18,9 @@ impl ConnectedComponentsError {
 }
 
 pub(crate) mod seal {
-    pub trait ConnectedComponentOutput: Sized + Copy + bytemuck::Pod + num::Zero {
+    pub trait ConnectedComponentOutput:
+        Sized + Copy + bytemuck::Pod + num::Zero + crate::types::CvType
+    {
         fn as_cv_type() -> i32 {
             crate::type_depth::<Self>()
         }
@@ -54,7 +56,7 @@ pub struct ConnectedComponentStats<O: seal::ConnectedComponentOutput> {
 }
 
 // use crate::conversions::NdCvConversionRef;
-impl<T: bytemuck::Pod, S: ndarray::Data<Elem = T>> NdCvConnectedComponents<T>
+impl<T: crate::types::CvType, S: ndarray::Data<Elem = T>> NdCvConnectedComponents<T>
     for ndarray::ArrayBase<S, ndarray::Ix2>
 where
     ndarray::Array2<T>: NdAsImage<T, ndarray::Ix2>,

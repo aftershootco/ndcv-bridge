@@ -50,7 +50,7 @@ mod sizes {
     fn bench_gaussian_sizes_u8(size: usize) {
         let arr = Array3::<u8>::ones((size, size, 3));
         let _out = black_box(
-            arr.gaussian_blur((3, 3), 1.0, 1.0, BorderType::BorderConstant)
+            arr.gaussian_blur((3, 3), (1.0, 1.0), BorderType::BorderConstant)
                 .unwrap(),
         );
     }
@@ -59,7 +59,7 @@ mod sizes {
     fn bench_gaussian_sizes_u8_inplace(size: usize) {
         let mut arr = Array3::<u8>::ones((size, size, 3));
         black_box(
-            arr.gaussian_blur_inplace((3, 3), 1.0, 1.0, BorderType::BorderConstant)
+            arr.gaussian_blur_inplace((3, 3), (1.0, 1.0), BorderType::BorderConstant)
                 .unwrap(),
         );
     }
@@ -68,7 +68,7 @@ mod sizes {
     fn bench_gaussian_sizes_f32(size: usize) {
         let arr = Array3::<f32>::ones((size, size, 3));
         let _out = black_box(
-            arr.gaussian_blur((3, 3), 1.0, 1.0, BorderType::BorderConstant)
+            arr.gaussian_blur((3, 3), (1.0, 1.0), BorderType::BorderConstant)
                 .unwrap(),
         );
     }
@@ -77,7 +77,7 @@ mod sizes {
     fn bench_gaussian_sizes_f32_inplace(size: usize) {
         let mut arr = Array3::<f32>::ones((size, size, 3));
         black_box(
-            arr.gaussian_blur_inplace((3, 3), 1.0, 1.0, BorderType::BorderConstant)
+            arr.gaussian_blur_inplace((3, 3), (1.0, 1.0), BorderType::BorderConstant)
                 .unwrap(),
         );
     }
@@ -87,7 +87,7 @@ mod sizes {
 #[divan::bench(args = [(3, 3), (5, 5), (7, 7), (9, 9), (11, 11)])]
 fn bench_gaussian_kernels(kernel_size: (u16, u16)) {
     let mut arr = Array3::<u8>::ones((1000, 1000, 3));
-    arr.gaussian_blur_inplace(kernel_size, 1.0, 1.0, BorderType::BorderConstant)
+    arr.gaussian_blur_inplace(kernel_size, (1.0, 1.0), BorderType::BorderConstant)
         .unwrap();
 }
 
@@ -95,7 +95,7 @@ fn bench_gaussian_kernels(kernel_size: (u16, u16)) {
 #[divan::bench(args = [0.5, 1.0, 2.0, 5.0])]
 fn bench_gaussian_sigmas(sigma: f64) {
     let mut arr = Array3::<u8>::ones((1000, 1000, 3));
-    arr.gaussian_blur_inplace((3, 3), sigma, sigma, BorderType::BorderConstant)
+    arr.gaussian_blur_inplace((3, 3), (sigma, sigma), BorderType::BorderConstant)
         .unwrap();
 }
 
@@ -103,7 +103,7 @@ fn bench_gaussian_sigmas(sigma: f64) {
 #[divan::bench(args = [(0.5, 2.0), (1.0, 1.0), (2.0, 0.5), (3.0, 1.0)])]
 fn bench_gaussian_asymmetric_sigmas(sigmas: (f64, f64)) {
     let mut arr = Array3::<u8>::ones((1000, 1000, 3));
-    arr.gaussian_blur_inplace((3, 3), sigmas.0, sigmas.1, BorderType::BorderConstant)
+    arr.gaussian_blur_inplace((3, 3), sigmas, BorderType::BorderConstant)
         .unwrap();
 }
 
@@ -121,7 +121,7 @@ fn bench_gaussian_border_types() -> Vec<()> {
     border_types
         .iter()
         .map(|border_type| {
-            arr.gaussian_blur_inplace((3, 3), 1.0, 1.0, *border_type)
+            arr.gaussian_blur_inplace((3, 3), (1.0, 1.0), *border_type)
                 .unwrap();
         })
         .collect()
@@ -134,7 +134,7 @@ fn bench_gaussian_patterns() {
 
     patterns.iter().for_each(|&pattern| {
         let mut arr = create_test_image(1000, pattern);
-        arr.gaussian_blur_inplace((3, 3), 1.0, 1.0, BorderType::BorderConstant)
+        arr.gaussian_blur_inplace((3, 3), (1.0, 1.0), BorderType::BorderConstant)
             .unwrap();
     })
 }
@@ -147,7 +147,7 @@ mod allocation {
         let mut arr = Array3::<f32>::ones((3840, 2160, 3));
 
         black_box(
-            arr.gaussian_blur_inplace((3, 3), 1.0, 1.0, BorderType::BorderConstant)
+            arr.gaussian_blur_inplace((3, 3), (1.0, 1.0), BorderType::BorderConstant)
                 .unwrap(),
         );
     }
@@ -157,7 +157,7 @@ mod allocation {
         let arr = Array3::<f32>::ones((3840, 2160, 3));
 
         let _out = black_box(
-            arr.gaussian_blur((3, 3), 1.0, 1.0, BorderType::BorderConstant)
+            arr.gaussian_blur((3, 3), (1.0, 1.0), BorderType::BorderConstant)
                 .unwrap(),
         );
     }
@@ -171,7 +171,7 @@ mod realistic {
         let small_blur = Array3::<u8>::ones((800, 600, 3));
         let _blurred = black_box(
             small_blur
-                .gaussian_blur((3, 3), 0.5, 0.5, BorderType::BorderConstant)
+                .gaussian_blur((3, 3), (0.5, 0.5), BorderType::BorderConstant)
                 .unwrap(),
         );
     }
@@ -179,7 +179,7 @@ mod realistic {
     fn small_800_600_3x3_inplace() {
         let mut small_blur = Array3::<u8>::ones((800, 600, 3));
         small_blur
-            .gaussian_blur_inplace((3, 3), 0.5, 0.5, BorderType::BorderConstant)
+            .gaussian_blur_inplace((3, 3), (0.5, 0.5), BorderType::BorderConstant)
             .unwrap();
     }
     #[divan::bench]
@@ -187,7 +187,7 @@ mod realistic {
         let mut medium_blur = Array3::<u8>::ones((1920, 1080, 3));
         let _blurred = black_box(
             medium_blur
-                .gaussian_blur_inplace((5, 5), 2.0, 2.0, BorderType::BorderConstant)
+                .gaussian_blur_inplace((5, 5), (2.0, 2.0), BorderType::BorderConstant)
                 .unwrap(),
         );
     }
@@ -195,7 +195,7 @@ mod realistic {
     fn medium_1920x1080_5x5_inplace() {
         let mut medium_blur = Array3::<u8>::ones((1920, 1080, 3));
         medium_blur
-            .gaussian_blur_inplace((5, 5), 2.0, 2.0, BorderType::BorderConstant)
+            .gaussian_blur_inplace((5, 5), (2.0, 2.0), BorderType::BorderConstant)
             .unwrap();
     }
     #[divan::bench]
@@ -203,7 +203,7 @@ mod realistic {
         let large_blur = Array3::<u8>::ones((3840, 2160, 3));
         let _blurred = black_box(
             large_blur
-                .gaussian_blur((9, 9), 5.0, 5.0, BorderType::BorderConstant)
+                .gaussian_blur((9, 9), (5.0, 5.0), BorderType::BorderConstant)
                 .unwrap(),
         );
     }
@@ -211,7 +211,7 @@ mod realistic {
     fn large_3840x2160_9x9_inplace() {
         let mut large_blur = Array3::<u8>::ones((3840, 2160, 3));
         large_blur
-            .gaussian_blur_inplace((9, 9), 5.0, 5.0, BorderType::BorderConstant)
+            .gaussian_blur_inplace((9, 9), (5.0, 5.0), BorderType::BorderConstant)
             .unwrap();
     }
     #[divan::bench]
@@ -219,7 +219,7 @@ mod realistic {
         let small_blur = Array3::<f32>::ones((800, 600, 3));
         let _blurred = black_box(
             small_blur
-                .gaussian_blur((3, 3), 0.5, 0.5, BorderType::BorderConstant)
+                .gaussian_blur((3, 3), (0.5, 0.5), BorderType::BorderConstant)
                 .unwrap(),
         );
     }
@@ -227,7 +227,7 @@ mod realistic {
     fn small_800_600_3x3_inplace_f32() {
         let mut small_blur = Array3::<f32>::ones((800, 600, 3));
         small_blur
-            .gaussian_blur_inplace((3, 3), 0.5, 0.5, BorderType::BorderConstant)
+            .gaussian_blur_inplace((3, 3), (0.5, 0.5), BorderType::BorderConstant)
             .unwrap();
     }
     #[divan::bench]
@@ -235,7 +235,7 @@ mod realistic {
         let mut medium_blur = Array3::<f32>::ones((1920, 1080, 3));
         let _blurred = black_box(
             medium_blur
-                .gaussian_blur_inplace((5, 5), 2.0, 2.0, BorderType::BorderConstant)
+                .gaussian_blur_inplace((5, 5), (2.0, 2.0), BorderType::BorderConstant)
                 .unwrap(),
         );
     }
@@ -243,7 +243,7 @@ mod realistic {
     fn medium_1920x1080_5x5_inplace_f32() {
         let mut medium_blur = Array3::<f32>::ones((1920, 1080, 3));
         medium_blur
-            .gaussian_blur_inplace((5, 5), 2.0, 2.0, BorderType::BorderConstant)
+            .gaussian_blur_inplace((5, 5), (2.0, 2.0), BorderType::BorderConstant)
             .unwrap();
     }
     #[divan::bench]
@@ -251,7 +251,7 @@ mod realistic {
         let large_blur = Array3::<f32>::ones((3840, 2160, 3));
         let _blurred = black_box(
             large_blur
-                .gaussian_blur((9, 9), 5.0, 5.0, BorderType::BorderConstant)
+                .gaussian_blur((9, 9), (5.0, 5.0), BorderType::BorderConstant)
                 .unwrap(),
         );
     }
@@ -259,7 +259,7 @@ mod realistic {
     fn large_3840x2160_9x9_inplace_f32() {
         let mut large_blur = Array3::<f32>::ones((3840, 2160, 3));
         large_blur
-            .gaussian_blur_inplace((9, 9), 5.0, 5.0, BorderType::BorderConstant)
+            .gaussian_blur_inplace((9, 9), (5.0, 5.0), BorderType::BorderConstant)
             .unwrap();
     }
 }

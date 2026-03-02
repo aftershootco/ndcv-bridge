@@ -51,6 +51,10 @@
         craneLib = (crane.mkLib pkgs).overrideToolchain stableToolchain;
         craneLibLLvmTools = (crane.mkLib pkgs).overrideToolchain stableToolchainWithLLvmTools;
 
+        nightlyToolchainWithRustAnalyzer = pkgs.rust-bin.nightly.latest.default.override {
+          extensions = ["rust-src" "rust-analyzer" "llvm-tools"];
+        };
+
         src = let
           filterBySuffix = path: exts: lib.any (ext: lib.hasSuffix ext path) exts;
           sourceFilters = path: type: (craneLib.filterCargoSources path type) || filterBySuffix path [".c" ".h" ".hpp" ".cpp" ".cc"];
@@ -148,6 +152,22 @@
                   cargo-deny
                   just
                   cargo-llvm-cov
+                  cargo-fuzz
+                ]
+                ++ (lib.optionals pkgs.stdenv.isDarwin [
+                  apple-sdk_26
+                ]);
+            });
+          nightly = pkgs.mkShell.override {stdenv = pkgs.clangStdenv;} (commonArgs
+            // {
+              packages = with pkgs;
+                [
+                  nightlyToolchainWithRustAnalyzer
+                  cargo-nextest
+                  cargo-deny
+                  just
+                  cargo-llvm-cov
+                  cargo-fuzz
                 ]
                 ++ (lib.optionals pkgs.stdenv.isDarwin [
                   apple-sdk_26

@@ -113,7 +113,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ndarray::{Array2, Array3, s};
+    use ndarray::{Array2, s};
 
     /// Helper: create a 2D grayscale image with a vertical edge in the middle.
     /// Left half = 0, right half = 255.

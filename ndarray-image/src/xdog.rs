@@ -59,7 +59,7 @@ pub struct XDoGArgs<T: num::Float + num::FromPrimitive> {
     /// Standard deviation of the smaller (detail) Gaussian.
     sigma: T,
 
-    kernel_size: glam::U8Vec2,
+    kernel_size: glam::U16Vec2,
 
     /// Ratio between the two Gaussian sigmas (`k > 1`). The larger Gaussian
     /// uses `sigma * k`.
@@ -126,10 +126,10 @@ impl<T: num::Float + num::FromPrimitive> XDoGArgsBuilder<T> {
             return Err("k must be positive".to_string());
         }
 
-        if let Some(kernel_size) = self.kernel_size {
-            if kernel_size.x % 2 == 0 || kernel_size.y % 2 == 0 {
-                return Err("kernel size must be odd".to_string());
-            }
+        if let Some(kernel_size) = self.kernel_size
+            && (kernel_size.x % 2 == 0 || kernel_size.y % 2 == 0)
+        {
+            return Err("kernel size must be odd".to_string());
         }
 
         Ok(())
@@ -237,11 +237,11 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use glam::U8Vec2;
+    use glam::U16Vec2;
     use ndarray::Array3;
 
     /// Default kernel size used across tests.
-    const KSIZE: U8Vec2 = U8Vec2::new(5, 5);
+    const KSIZE: U16Vec2 = U16Vec2::new(5, 5);
 
     // ── Shape preservation ───────────────────────────────────────────
 
@@ -501,7 +501,7 @@ mod tests {
     #[test]
     fn xdog_builder_all_fields() {
         let args = XDoGArgs::sigma(1.5f32)
-            .kernel_size(U8Vec2::new(7, 7))
+            .kernel_size(U16Vec2::new(7, 7))
             .k(2.0f32)
             .p(100.0f32)
             .epsilon(0.3f32)
@@ -522,7 +522,7 @@ mod tests {
     fn xdog_different_kernel_sizes() {
         let img = Array3::<f32>::from_elem((20, 20, 3), 50.0);
 
-        for ksize in [U8Vec2::new(3, 3), U8Vec2::new(5, 5), U8Vec2::new(7, 7)] {
+        for ksize in [U16Vec2::new(3, 3), U16Vec2::new(5, 5), U16Vec2::new(7, 7)] {
             let result = img
                 .xdog(XDoGArgs::sigma(1.0f32).kernel_size(ksize).build().unwrap())
                 .unwrap();

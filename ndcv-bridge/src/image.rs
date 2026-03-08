@@ -15,6 +15,7 @@ pub trait NdImage {
     fn width(&self) -> usize;
     fn height(&self) -> usize;
     fn channels(&self) -> usize;
+    fn is_continuous(&self) -> bool;
 }
 
 impl<T, S: RawData<Elem = T>> NdImage for ArrayBase<S, Ix3> {
@@ -27,6 +28,9 @@ impl<T, S: RawData<Elem = T>> NdImage for ArrayBase<S, Ix3> {
     fn channels(&self) -> usize {
         self.dim().2
     }
+    fn is_continuous(&self) -> bool {
+        self.is_standard_layout()
+    }
 }
 
 impl<T, S: RawData<Elem = T>> NdImage for ArrayBase<S, Ix2> {
@@ -38,5 +42,8 @@ impl<T, S: RawData<Elem = T>> NdImage for ArrayBase<S, Ix2> {
     }
     fn channels(&self) -> usize {
         1
+    }
+    fn is_continuous(&self) -> bool {
+        self.is_standard_layout()
     }
 }

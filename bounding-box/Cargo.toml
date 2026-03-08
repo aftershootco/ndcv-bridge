@@ -20,7 +20,7 @@ tracing = { version = "0.1.41", optional = true, default-features = false }
 ndarray = ["dep:ndarray"]
 tracing = ["dep:tracing"]
 serde = ["dep:serde"]
-
 bbox-compat = ["serde"]
+roi = ["ndarray"]
 
 default = ["ndarray", "tracing", "bbox-compat"]

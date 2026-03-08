@@ -8,17 +8,22 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 
 # [patch.crates-io]
 # paste = { package = "pastey", version = "*" }
+[workspace.metadata.crane]
+name = "ndcv"
 
 [workspace.dependencies]
 divan = { version = "0.1.21" }
 ndarray-npy = "0.9"
 serde = { version = "1.0", features = ["derive"] }
-nalgebra = { version = "0.34.0", default-features = false, features = ["std"] }
+nalgebra = { version = "0.34.0", default-features = false, features = [
+  "std",
+  "bytemuck",
+] }
 opencv = { version = "0.95.0", features = ["clang-runtime"] }
 bounding-box = { version = "0.2.0", path = "bounding-box" }
 bytemuck = "1.23.2"

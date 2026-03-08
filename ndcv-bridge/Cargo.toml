@@ -39,3 +39,11 @@ harness = false
 [[bench]]
 name = "gaussian"
 harness = false
+
+[[bench]]
+name = "blur"
+harness = false
+
+[[bench]]
+name = "dilate"
+harness = false

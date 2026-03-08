@@ -18,6 +18,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: DeterminateSystems/nix-installer-action@main
+    - uses: cachix/cachix-action@v15
+      with:
+        name: toshokan
     - uses: DeterminateSystems/flake-checker-action@main
 
     - name: Generate docs

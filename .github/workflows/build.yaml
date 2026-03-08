@@ -17,6 +17,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@main
+      - uses: cachix/cachix-action@v15
+        with:
+          name: toshokan
       - id: set-matrix
         name: Generate Nix Matrix
         run: |
@@ -32,6 +35,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@main
+      - uses: cachix/cachix-action@v15
+        with:
+          name: toshokan
       - run: nix build -L '.#${{ matrix.attr }}'
 
   codecov:
@@ -43,6 +49,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: DeterminateSystems/nix-installer-action@main
+    - uses: cachix/cachix-action@v15
+      with:
+        name: toshokan
 
     - name: Run codecov
       run: nix build .#checks.x86_64-linux.ndcv-bridge-llvm-cov

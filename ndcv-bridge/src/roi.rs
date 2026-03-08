@@ -117,6 +117,7 @@ pub fn bbox_clamp_failure_preload() {
     let segment_mask = ndarray::Array2::<u8>::zeros((512, 512));
     let og = Aabb2::from_xywh(475.0, 79.625, 37.0, 282.15);
     let clamp = Aabb2::from_xywh(0.0, 0.0, 512.0, 512.0);
+    #[rustfmt::skip]
     use ::tap::*;
     let padded = og
         .tap(|bbox| {

@@ -24,19 +24,19 @@ pub trait Num:
 {
 }
 impl<
-    T: num::Num
-        + core::ops::AddAssign
-        + core::ops::SubAssign
-        + core::ops::MulAssign
-        + core::ops::DivAssign
-        + core::cmp::PartialOrd
-        + core::cmp::PartialEq
-        + nalgebra::SimdPartialOrd
-        + nalgebra::SimdValue
-        + Copy
-        + core::fmt::Debug
-        + 'static,
-> Num for T
+        T: num::Num
+            + core::ops::AddAssign
+            + core::ops::SubAssign
+            + core::ops::MulAssign
+            + core::ops::DivAssign
+            + core::cmp::PartialOrd
+            + core::cmp::PartialEq
+            + nalgebra::SimdPartialOrd
+            + nalgebra::SimdValue
+            + Copy
+            + core::fmt::Debug
+            + 'static,
+    > Num for T
 {
 }
 
@@ -287,7 +287,7 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         T: nalgebra::SimdPartialOrd,
     {
         let min = self.min_vertex().inf(&other.min_vertex());
-        let max = self.min_vertex().sup(&other.max_vertex());
+        let max = self.max_vertex().sup(&other.max_vertex());
         Self::new(min, max)
     }
 
@@ -405,7 +405,12 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         let inter_max = lhs_max.inf(&rhs_max);
         if inter_max >= inter_min {
             let intersection = Aabb::new(inter_min, inter_max).measure();
-            intersection / (self.measure() + other.measure() - intersection)
+            let union = self.measure() + other.measure() - intersection;
+            if union == T::zero() {
+                T::zero()
+            } else {
+                intersection / union
+            }
         } else {
             T::zero()
         }

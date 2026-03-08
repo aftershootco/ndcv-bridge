@@ -36,7 +36,7 @@ mod seal {
     }
 }
 
-impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvResize<T, ndarray::Ix2>
+impl<T: crate::types::CvType + num::Zero, S: ndarray::Data<Elem = T>> NdCvResize<T, ndarray::Ix2>
     for ndarray::ArrayBase<S, ndarray::Ix2>
 {
     fn resize(
@@ -64,7 +64,7 @@ impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvResize<T, nda
     }
 }
 
-impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvResize<T, ndarray::Ix3>
+impl<T: crate::types::CvType + num::Zero, S: ndarray::Data<Elem = T>> NdCvResize<T, ndarray::Ix3>
     for ndarray::ArrayBase<S, ndarray::Ix3>
 {
     fn resize(

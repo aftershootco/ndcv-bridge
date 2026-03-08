@@ -1,5 +1,7 @@
+#[cfg(feature = "ndarray")]
 pub mod draw;
 pub mod nms;
+#[cfg(feature = "ndarray")]
 pub mod roi;
 pub use nalgebra;
 #[cfg(feature = "bbox-compat")]

@@ -15,7 +15,7 @@ where
         mask,
         alpha,
     } = input;
-    let mask = mask * alpha;
+    let mask = mask * (1.0 - alpha);
 
     this * mask + other * (1.0 - mask)
 }

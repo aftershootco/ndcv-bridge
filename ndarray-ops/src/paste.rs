@@ -111,6 +111,7 @@ where
     F: Fn(PasteInput<T>) -> T + Send + Sync,
 {
     pub mask_info: Option<MaskInfo<'a, A>>,
+    /// alpha for other
     pub alpha: f32,
     pub pos: AnchoredPos,
     pub paste_algo: F,
@@ -185,6 +186,7 @@ where
         self
     }
 
+    /// alpha for the `other` image
     pub fn with_alpha(mut self, alpha: f32) -> Self {
         self.alpha = alpha;
         self

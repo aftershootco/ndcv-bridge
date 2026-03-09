@@ -87,14 +87,11 @@ where
         ]);
 
         if let Some((mask, mask_translation)) = mask_info {
-            dbg!(img_bounds);
-            dbg!(mask_translation);
             let mask_bounds = img_bounds.translate(-mask_translation);
-            dbg!(mask_bounds);
 
             let cropped_mask = mask.slice(s![
-                dbg!(mask_bounds.h_min()) as usize..dbg!(mask_bounds.h_max()) as usize,
-                dbg!(mask_bounds.w_min()) as usize..dbg!(mask_bounds.w_max()) as usize
+                mask_bounds.h_min() as usize..mask_bounds.h_max() as usize,
+                mask_bounds.w_min() as usize..mask_bounds.w_max() as usize
             ]);
 
             Zip::from(cropped_src.lanes_mut(Axis(2)))

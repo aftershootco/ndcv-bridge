@@ -16,6 +16,8 @@ pub mod image;
 pub mod paste_algos;
 pub mod traits;
 
+const DEFAULT_MASK: f32 = 0.;
+
 #[derive(Debug, thiserror::Error)]
 #[error("Paste Error")]
 pub struct PasteError;

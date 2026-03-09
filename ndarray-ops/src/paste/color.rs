@@ -6,7 +6,8 @@ use tap::Pipe;
 use crate::{
     Rgb,
     paste::{
-        Bounds, PasteError, PasteInput, PasteOpts, Sections, traits::Paste, traits::PasteConfig,
+        Bounds, DEFAULT_MASK, PasteError, PasteInput, PasteOpts, Sections,
+        traits::{Paste, PasteConfig},
     },
 };
 
@@ -162,7 +163,7 @@ where
                     (
                         super::from_iter_to_f32_4(&this),
                         super::from_iter_to_f32_4(data.0),
-                        1.,
+                        DEFAULT_MASK,
                         alpha,
                     )
                         .into(),

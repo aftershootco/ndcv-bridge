@@ -4,7 +4,7 @@ use error_stack::{Report, ResultExt};
 use ndarray::{Array2, Array3, ArrayView2, Axis, Zip, s};
 
 use crate::paste::{
-    Bounds, PasteError, PasteInput, PasteOpts, Sections,
+    Bounds, DEFAULT_MASK, PasteError, PasteInput, PasteOpts, Sections,
     traits::{Paste, PasteConfig},
 };
 
@@ -179,7 +179,7 @@ where
                         (
                             super::convert_to_f32(*this),
                             super::convert_to_f32(*other),
-                            1.,
+                            DEFAULT_MASK,
                             alpha,
                         )
                             .into(),

@@ -4,7 +4,8 @@ use std::ops::Div;
 use tap::Pipe;
 
 use crate::paste::{
-    Bounds, PasteError, PasteInput, PasteOpts, Sections, traits::Paste, traits::PasteConfig,
+    Bounds, DEFAULT_MASK, PasteError, PasteInput, PasteOpts, Sections,
+    traits::{Paste, PasteConfig},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -119,7 +120,7 @@ where
                         (
                             super::from_iter_to_f32_4(&this),
                             super::from_iter_to_f32_4(other),
-                            1.,
+                            DEFAULT_MASK,
                             alpha,
                         )
                             .into(),

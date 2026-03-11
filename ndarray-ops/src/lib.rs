@@ -6,6 +6,7 @@ pub mod prelude {
     pub use super::paste::Anchor;
     pub use super::paste::AnchoredPos;
     pub use super::paste::PasteOpts;
+    pub use super::paste::PasteRegion;
     pub use super::paste::channel::ChannelOpts;
     pub use super::paste::channel::ChannelPaster;
     pub use super::paste::color::ColorOpts;

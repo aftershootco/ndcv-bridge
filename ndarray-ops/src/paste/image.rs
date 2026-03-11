@@ -64,7 +64,13 @@ where
             this_bounds: img_bounds,
             other_translation,
             mask_with_translation: mask_info,
-        }) = super::get_tri_intersection(img_bounds, other_bounds, opts.mask_info, opts.pos)
+        }) = super::get_tri_intersection(
+            img_bounds,
+            other_bounds,
+            opts.mask_info,
+            opts.pos,
+            opts.paste_region,
+        )
         else {
             return Ok(self);
         };
@@ -221,13 +227,9 @@ mod tests {
         let mut this = Array3::zeros((4096, 4096, 3));
         let other = Array3::ones((512, 512, 3)) * 255_u8;
 
-        this.paste(
-            other.with_opts(
-                PasteOpts::new()
-                    .with_alpha(0.3)
-                    .with_pos(AnchoredPos::from_dim(0., 0., crate::paste::Anchor::TopLeft)),
-            ),
-        )
+        this.paste(other.with_opts(PasteOpts::new().with_alpha(0.3).with_pos(
+            AnchoredPos::from_dim_norm(0., 0., crate::paste::Anchor::TopLeft),
+        )))
         .unwrap();
 
         save_rgb(this.view(), "test_paste_bg_pan_50.jpg");
@@ -244,10 +246,10 @@ mod tests {
                 PasteOpts::new()
                     .with_mask(
                         mask.view(),
-                        AnchoredPos::from_dim(0., 0., crate::paste::Anchor::TopLeft),
+                        AnchoredPos::from_dim_norm(0., 0., crate::paste::Anchor::TopLeft),
                     )
                     .with_alpha(0.7)
-                    .with_pos(AnchoredPos::from_dim(
+                    .with_pos(AnchoredPos::from_dim_norm(
                         1.2,
                         0.75,
                         crate::paste::Anchor::Center,
@@ -255,7 +257,11 @@ mod tests {
                     .with_paste_algo(|mut input| {
                         input.mask = input.mask.powf(5.);
                         crate::paste::paste_algos::blend(input)
-                    }),
+                    })
+                    .with_paste_region(
+                        crate::paste::PasteRegion::norm(1., 0.4),
+                        AnchoredPos::from_dim_norm(0., 0.5, crate::paste::Anchor::TopLeft),
+                    ),
             ),
         )
         .unwrap();

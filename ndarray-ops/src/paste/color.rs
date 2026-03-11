@@ -118,6 +118,7 @@ where
             other_bounds,
             opts.opts.mask_info,
             opts.opts.pos,
+            opts.opts.paste_region,
         )
         else {
             return Ok(self);
@@ -256,7 +257,11 @@ mod tests {
                 ColorOpts::new().with_size(512, 512).with_paste_opts(
                     PasteOpts::new()
                         .with_alpha(0.3)
-                        .with_pos(AnchoredPos::from_dim(0.5, 1., crate::paste::Anchor::Center)),
+                        .with_pos(AnchoredPos::from_dim_norm(
+                            0.5,
+                            1.,
+                            crate::paste::Anchor::Center,
+                        )),
                 ),
             ),
         )
@@ -276,14 +281,14 @@ mod tests {
                 ColorOpts::new().with_size(1900, 2540).with_paste_opts(
                     PasteOpts::new()
                         .with_alpha(0.7)
-                        .with_pos(AnchoredPos::from_dim(
+                        .with_pos(AnchoredPos::from_dim_norm(
                             0.5,
                             0.8,
                             crate::paste::Anchor::Center,
                         ))
                         .with_mask(
                             mask.view(),
-                            AnchoredPos::from_dim(0.3, 0.5, crate::paste::Anchor::Center),
+                            AnchoredPos::from_dim_norm(0.3, 0.5, crate::paste::Anchor::Center),
                         )
                         .with_paste_algo(|mut input| {
                             input.mask = input.mask.powf(0.7);

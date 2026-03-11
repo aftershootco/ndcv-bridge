@@ -122,6 +122,7 @@ where
             other_bounds,
             opts.opts.mask_info,
             opts.opts.pos,
+            opts.opts.paste_region,
         )
         else {
             return Ok(self);
@@ -262,7 +263,7 @@ mod tests {
             mask.with_opts(
                 ChannelOpts::new().with_paste_opts(
                     PasteOpts::new()
-                        .with_pos(AnchoredPos::from_dim(
+                        .with_pos(AnchoredPos::from_dim_norm(
                             0.5,
                             0.5,
                             crate::paste::Anchor::TopLeft,
@@ -293,7 +294,7 @@ mod tests {
                 ChannelOpts::new().with_channel_idx(1).with_paste_opts(
                     PasteOpts::new()
                         .with_alpha(0.7)
-                        .with_pos(AnchoredPos::from_dim(
+                        .with_pos(AnchoredPos::from_dim_norm(
                             0.5,
                             0.5,
                             crate::paste::Anchor::TopLeft,

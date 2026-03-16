@@ -21,15 +21,6 @@ pub trait ConnectedComponentOutput {
     crate::seal!();
 }
 crate::seal!(impl, ConnectedComponentOutput, u16, i32);
-// pub trait ConnectedComponentOutput:
-//     Sized + Copy + bytemuck::Pod + num::Zero + crate::types::CvType
-// {
-//     fn as_cv_type() -> i32 {
-//         crate::type_depth::<Self>()
-//     }
-// }
-// impl ConnectedComponentOutput for i32 {}
-// impl ConnectedComponentOutput for u16 {}
 
 pub trait NdCvConnectedComponents<T> {
     fn connected_components<O: CvType + CvDepth + ConnectedComponentOutput>(

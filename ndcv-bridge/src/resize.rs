@@ -1,7 +1,7 @@
-use crate::{NdAsImage, NdAsImageMut};
+use crate::{NdAsImage, NdAsImageMut, types::CvType};
 
 /// Resize ndarray using OpenCV resize functions
-pub trait NdCvResize<T, D>: seal::SealedInternal {
+pub trait NdCvResize<T: CvType, D: ndarray::Dimension>: NdAsImage<T, D> {
     /// The input array must be a continuous 2D or 3D ndarray
     fn resize(
         &self,
@@ -32,33 +32,34 @@ pub enum Interpolation {
     Lanczos4 = opencv::imgproc::INTER_LANCZOS4,
 }
 
-mod seal {
-    pub trait SealedInternal {}
-    impl<T: bytemuck::Pod, S: ndarray::Data<Elem = T>> SealedInternal
-        for ndarray::ArrayBase<S, ndarray::Ix3>
-    {
-    }
-    impl<T: bytemuck::Pod, S: ndarray::Data<Elem = T>> SealedInternal
-        for ndarray::ArrayBase<S, ndarray::Ix2>
-    {
-    }
-}
-
-impl<T: crate::types::CvType + num::Zero, S: ndarray::Data<Elem = T>> NdCvResize<T, ndarray::Ix2>
-    for ndarray::ArrayBase<S, ndarray::Ix2>
+impl<T, S, D> NdCvResize<T, D> for ndarray::ArrayBase<S, D>
+where
+    T: CvType + num::Zero,
+    T: core::fmt::Debug,
+    S: ndarray::Data<Elem = T>,
+    ndarray::ArrayBase<S, D>: NdAsImage<T, D>,
+    ndarray::Array<T, D>: NdAsImageMut<T, D>,
+    D: ndarray::Dimension,
 {
     fn resize(
         &self,
         height: u16,
         width: u16,
         interpolation: Interpolation,
-    ) -> Result<ndarray::Array2<T>, ResizeError> {
+    ) -> Result<ndarray::Array<T, D>, ResizeError> {
         let mat = self.as_image_mat()?;
-        let mut dest = ndarray::Array2::zeros((height.into(), width.into()));
+        let mut size = ndarray::Dim(self.dim());
+        let mut size_mut = size.as_array_view_mut();
+        size_mut[0] = height as usize;
+        size_mut[1] = width as usize;
+        // size.0 = height as usize;
+        // size.1 = width as usize;
+        let mut dest: ndarray::Array<T, D> = ndarray::Array::zeros(size);
         let mut dest_mat = dest.as_image_mat_mut()?;
+        // let mut output = opencv::core::Mat::default();
         opencv::imgproc::resize(
             mat.as_ref(),
-            dest_mat.as_mut(),
+            &mut dest_mat,
             opencv::core::Size {
                 height: height.into(),
                 width: width.into(),
@@ -67,34 +68,8 @@ impl<T: crate::types::CvType + num::Zero, S: ndarray::Data<Elem = T>> NdCvResize
             0.,
             interpolation as i32,
         )?;
-        Ok(dest)
-    }
-}
 
-impl<T: crate::types::CvType + num::Zero, S: ndarray::Data<Elem = T>> NdCvResize<T, ndarray::Ix3>
-    for ndarray::ArrayBase<S, ndarray::Ix3>
-{
-    fn resize(
-        &self,
-        height: u16,
-        width: u16,
-        interpolation: Interpolation,
-    ) -> Result<ndarray::ArrayBase<ndarray::OwnedRepr<T>, ndarray::Ix3>, ResizeError> {
-        let mat = self.as_image_mat()?;
-        let mut dest =
-            ndarray::Array3::zeros((height.into(), width.into(), self.len_of(ndarray::Axis(2))));
-        let mut dest_mat = dest.as_image_mat_mut()?;
-        opencv::imgproc::resize(
-            mat.as_ref(),
-            dest_mat.as_mut(),
-            opencv::core::Size {
-                height: height.into(),
-                width: width.into(),
-            },
-            0.,
-            0.,
-            interpolation as i32,
-        )?;
+        // let dest = output.as_ndarray()?.to_owned();
         Ok(dest)
     }
 }

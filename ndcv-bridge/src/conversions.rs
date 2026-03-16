@@ -17,7 +17,6 @@
 //! | Array<T, Ix6>     | Mat(ndims = 5, channels = X)   |
 //!
 //! // X is the last dimension
-use crate::type_depth;
 use ndarray::{Ix2, Ix3};
 pub mod impls;
 pub(crate) mod matref;

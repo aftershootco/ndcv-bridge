@@ -1,6 +1,7 @@
 use crate::{
     NdAsImage, NdAsImageMut,
     conversions::{ConversionError, MatAsNd},
+    types::{CvDepth, CvType},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -16,25 +17,26 @@ impl ConnectedComponentsError {
         self
     }
 }
-
-pub(crate) mod seal {
-    pub trait ConnectedComponentOutput:
-        Sized + Copy + bytemuck::Pod + num::Zero + crate::types::CvType
-    {
-        fn as_cv_type() -> i32 {
-            crate::type_depth::<Self>()
-        }
-    }
-    impl ConnectedComponentOutput for i32 {}
-    impl ConnectedComponentOutput for u16 {}
+pub trait ConnectedComponentOutput {
+    crate::seal!();
 }
+crate::seal!(impl, ConnectedComponentOutput, u16, i32);
+// pub trait ConnectedComponentOutput:
+//     Sized + Copy + bytemuck::Pod + num::Zero + crate::types::CvType
+// {
+//     fn as_cv_type() -> i32 {
+//         crate::type_depth::<Self>()
+//     }
+// }
+// impl ConnectedComponentOutput for i32 {}
+// impl ConnectedComponentOutput for u16 {}
 
 pub trait NdCvConnectedComponents<T> {
-    fn connected_components<O: seal::ConnectedComponentOutput>(
+    fn connected_components<O: CvType + CvDepth + ConnectedComponentOutput>(
         &self,
         connectivity: Connectivity,
     ) -> Result<ndarray::Array2<O>, ConnectedComponentsError>;
-    fn connected_components_with_stats<O: seal::ConnectedComponentOutput>(
+    fn connected_components_with_stats<O: CvType + CvDepth + ConnectedComponentOutput>(
         &self,
         connectivity: Connectivity,
     ) -> Result<ConnectedComponentStats<O>, ConnectedComponentsError>;
@@ -48,7 +50,7 @@ pub enum Connectivity {
 }
 
 #[derive(Debug, Clone)]
-pub struct ConnectedComponentStats<O: seal::ConnectedComponentOutput> {
+pub struct ConnectedComponentStats<O: CvType + CvDepth + ConnectedComponentOutput> {
     pub num_labels: i32,
     pub labels: ndarray::Array2<O>,
     pub stats: ndarray::Array2<i32>,
@@ -56,12 +58,12 @@ pub struct ConnectedComponentStats<O: seal::ConnectedComponentOutput> {
 }
 
 // use crate::conversions::NdCvConversionRef;
-impl<T: crate::types::CvType, S: ndarray::Data<Elem = T>> NdCvConnectedComponents<T>
+impl<T: CvType, S: ndarray::Data<Elem = T>> NdCvConnectedComponents<T>
     for ndarray::ArrayBase<S, ndarray::Ix2>
 where
     ndarray::Array2<T>: NdAsImage<T, ndarray::Ix2>,
 {
-    fn connected_components<O: seal::ConnectedComponentOutput>(
+    fn connected_components<O: CvType + CvDepth + ConnectedComponentOutput>(
         &self,
         connectivity: Connectivity,
     ) -> Result<ndarray::Array2<O>, ConnectedComponentsError> {
@@ -72,12 +74,12 @@ where
             mat.as_ref(),
             cv_labels.as_mut(),
             connectivity as i32,
-            O::as_cv_type(),
+            <O as CvType>::cv_depth(),
         )?;
         Ok(labels)
     }
 
-    fn connected_components_with_stats<O: seal::ConnectedComponentOutput>(
+    fn connected_components_with_stats<O: CvType + CvDepth + ConnectedComponentOutput>(
         &self,
         connectivity: Connectivity,
     ) -> Result<ConnectedComponentStats<O>, ConnectedComponentsError> {
@@ -90,7 +92,7 @@ where
             &mut stats,
             &mut centroids,
             connectivity as i32,
-            O::as_cv_type(),
+            <O as CvType>::cv_depth(),
         )?;
         let stats = stats.as_ndarray()?.to_owned();
         let centroids = centroids.as_ndarray()?.to_owned();

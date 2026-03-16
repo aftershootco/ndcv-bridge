@@ -1,4 +1,4 @@
-use crate::{NdAsImage, NdAsImageMut, prelude_::*};
+use crate::{NdAsImage, NdAsImageMut};
 
 /// Resize ndarray using OpenCV resize functions
 pub trait NdCvResize<T, D>: seal::SealedInternal {
@@ -8,7 +8,15 @@ pub trait NdCvResize<T, D>: seal::SealedInternal {
         height: u16,
         width: u16,
         interpolation: Interpolation,
-    ) -> Result<ndarray::ArrayBase<ndarray::OwnedRepr<T>, D>, NdCvError>;
+    ) -> Result<ndarray::ArrayBase<ndarray::OwnedRepr<T>, D>, ResizeError>;
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ResizeError {
+    #[error("OpenCV error: {0}")]
+    OpenCvError(#[from] opencv::Error),
+    #[error("Conversion error: {0}")]
+    ConversionError(#[from] crate::conversions::ConversionError),
 }
 
 #[repr(i32)]
@@ -44,10 +52,10 @@ impl<T: crate::types::CvType + num::Zero, S: ndarray::Data<Elem = T>> NdCvResize
         height: u16,
         width: u16,
         interpolation: Interpolation,
-    ) -> Result<ndarray::Array2<T>, NdCvError> {
-        let mat = self.as_image_mat().change_context(NdCvError)?;
+    ) -> Result<ndarray::Array2<T>, ResizeError> {
+        let mat = self.as_image_mat()?;
         let mut dest = ndarray::Array2::zeros((height.into(), width.into()));
-        let mut dest_mat = dest.as_image_mat_mut().change_context(NdCvError)?;
+        let mut dest_mat = dest.as_image_mat_mut()?;
         opencv::imgproc::resize(
             mat.as_ref(),
             dest_mat.as_mut(),
@@ -58,8 +66,7 @@ impl<T: crate::types::CvType + num::Zero, S: ndarray::Data<Elem = T>> NdCvResize
             0.,
             0.,
             interpolation as i32,
-        )
-        .change_context(NdCvError)?;
+        )?;
         Ok(dest)
     }
 }
@@ -72,11 +79,11 @@ impl<T: crate::types::CvType + num::Zero, S: ndarray::Data<Elem = T>> NdCvResize
         height: u16,
         width: u16,
         interpolation: Interpolation,
-    ) -> Result<ndarray::ArrayBase<ndarray::OwnedRepr<T>, ndarray::Ix3>, NdCvError> {
-        let mat = self.as_image_mat().change_context(NdCvError)?;
+    ) -> Result<ndarray::ArrayBase<ndarray::OwnedRepr<T>, ndarray::Ix3>, ResizeError> {
+        let mat = self.as_image_mat()?;
         let mut dest =
             ndarray::Array3::zeros((height.into(), width.into(), self.len_of(ndarray::Axis(2))));
-        let mut dest_mat = dest.as_image_mat_mut().change_context(NdCvError)?;
+        let mut dest_mat = dest.as_image_mat_mut()?;
         opencv::imgproc::resize(
             mat.as_ref(),
             dest_mat.as_mut(),
@@ -87,8 +94,7 @@ impl<T: crate::types::CvType + num::Zero, S: ndarray::Data<Elem = T>> NdCvResize
             0.,
             0.,
             interpolation as i32,
-        )
-        .change_context(NdCvError)?;
+        )?;
         Ok(dest)
     }
 }

@@ -1,4 +1,5 @@
 pub mod image;
+pub mod percentile;
 pub use image::*;
 pub use ndcv_bridge::*;
 pub mod blend;

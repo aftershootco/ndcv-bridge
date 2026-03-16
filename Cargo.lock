@@ -1245,7 +1245,6 @@ dependencies = [
  "bytemuck",
  "derive_builder",
  "divan",
- "error-stack",
  "fast_image_resize",
  "glam 0.32.0",
  "img-parts",

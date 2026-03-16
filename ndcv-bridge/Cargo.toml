@@ -8,7 +8,6 @@ license = "MIT OR Apache-2.0"
 bounding-box.workspace = true
 nalgebra = { workspace = true, features = ["bytemuck"], optional = true }
 bytemuck.workspace = true
-error-stack.workspace = true
 fast_image_resize.workspace = true
 ndarray = { workspace = true, features = ["rayon"] }
 num.workspace = true

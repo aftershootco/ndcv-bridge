@@ -16,3 +16,4 @@ opencv.workspace = true
 rayon = "1.11.0"
 thiserror.workspace = true
 wide = "1.2.0"
+bounding-box.workspace = true

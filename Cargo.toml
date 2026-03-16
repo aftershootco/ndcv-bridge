@@ -5,7 +5,6 @@ members = [
   "ndarray-resize",
   "ndarray-safetensors",
   "ndcv-bridge",
-  "ndcv-cli",
 ]
 
 [workspace.package]

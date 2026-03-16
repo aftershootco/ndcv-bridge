@@ -1,9 +1,7 @@
 //! Methods and type conversions for ndarray to opencv and vice versa
 pub mod dilate;
-pub mod fir;
 pub mod image;
 mod inplace;
-mod roi;
 
 pub(crate) mod sealer {
     #[doc(hidden)]
@@ -26,10 +24,7 @@ pub mod types;
 // pub mod codec;
 pub use blur::NdCvBlur;
 pub use dilate::{DilateError, NdCvDilate, NdCvDilateInPlace};
-pub use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
-pub use fir::NdFir;
 pub use gaussian::{BorderType, NdCvGaussianBlur, NdCvGaussianBlurInPlace};
-pub use roi::{NdRoiZeroPadded, Roi as NdRoi, RoiMut as NdRoiMut};
 pub use sobel::{Ksize, NdCvSobel, NdCvSobelError, SobelArgs};
 
 pub use contours::{

@@ -6,5 +6,7 @@ pub mod blend;
 pub use blend::NdBlend;
 pub mod orient;
 pub use orient::*;
+pub mod roi;
+pub use roi::*;
 // pub use xdog::*;
 // pub mod xdog;

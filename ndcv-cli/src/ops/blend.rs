@@ -3,7 +3,7 @@ use clap::Args;
 use std::path::PathBuf;
 
 use crate::io::NdImage;
-use ndcv_bridge::NdBlend;
+use ndarray_image::NdBlend;
 
 #[derive(Debug, Clone, Args)]
 pub struct BlendArgs {

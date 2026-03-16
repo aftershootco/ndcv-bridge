@@ -2,7 +2,7 @@ use anyhow::{Result, bail};
 use clap::Args;
 
 use crate::io::NdImage;
-use ndcv_bridge::orient::{FlipFlag, Orient, Orientation, RotationFlag};
+use ndarray_image::orient::{FlipFlag, Orient, Orientation, RotationFlag};
 
 /// Rotation angle
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]

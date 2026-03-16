@@ -1106,11 +1106,13 @@ dependencies = [
  "derive_builder",
  "glam 0.32.0",
  "image",
+ "nalgebra",
  "ndarray",
  "ndcv-bridge",
  "num",
  "opencv",
  "rayon",
+ "tap",
  "thiserror",
  "wide 1.2.0",
 ]

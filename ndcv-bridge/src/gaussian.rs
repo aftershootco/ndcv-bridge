@@ -156,6 +156,7 @@ mod tests {
             .gaussian_blur(kernel_size, (sigma_x, sigma_y), border_type)
             .unwrap();
         assert_eq!(res.shape(), &[10, 10, 3]);
+        assert_eq!(res, arr);
     }
 
     #[test]

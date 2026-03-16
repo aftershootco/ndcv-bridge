@@ -1,5 +1,9 @@
 //! <https://docs.rs/opencv/latest/opencv/core/fn.absdiff.html>
-use crate::conversions::*;
+use crate::{
+    conversions::{NdAsImageMut, *},
+    image::NdImage,
+    types::CvType,
+};
 use ndarray::*;
 
 #[derive(Debug, thiserror::Error)]
@@ -16,29 +20,29 @@ pub enum AbsDiffError {
 /// `dst(I) = saturate(|self(I) - other(I)|)` for every element index `I`.
 ///
 /// Note: Saturation is not applied when the depth is `i32` (`CV_32S`).
-pub trait NdCvAbsDiff<T: crate::types::CvType, D: ndarray::Dimension>:
-    crate::image::NdImage + crate::conversions::NdAsImage<T, D>
+pub trait NdCvAbsDiff<T, D>: NdImage + crate::conversions::NdAsImage<T, D>
+where
+    T: CvType,
+    D: ndarray::Dimension,
 {
-    fn absdiff<S2: ndarray::RawData + ndarray::Data<Elem = T>>(
-        &self,
-        other: &ArrayBase<S2, D>,
-    ) -> Result<ndarray::Array<T, D>, AbsDiffError>
+    fn absdiff<S2>(&self, other: &ArrayBase<S2, D>) -> Result<ndarray::Array<T, D>, AbsDiffError>
     where
-        ArrayBase<S2, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>;
+        ArrayBase<S2, D>: NdImage + crate::conversions::NdAsImage<T, D>,
+        S2: ndarray::RawData + ndarray::Data<Elem = T>;
 }
 
-impl<T: crate::types::CvType, S: ndarray::RawData + ndarray::Data<Elem = T>, D: ndarray::Dimension>
-    NdCvAbsDiff<T, D> for ArrayBase<S, D>
+impl<T, S, D> NdCvAbsDiff<T, D> for ArrayBase<S, D>
 where
-    ndarray::ArrayBase<S, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>,
-    ndarray::Array<T, D>: crate::conversions::NdAsImageMut<T, D>,
+    ndarray::ArrayBase<S, D>: NdImage + crate::conversions::NdAsImage<T, D>,
+    ndarray::Array<T, D>: NdAsImageMut<T, D>,
+    T: CvType,
+    S: ndarray::RawData + ndarray::Data<Elem = T>,
+    D: ndarray::Dimension,
 {
-    fn absdiff<S2: ndarray::RawData + ndarray::Data<Elem = T>>(
-        &self,
-        other: &ArrayBase<S2, D>,
-    ) -> Result<ndarray::Array<T, D>, AbsDiffError>
+    fn absdiff<S2>(&self, other: &ArrayBase<S2, D>) -> Result<ndarray::Array<T, D>, AbsDiffError>
     where
-        ArrayBase<S2, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>,
+        ArrayBase<S2, D>: NdImage + crate::conversions::NdAsImage<T, D>,
+        S2: ndarray::RawData + ndarray::Data<Elem = T>,
     {
         let mut dst = ndarray::Array::default(self.dim());
         let cv_self = self.as_image_mat()?;
@@ -50,31 +54,26 @@ where
 }
 
 /// In-place variant: computes `self(I) = saturate(|self(I) - other(I)|)`.
-pub trait NdCvAbsDiffInPlace<T: crate::types::CvType, D: ndarray::Dimension>:
-    crate::image::NdImage + crate::conversions::NdAsImageMut<T, D>
+pub trait NdCvAbsDiffInPlace<T: CvType, D: ndarray::Dimension>:
+    NdImage + NdAsImageMut<T, D>
 {
-    fn absdiff_inplace<S2: ndarray::RawData + ndarray::Data<Elem = T>>(
-        &mut self,
-        other: &ArrayBase<S2, D>,
-    ) -> Result<&mut Self, AbsDiffError>
+    fn absdiff_inplace<S2>(&mut self, other: &ArrayBase<S2, D>) -> Result<&mut Self, AbsDiffError>
     where
-        ArrayBase<S2, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>;
+        ArrayBase<S2, D>: NdImage + crate::conversions::NdAsImage<T, D>,
+        S2: ndarray::RawData + ndarray::Data<Elem = T>;
 }
 
-impl<
-    T: crate::types::CvType,
+impl<T, S, D> NdCvAbsDiffInPlace<T, D> for ArrayBase<S, D>
+where
+    Self: NdImage + NdAsImageMut<T, D>,
+    T: CvType,
     S: ndarray::RawData + ndarray::DataMut<Elem = T>,
     D: ndarray::Dimension,
-> NdCvAbsDiffInPlace<T, D> for ArrayBase<S, D>
-where
-    Self: crate::image::NdImage + crate::conversions::NdAsImageMut<T, D>,
 {
-    fn absdiff_inplace<S2: ndarray::RawData + ndarray::Data<Elem = T>>(
-        &mut self,
-        other: &ArrayBase<S2, D>,
-    ) -> Result<&mut Self, AbsDiffError>
+    fn absdiff_inplace<S2>(&mut self, other: &ArrayBase<S2, D>) -> Result<&mut Self, AbsDiffError>
     where
-        ArrayBase<S2, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>,
+        ArrayBase<S2, D>: NdImage + crate::conversions::NdAsImage<T, D>,
+        S2: ndarray::RawData + ndarray::Data<Elem = T>,
     {
         let cv_other = other.as_image_mat()?;
         let mut cv_self = self.as_image_mat_mut()?;

@@ -28,7 +28,7 @@
 //! <https://docs.rs/opencv/latest/opencv/imgproc/fn.gaussian_blur.html>
 
 use ndarray::*;
-use ndcv_bridge::{NdCvGaussianBlur, gaussian::BorderType, types::CvType};
+use ndcv_bridge::{NdCvGaussianBlur, BorderType, types::CvType};
 use num::Float;
 
 #[derive(Debug, thiserror::Error)]

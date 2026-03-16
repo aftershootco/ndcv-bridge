@@ -24,19 +24,19 @@ pub trait Num:
 {
 }
 impl<
-        T: num::Num
-            + core::ops::AddAssign
-            + core::ops::SubAssign
-            + core::ops::MulAssign
-            + core::ops::DivAssign
-            + core::cmp::PartialOrd
-            + core::cmp::PartialEq
-            + nalgebra::SimdPartialOrd
-            + nalgebra::SimdValue
-            + Copy
-            + core::fmt::Debug
-            + 'static,
-    > Num for T
+    T: num::Num
+        + core::ops::AddAssign
+        + core::ops::SubAssign
+        + core::ops::MulAssign
+        + core::ops::DivAssign
+        + core::cmp::PartialOrd
+        + core::cmp::PartialEq
+        + nalgebra::SimdPartialOrd
+        + nalgebra::SimdValue
+        + Copy
+        + core::fmt::Debug
+        + 'static,
+> Num for T
 {
 }
 

@@ -673,7 +673,9 @@ pub mod traits {
         };
     }
 
-        impl_max!(usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128);
+        impl_max!(
+            usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128
+        );
         impl_max!(float f32, f64);
     }
 
@@ -703,7 +705,9 @@ pub mod traits {
         };
     }
 
-        impl_min!(usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128);
+        impl_min!(
+            usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128
+        );
         impl_min!(float f32, f64);
     }
 }

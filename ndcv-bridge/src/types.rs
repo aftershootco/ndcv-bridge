@@ -6,25 +6,26 @@ pub trait CvDepth: seal::Sealed + bytemuck::Pod + Default + Copy + num::One + nu
 /// Types that can be used as OpenCV Mat types (combination of depth and channels).
 pub trait CvType: seal::Sealed + bytemuck::Pod + Default {
     type Depth: CvDepth;
-    const CHANNELS: usize;
     fn cv_depth() -> i32 {
         Self::Depth::cv_depth()
     }
-    fn channels() -> i32 {
-        1
-    }
-    fn cv_type() -> i32 {
-        opencv::core::CV_MAKETYPE(Self::cv_depth(), Self::channels())
+
+    fn cv_channels() -> i32 {
+        Self::channels() as i32
     }
 
-    fn splat(value: Self::Depth) -> Self {
-        let len = Self::CHANNELS;
-        if len == 1 {
-            bytemuck::cast(value)
-        } else {
-            todo!()
-        }
+    fn cv_type() -> i32 {
+        opencv::core::CV_MAKETYPE(Self::cv_depth(), Self::cv_channels())
     }
+
+    fn channels() -> usize {
+        1
+    }
+
+    // fn splat(value: Self::Depth) -> Self {
+    //     // This is a bit hacky, but it allows us to create a value of the correct type with all channels set to the same value.
+    //     // We can safely transmute here because we require that the type is Pod and has the same size as its depth times the number of channels.
+    // }
 
     fn zero() -> Self {
         // Self::splat(Self::Depth::zero())
@@ -118,7 +119,6 @@ macro_rules! impl_cv_type {
         $(
             impl CvType for $t {
                 type Depth = $t;
-                const CHANNELS: usize = 1;
             }
         )*
     };
@@ -126,8 +126,7 @@ macro_rules! impl_cv_type {
         $(
             impl CvType for $t {
                 type Depth = $depth;
-                const CHANNELS: usize = $channels;
-                fn channels() -> i32 {
+                fn channels() -> usize {
                     $channels
                 }
             }
@@ -141,9 +140,8 @@ where
     [T; N]: seal::Sealed + Default + bytemuck::Pod,
 {
     type Depth = T;
-    const CHANNELS: usize = N;
-    fn channels() -> i32 {
-        N as i32
+    fn channels() -> usize {
+        N
     }
 }
 
@@ -184,12 +182,11 @@ const _: () = {
         SVector<T, N>: seal::Sealed + Default + bytemuck::Pod,
     {
         type Depth = T;
-        const CHANNELS: usize = N;
-        fn channels() -> i32 {
+        fn channels() -> usize {
             if N > opencv::core::CV_CN_MAX as usize {
                 panic!("Number of channels exceeds OpenCV's maximum");
             }
-            N as i32
+            N
         }
     }
 };

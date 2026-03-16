@@ -1,8 +1,8 @@
 //! <https://docs.rs/opencv/latest/opencv/imgproc/fn.gaussian_blur.html>
+use crate::*;
 use crate::{conversions::*, types::CvType};
 use glam::{DVec2, U16Vec2};
 use ndarray::*;
-use opencv::core::AlgorithmHint as OpencvAlgorithmHint;
 
 #[derive(Debug, thiserror::Error)]
 pub enum GaussianBlurError {
@@ -12,51 +12,13 @@ pub enum GaussianBlurError {
     OpenCvError(#[from] opencv::Error),
 }
 
-#[repr(C)]
-#[derive(Default, Debug, Copy, Clone)]
-pub enum BorderType {
-    #[default]
-    BorderConstant = 0,
-    BorderReplicate = 1,
-    BorderReflect = 2,
-    BorderWrap = 3,
-    BorderReflect101 = 4,
-    BorderTransparent = 5,
-    BorderIsolated = 16,
-}
-
-#[repr(C)]
-#[derive(Default, Debug, Copy, Clone)]
-pub enum AlgorithmHint {
-    #[default]
-    AlgoHintDefault = OpencvAlgorithmHint::ALGO_HINT_DEFAULT as isize,
-    AlgoHintAccurate = OpencvAlgorithmHint::ALGO_HINT_ACCURATE as isize,
-    AlgoHintApprox = OpencvAlgorithmHint::ALGO_HINT_APPROX as isize,
-}
-
-impl AlgorithmHint {
-    pub fn to_opencv(self) -> OpencvAlgorithmHint {
-        match self {
-            AlgorithmHint::AlgoHintDefault => OpencvAlgorithmHint::ALGO_HINT_DEFAULT,
-            AlgorithmHint::AlgoHintAccurate => OpencvAlgorithmHint::ALGO_HINT_ACCURATE,
-            AlgorithmHint::AlgoHintApprox => OpencvAlgorithmHint::ALGO_HINT_APPROX,
-        }
-    }
-}
-
-/// Allowd type depth for GaussianBlur.
+/// Allowed type depth for GaussianBlur.
+/// src: input image; the image can have any number of channels, which are processed independently, but the depth should be CV_8U, CV_16U, CV_16S, CV_32F or CV_64F.
+/// Marker type to ensure only supported type depths are used
 pub trait GaussianBlurAllowedDepth {
-    #[doc(hidden)]
-    fn __sealed() -> crate::sealer::__Sealed__ {
-        crate::sealer::__Sealed__
-    }
+    crate::seal!();
 }
-// src: input image; the image can have any number of channels, which are processed independently, but the depth should be CV_8U, CV_16U, CV_16S, CV_32F or CV_64F.
-impl GaussianBlurAllowedDepth for u8 {}
-impl GaussianBlurAllowedDepth for u16 {}
-impl GaussianBlurAllowedDepth for i16 {}
-impl GaussianBlurAllowedDepth for f32 {}
-impl GaussianBlurAllowedDepth for f64 {}
+crate::seal!(impl, GaussianBlurAllowedDepth, u8, u16, i16, f32, f64);
 
 pub trait NdCvGaussianBlur<T, D>:
     crate::image::NdImage + crate::conversions::NdAsImage<T, D>

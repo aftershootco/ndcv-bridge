@@ -41,7 +41,7 @@ where
         kernel: ndarray::ArrayView2<u8>,
         anchor: Point2<i32>,
         iterations: u16,
-        border_type: crate::gaussian::BorderType,
+        border_type: crate::BorderType,
         border_value: Vector4<f64>,
     ) -> Result<ndarray::Array<T, D>, DilateError>;
 
@@ -58,7 +58,7 @@ where
             kernel,
             Point2::new(-1, -1),
             iterations,
-            crate::gaussian::BorderType::BorderConstant,
+            crate::BorderType::BorderConstant,
             border_value,
         )
     }
@@ -78,7 +78,7 @@ where
         kernel: ndarray::ArrayView2<u8>,
         anchor: Point2<i32>,
         iterations: u16,
-        border_type: crate::gaussian::BorderType,
+        border_type: crate::BorderType,
         border_value: Vector4<f64>,
     ) -> Result<ndarray::Array<T, D>, DilateError> {
         let mut dst = ndarray::Array::zeros(self.dim());
@@ -116,7 +116,7 @@ where
         kernel: ndarray::ArrayView2<u8>,
         anchor: Point2<i32>,
         iterations: u16,
-        border_type: crate::gaussian::BorderType,
+        border_type: crate::BorderType,
         border_value: Vector4<f64>,
     ) -> Result<&mut Self, DilateError>;
 
@@ -131,7 +131,7 @@ where
             kernel,
             Point2::new(-1, -1),
             iterations,
-            crate::gaussian::BorderType::BorderConstant,
+            crate::BorderType::BorderConstant,
             border_value,
         )
     }
@@ -150,7 +150,7 @@ where
         kernel: ndarray::ArrayView2<u8>,
         anchor: Point2<i32>,
         iterations: u16,
-        border_type: crate::gaussian::BorderType,
+        border_type: crate::BorderType,
         border_value: Vector4<f64>,
     ) -> Result<&mut Self, DilateError> {
         let cv_kernel = kernel.as_image_mat()?;
@@ -180,7 +180,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gaussian::BorderType;
+    use crate::BorderType;
     use ndarray::{Array2, Array3};
 
     fn rect_kernel(size: usize) -> Array2<u8> {

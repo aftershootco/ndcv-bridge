@@ -6,6 +6,35 @@ mod inplace;
 pub(crate) mod sealer {
     #[doc(hidden)]
     pub struct __Sealed__;
+
+    #[macro_export]
+    #[doc(hidden)]
+    macro_rules! seal {
+        () => {
+            #[doc(hidden)]
+            fn __sealed() -> $crate::sealer::__Sealed__;
+        };
+        (impl) => {
+            #[doc(hidden)]
+            fn __sealed() -> $crate::sealer::__Sealed__ {
+                $crate::sealer::__Sealed__
+            }
+        };
+        (impl, $name: ident, $($typ: ty),*) => {
+            $(
+                impl $name for $typ {
+                    $crate::seal!(impl);
+                }
+             )*
+        };
+        ($name: ident, $($typ: ty),*) => {
+            pub trait $name {
+                $crate::seal!();
+            }
+            $crate::seal!(impl, $name, $($typ),*);
+
+        };
+    }
 }
 
 pub mod absdiff;
@@ -24,7 +53,7 @@ pub mod types;
 // pub mod codec;
 pub use blur::NdCvBlur;
 pub use dilate::{DilateError, NdCvDilate, NdCvDilateInPlace};
-pub use gaussian::{BorderType, NdCvGaussianBlur, NdCvGaussianBlurInPlace};
+pub use gaussian::{NdCvGaussianBlur, NdCvGaussianBlurInPlace};
 pub use sobel::{Ksize, NdCvSobel, NdCvSobelError, SobelArgs};
 
 pub use contours::{
@@ -56,5 +85,38 @@ pub const fn depth_type(depth: i32) -> &'static str {
         opencv::core::CV_32F => "f32",
         opencv::core::CV_64F => "f64",
         _ => panic!("Unsupported depth"),
+    }
+}
+
+use opencv::core::AlgorithmHint as OpencvAlgorithmHint;
+#[repr(C)]
+#[derive(Default, Debug, Copy, Clone)]
+pub enum BorderType {
+    #[default]
+    BorderConstant = 0,
+    BorderReplicate = 1,
+    BorderReflect = 2,
+    BorderWrap = 3,
+    BorderReflect101 = 4,
+    BorderTransparent = 5,
+    BorderIsolated = 16,
+}
+
+#[repr(C)]
+#[derive(Default, Debug, Copy, Clone)]
+pub enum AlgorithmHint {
+    #[default]
+    AlgoHintDefault = OpencvAlgorithmHint::ALGO_HINT_DEFAULT as isize,
+    AlgoHintAccurate = OpencvAlgorithmHint::ALGO_HINT_ACCURATE as isize,
+    AlgoHintApprox = OpencvAlgorithmHint::ALGO_HINT_APPROX as isize,
+}
+
+impl AlgorithmHint {
+    pub fn to_opencv(self) -> OpencvAlgorithmHint {
+        match self {
+            AlgorithmHint::AlgoHintDefault => OpencvAlgorithmHint::ALGO_HINT_DEFAULT,
+            AlgorithmHint::AlgoHintAccurate => OpencvAlgorithmHint::ALGO_HINT_ACCURATE,
+            AlgorithmHint::AlgoHintApprox => OpencvAlgorithmHint::ALGO_HINT_APPROX,
+        }
     }
 }

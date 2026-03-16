@@ -21,21 +21,6 @@ pub trait CvType: seal::Sealed + bytemuck::Pod + Default {
     fn channels() -> usize {
         1
     }
-
-    // fn splat(value: Self::Depth) -> Self {
-    //     // This is a bit hacky, but it allows us to create a value of the correct type with all channels set to the same value.
-    //     // We can safely transmute here because we require that the type is Pod and has the same size as its depth times the number of channels.
-    // }
-
-    fn zero() -> Self {
-        // Self::splat(Self::Depth::zero())
-        todo!()
-    }
-
-    fn one() -> Self {
-        // Self::splat(Self::Depth::one())
-        todo!()
-    }
 }
 
 pub(crate) mod seal {

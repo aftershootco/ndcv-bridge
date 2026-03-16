@@ -1,11 +1,12 @@
 /// Primitive types that can be used as Type depth for OpenCV Mat.
-pub trait CvDepth: seal::Sealed + bytemuck::Pod + Default {
+pub trait CvDepth: seal::Sealed + bytemuck::Pod + Default + Copy + num::One + num::Zero {
     fn cv_depth() -> i32;
 }
 
 /// Types that can be used as OpenCV Mat types (combination of depth and channels).
 pub trait CvType: seal::Sealed + bytemuck::Pod + Default {
     type Depth: CvDepth;
+    const CHANNELS: usize;
     fn cv_depth() -> i32 {
         Self::Depth::cv_depth()
     }
@@ -14,6 +15,25 @@ pub trait CvType: seal::Sealed + bytemuck::Pod + Default {
     }
     fn cv_type() -> i32 {
         opencv::core::CV_MAKETYPE(Self::cv_depth(), Self::channels())
+    }
+
+    fn splat(value: Self::Depth) -> Self {
+        let len = Self::CHANNELS;
+        if len == 1 {
+            bytemuck::cast(value)
+        } else {
+            todo!()
+        }
+    }
+
+    fn zero() -> Self {
+        // Self::splat(Self::Depth::zero())
+        todo!()
+    }
+
+    fn one() -> Self {
+        // Self::splat(Self::Depth::one())
+        todo!()
     }
 }
 
@@ -98,6 +118,7 @@ macro_rules! impl_cv_type {
         $(
             impl CvType for $t {
                 type Depth = $t;
+                const CHANNELS: usize = 1;
             }
         )*
     };
@@ -105,6 +126,7 @@ macro_rules! impl_cv_type {
         $(
             impl CvType for $t {
                 type Depth = $depth;
+                const CHANNELS: usize = $channels;
                 fn channels() -> i32 {
                     $channels
                 }
@@ -119,6 +141,7 @@ where
     [T; N]: seal::Sealed + Default + bytemuck::Pod,
 {
     type Depth = T;
+    const CHANNELS: usize = N;
     fn channels() -> i32 {
         N as i32
     }
@@ -161,6 +184,7 @@ const _: () = {
         SVector<T, N>: seal::Sealed + Default + bytemuck::Pod,
     {
         type Depth = T;
+        const CHANNELS: usize = N;
         fn channels() -> i32 {
             if N > opencv::core::CV_CN_MAX as usize {
                 panic!("Number of channels exceeds OpenCV's maximum");
@@ -175,3 +199,17 @@ fn test_cv_type() {
     assert_eq!(<u8 as CvType>::cv_type(), opencv::core::CV_8UC1);
     assert_eq!(<glam::Vec3 as CvType>::cv_type(), opencv::core::CV_32FC3);
 }
+
+// use num::{One, Zero};
+// pub trait CvTypeSplat: CvType
+// where
+//     Self::Depth: num::One + num::Zero,
+// {
+//     fn splat(value: Self::Depth) -> Self;
+//     fn zero() -> Self {
+//         Self::splat(Self::Depth::zero())
+//     }
+//     fn one() -> Self {
+//         Self::splat(Self::Depth::one())
+//     }
+// }

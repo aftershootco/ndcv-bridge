@@ -4,11 +4,16 @@ mod blend;
 pub mod dilate;
 mod errors;
 pub mod fir;
-mod image;
+pub mod image;
 mod inplace;
 pub mod percentile;
 mod roi;
 pub use errors::NdCvError;
+
+pub(crate) mod sealer {
+    #[doc(hidden)]
+    pub struct __Sealed__;
+}
 
 #[cfg(feature = "opencv")]
 pub mod absdiff;

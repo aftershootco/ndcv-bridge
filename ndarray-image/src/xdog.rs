@@ -28,7 +28,8 @@
 //! <https://docs.rs/opencv/latest/opencv/imgproc/fn.gaussian_blur.html>
 
 use ndarray::*;
-use ndcv_bridge::{NdCvGaussianBlur, gaussian::BorderType};
+use ndcv_bridge::{NdCvGaussianBlur, gaussian::BorderType, types::CvType};
+use num::Float;
 
 #[derive(Debug, thiserror::Error)]
 pub enum XDoGError {
@@ -157,17 +158,19 @@ mod seal {
 pub trait NdCvXDoG<T, D>:
     ndcv_bridge::image::NdImage + ndcv_bridge::conversions::NdAsImage<T, D>
 where
-    T: ndcv_bridge::types::CvType + seal::Sealed + num::Float + num::FromPrimitive,
+    T: ndcv_bridge::types::CvType + Send + Sync,
+    <T as CvType>::Depth:
+        ndcv_bridge::gaussian::GaussianBlurAllowedDepth + num::Float + num::FromPrimitive,
     D: ndarray::Dimension,
 {
     /// Compute XDoG with full control over all parameters.
-    fn xdog(&self, args: XDoGArgs<T>) -> Result<ndarray::Array<T, D>, XDoGError>
+    fn xdog(&self, args: XDoGArgs<T::Depth>) -> Result<ndarray::Array<T, D>, XDoGError>
     where
         ndarray::Array<T, D>: ndcv_bridge::conversions::NdAsImageMut<T, D>;
 
     /// Convenience: compute a plain (un-thresholded) XDoG with default
     /// parameters, only requiring `sigma`.
-    fn xdog_def(&self, sigma: T) -> Result<ndarray::Array<T, D>, XDoGError>
+    fn xdog_def(&self, sigma: T::Depth) -> Result<ndarray::Array<T, D>, XDoGError>
     where
         ndarray::Array<T, D>: ndcv_bridge::conversions::NdAsImageMut<T, D>,
     {
@@ -180,21 +183,28 @@ where
     T: ndcv_bridge::types::CvType
         + Send
         + Sync
-        + num::Zero
         + num::One
+        + core::ops::Add<<T as CvType>::Depth, Output = T>
+        + core::ops::Sub<<T as CvType>::Depth, Output = T>,
+    <T as CvType>::Depth: seal::Sealed
+        + num::Float
+        + num::FromPrimitive
+        + Send
+        + Sync
+        + num::Zero
+        // + num::One
         + num::ToPrimitive
         + seal::Sealed
-        + ndcv_bridge::gaussian::seal::Sealed
-        + core::ops::Mul<Output = T>,
-    T: ndcv_bridge::types::CvType + seal::Sealed + num::Float + num::FromPrimitive,
+        + core::ops::Mul<Output = T>
+        + ndcv_bridge::gaussian::GaussianBlurAllowedDepth,
     D: ndarray::Dimension,
     S: ndarray::RawData + ndarray::Data<Elem = T>,
     ndarray::ArrayBase<S, D>:
         ndcv_bridge::image::NdImage + ndcv_bridge::conversions::NdAsImage<T, D>,
     ndarray::Array<T, D>: ndcv_bridge::conversions::NdAsImageMut<T, D>,
-    ndarray::ArrayBase<S, D>: NdCvGaussianBlur<T, D>,
+    Self: NdCvGaussianBlur<T, D>,
 {
-    fn xdog(&self, args: XDoGArgs<T>) -> Result<ndarray::Array<T, D>, XDoGError>
+    fn xdog(&self, args: XDoGArgs<T::Depth>) -> Result<ndarray::Array<T, D>, XDoGError>
     where
         ndarray::Array<T, D>: ndcv_bridge::conversions::NdAsImageMut<T, D>,
     {

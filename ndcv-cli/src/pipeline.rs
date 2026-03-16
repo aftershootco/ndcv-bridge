@@ -12,7 +12,7 @@ pub enum PipelineOp {
     Resize(ops::resize::ResizeArgs),
     Color(ops::color::ColorArgs),
     Orient(ops::orient::OrientArgs),
-    Xdog(ops::xdog::XDoGArgs),
+    // Xdog(ops::xdog::XDoGArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -36,7 +36,7 @@ impl PipelineOp {
             PipelineOp::Resize(args) => ops::resize::run(image, args),
             PipelineOp::Color(args) => ops::color::run(image, args),
             PipelineOp::Orient(args) => ops::orient::run(image, args),
-            PipelineOp::Xdog(args) => ops::xdog::run(image, args),
+            // PipelineOp::Xdog(args) => ops::xdog::run(image, args),
         }
     }
 
@@ -47,7 +47,7 @@ impl PipelineOp {
             PipelineOp::Resize(_) => "resize",
             PipelineOp::Color(_) => "color",
             PipelineOp::Orient(_) => "orient",
-            PipelineOp::Xdog(_) => "xdog",
+            // PipelineOp::Xdog(_) => "xdog",
         }
     }
 }
@@ -164,15 +164,15 @@ fn parse_single_op(name: &str, args: &[String]) -> Result<PipelineOp> {
             let w = Wrapper::try_parse_from(&argv)?;
             Ok(PipelineOp::Orient(w.inner))
         }
-        "xdog" => {
-            #[derive(Parser)]
-            struct Wrapper {
-                #[command(flatten)]
-                inner: ops::xdog::XDoGArgs,
-            }
-            let w = Wrapper::try_parse_from(&argv)?;
-            Ok(PipelineOp::Xdog(w.inner))
-        }
+        // "xdog" => {
+        //     #[derive(Parser)]
+        //     struct Wrapper {
+        //         #[command(flatten)]
+        //         inner: ops::xdog::XDoGArgs,
+        //     }
+        //     let w = Wrapper::try_parse_from(&argv)?;
+        //     Ok(PipelineOp::Xdog(w.inner))
+        // }
         _ => bail!(
             "unknown operation '{}' (available: blur, sobel, resize, color, orient, xdog)",
             name

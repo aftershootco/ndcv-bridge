@@ -1,5 +1,5 @@
 //! <https://docs.rs/opencv/latest/opencv/imgproc/fn.gaussian_blur.html>
-use crate::conversions::*;
+use crate::{conversions::*, types::CvType};
 use glam::{DVec2, U16Vec2};
 use ndarray::*;
 use opencv::core::AlgorithmHint as OpencvAlgorithmHint;
@@ -44,18 +44,26 @@ impl AlgorithmHint {
     }
 }
 
-pub(crate) mod seal {
-    pub trait Sealed {}
-    // src: input image; the image can have any number of channels, which are processed independently, but the depth should be CV_8U, CV_16U, CV_16S, CV_32F or CV_64F.
-    impl Sealed for u8 {}
-    impl Sealed for u16 {}
-    impl Sealed for i16 {}
-    impl Sealed for f32 {}
-    impl Sealed for f64 {}
+/// Allowd type depth for GaussianBlur.
+pub trait GaussianBlurAllowedDepth {
+    #[doc(hidden)]
+    fn __sealed() -> crate::sealer::__Sealed__ {
+        crate::sealer::__Sealed__
+    }
 }
+// src: input image; the image can have any number of channels, which are processed independently, but the depth should be CV_8U, CV_16U, CV_16S, CV_32F or CV_64F.
+impl GaussianBlurAllowedDepth for u8 {}
+impl GaussianBlurAllowedDepth for u16 {}
+impl GaussianBlurAllowedDepth for i16 {}
+impl GaussianBlurAllowedDepth for f32 {}
+impl GaussianBlurAllowedDepth for f64 {}
 
-pub trait NdCvGaussianBlur<T: crate::types::CvType + seal::Sealed, D: ndarray::Dimension>:
+pub trait NdCvGaussianBlur<T, D>:
     crate::image::NdImage + crate::conversions::NdAsImage<T, D>
+where
+    T: CvType,
+    <T as CvType>::Depth: GaussianBlurAllowedDepth,
+    D: ndarray::Dimension,
 {
     fn gaussian_blur(
         &self,
@@ -72,14 +80,14 @@ pub trait NdCvGaussianBlur<T: crate::types::CvType + seal::Sealed, D: ndarray::D
     }
 }
 
-impl<
-    T: crate::types::CvType + num::Zero + seal::Sealed,
+impl<T, S, D> NdCvGaussianBlur<T, D> for ArrayBase<S, D>
+where
+    T: CvType + num::Zero,
+    <T as CvType>::Depth: GaussianBlurAllowedDepth,
     S: ndarray::RawData + ndarray::Data<Elem = T>,
     D: ndarray::Dimension,
-> NdCvGaussianBlur<T, D> for ArrayBase<S, D>
-where
-    ndarray::ArrayBase<S, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>,
     ndarray::Array<T, D>: crate::conversions::NdAsImageMut<T, D>,
+    ndarray::ArrayBase<S, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>,
 {
     fn gaussian_blur(
         &self,
@@ -110,8 +118,12 @@ where
 
 /// For smaller values it is faster to use the allocated version
 /// For example in a 4k f32 image this is about 50% faster than the allocated one
-pub trait NdCvGaussianBlurInPlace<T: crate::types::CvType + seal::Sealed, D: ndarray::Dimension>:
+pub trait NdCvGaussianBlurInPlace<T, D>:
     crate::image::NdImage + crate::conversions::NdAsImageMut<T, D>
+where
+    T: CvType,
+    <T as CvType>::Depth: GaussianBlurAllowedDepth,
+    D: ndarray::Dimension,
 {
     fn gaussian_blur_inplace(
         &mut self,
@@ -128,13 +140,13 @@ pub trait NdCvGaussianBlurInPlace<T: crate::types::CvType + seal::Sealed, D: nda
     }
 }
 
-impl<
-    T: crate::types::CvType + num::Zero + seal::Sealed,
-    S: ndarray::RawData + ndarray::DataMut<Elem = T>,
-    D: ndarray::Dimension,
-> NdCvGaussianBlurInPlace<T, D> for ArrayBase<S, D>
+impl<T, S, D> NdCvGaussianBlurInPlace<T, D> for ArrayBase<S, D>
 where
     Self: crate::image::NdImage + crate::conversions::NdAsImageMut<T, D>,
+    T: CvType + num::Zero,
+    <T as CvType>::Depth: GaussianBlurAllowedDepth,
+    S: ndarray::RawData + ndarray::DataMut<Elem = T>,
+    D: ndarray::Dimension,
 {
     fn gaussian_blur_inplace(
         &mut self,

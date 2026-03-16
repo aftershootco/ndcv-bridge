@@ -1188,6 +1188,7 @@ name = "ndarray-image"
 version = "0.1.0"
 dependencies = [
  "derive_builder",
+ "glam 0.32.0",
  "image",
  "ndarray",
  "ndcv-bridge",

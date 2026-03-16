@@ -12,7 +12,6 @@ libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
 ndarray = "0.16"
 bytemuck = "1"
-bounding-box = { path = "../../bounding-box" }
 
 [dependencies.ndcv-bridge]
 path = ".."
@@ -22,31 +21,6 @@ members = ["."]
 
 [profile.release]
 debug = 1
-
-[[bin]]
-name = "fuzz_orient"
-path = "fuzz_targets/fuzz_orient.rs"
-doc = false
-
-[[bin]]
-name = "fuzz_percentile"
-path = "fuzz_targets/fuzz_percentile.rs"
-doc = false
-
-[[bin]]
-name = "fuzz_blend"
-path = "fuzz_targets/fuzz_blend.rs"
-doc = false
-
-[[bin]]
-name = "fuzz_fir"
-path = "fuzz_targets/fuzz_fir.rs"
-doc = false
-
-[[bin]]
-name = "fuzz_roi"
-path = "fuzz_targets/fuzz_roi.rs"
-doc = false
 
 [[bin]]
 name = "fuzz_conversions"

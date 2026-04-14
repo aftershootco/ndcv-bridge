@@ -23,17 +23,11 @@ pub trait NdCvNormalize<T: bytemuck::Pod + num::Zero, D: ndarray::Dimension>:
         beta: f64,
         norm_type: NormType,
         dtype: i32,
-        mask: &ndarray::Array2<T>,
+        mask: &Option<ndarray::Array2<T>>,
     ) -> Result<ndarray::Array<T, D>, NdCvError>;
 
     fn normalize_def(&self) -> Result<ndarray::Array<T, D>, NdCvError> {
-        self.normalize(
-            -1.,
-            1.,
-            NormType::MinMax,
-            -1,
-            &ndarray::Array2::<T>::zeros((0, 0)),
-        )
+        self.normalize(-1., 1., NormType::MinMax, -1, &None)
     }
 }
 
@@ -46,25 +40,42 @@ impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvNormalize<T, 
         beta: f64,
         norm_type: NormType,
         dtype: i32,
-        mask: &ndarray::Array2<T>,
+        mask: &Option<ndarray::Array2<T>>,
     ) -> error_stack::Result<ndarray::Array<T, ndarray::Ix3>, NdCvError> {
         let mat = self.as_image_mat().change_context(NdCvError)?;
-        let mask = mask
-            .as_image_mat()
-            .change_context(NdCvError)?
-            .clone_pointee();
         let mut dest = ndarray::Array3::zeros((self.shape()[0], self.shape()[1], self.shape()[2]));
         let mut dest_mat = dest.as_image_mat_mut().change_context(NdCvError)?;
-        opencv::core::normalize(
-            mat.as_ref(),
-            dest_mat.as_mut(),
-            alpha,
-            beta,
-            norm_type as i32,
-            dtype,
-            &mask,
-        )
-        .change_context(NdCvError)?;
+
+        match mask {
+            Some(mask) => {
+                let mask = mask.as_image_mat().change_context(NdCvError)?;
+
+                opencv::core::normalize(
+                    mat.as_ref(),
+                    dest_mat.as_mut(),
+                    alpha,
+                    beta,
+                    norm_type as i32,
+                    dtype,
+                    mask.as_ref(),
+                )
+                .change_context(NdCvError)?;
+            }
+
+            None => {
+                let mask = opencv::core::no_array();
+                opencv::core::normalize(
+                    mat.as_ref(),
+                    dest_mat.as_mut(),
+                    alpha,
+                    beta,
+                    norm_type as i32,
+                    dtype,
+                    &mask,
+                )
+                .change_context(NdCvError)?;
+            }
+        };
 
         Ok(dest)
     }
@@ -79,22 +90,43 @@ impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvNormalize<T, 
         beta: f64,
         norm_type: NormType,
         dtype: i32,
-        mask: &ndarray::Array2<T>,
+        mask: &Option<ndarray::Array2<T>>,
     ) -> error_stack::Result<ndarray::Array<T, ndarray::Ix2>, NdCvError> {
         let mat = self.as_image_mat().change_context(NdCvError)?;
-        let mask = mask.as_image_mat().change_context(NdCvError)?;
         let mut dest = ndarray::Array2::zeros((self.shape()[0], self.shape()[1]));
         let mut dest_mat = dest.as_image_mat_mut().change_context(NdCvError)?;
-        opencv::core::normalize(
-            mat.as_ref(),
-            dest_mat.as_mut(),
-            alpha,
-            beta,
-            norm_type as i32,
-            dtype,
-            mask.as_ref(),
-        )
-        .change_context(NdCvError)?;
+
+        match mask {
+            Some(mask) => {
+                let mask = mask.as_image_mat().change_context(NdCvError)?;
+
+                opencv::core::normalize(
+                    mat.as_ref(),
+                    dest_mat.as_mut(),
+                    alpha,
+                    beta,
+                    norm_type as i32,
+                    dtype,
+                    mask.as_ref(),
+                )
+                .change_context(NdCvError)?;
+            }
+
+            None => {
+                let mask = opencv::core::no_array();
+
+                opencv::core::normalize(
+                    mat.as_ref(),
+                    dest_mat.as_mut(),
+                    alpha,
+                    beta,
+                    norm_type as i32,
+                    dtype,
+                    &mask,
+                )
+                .change_context(NdCvError)?;
+            }
+        };
 
         Ok(dest)
     }

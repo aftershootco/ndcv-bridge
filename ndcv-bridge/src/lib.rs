@@ -11,6 +11,10 @@ mod roi;
 pub use errors::NdCvError;
 
 #[cfg(feature = "opencv")]
+pub mod affine;
+#[cfg(feature = "opencv")]
+pub mod blob;
+#[cfg(feature = "opencv")]
 pub mod blur;
 #[cfg(feature = "opencv")]
 pub mod bounding_rect;
@@ -25,15 +29,11 @@ pub mod conversions;
 #[cfg(feature = "opencv")]
 pub mod gaussian;
 #[cfg(feature = "opencv")]
+pub mod morphology;
+#[cfg(feature = "opencv")]
 pub mod normalize;
 #[cfg(feature = "opencv")]
 pub mod resize;
-#[cfg(feature = "opencv")]
-pub mod warp_affine;
-#[cfg(feature = "opencv")]
-pub mod blob;
-#[cfg(feature = "opencv")]
-pub mod morphology;
 
 // pub mod codec;
 pub mod orient;

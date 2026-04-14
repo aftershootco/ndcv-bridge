@@ -6,7 +6,7 @@ pub trait NdCvWarpAffine<T: bytemuck::Pod + num::Zero, D: ndarray::Dimension>:
 {
     fn warp_affine(
         &self,
-        transformation: ndarray::Array2<f32>,
+        transformation: &ndarray::Array2<f32>,
         output_size: (usize, usize),
         interpolation: Interpolation,
         border_type: BorderType,
@@ -19,7 +19,7 @@ impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvWarpAffine<T,
 {
     fn warp_affine(
         &self,
-        transformation: ndarray::Array2<f32>,
+        transformation: &ndarray::Array2<f32>,
         output_size: (usize, usize),
         interpolation: Interpolation,
         border_type: BorderType,
@@ -50,7 +50,7 @@ impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvWarpAffine<T,
 {
     fn warp_affine(
         &self,
-        transformation: ndarray::Array2<f32>,
+        transformation: &ndarray::Array2<f32>,
         output_size: (usize, usize),
         interpolation: Interpolation,
         border_type: BorderType,

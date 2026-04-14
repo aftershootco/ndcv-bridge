@@ -26,6 +26,10 @@ pub mod conversions;
 pub mod gaussian;
 #[cfg(feature = "opencv")]
 pub mod resize;
+#[cfg(feature = "opencv")]
+pub mod normalize;
+#[cfg(feature = "opencv")]
+pub mod warp_affine;
 
 // pub mod codec;
 pub mod orient;

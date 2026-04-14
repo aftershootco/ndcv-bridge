@@ -39,8 +39,8 @@ pub use dilate::{DilateError, NdCvDilate, NdCvDilateInPlace};
 pub use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 pub use fir::NdFir;
 pub use gaussian::{BorderType, NdCvGaussianBlur, NdCvGaussianBlurInPlace};
-pub use roi::{NdRoiZeroPadded, Roi as NdRoi, RoiMut as NdRoiMut};
 pub use image::NdImage;
+pub use roi::{NdRoiZeroPadded, Roi as NdRoi, RoiMut as NdRoiMut};
 
 #[cfg(feature = "opencv")]
 pub use contours::{

@@ -1,4 +1,4 @@
-use crate::{BorderType, Interpolation, NdAsImage, NdAsImageMut, prelude_::*};
+use crate::{BorderType, Interpolation, NdAsImage, NdAsImageMut, NdImage, prelude_::*};
 use error_stack::ResultExt;
 
 pub trait NdCvWarpAffine<T: bytemuck::Pod + num::Zero, D: ndarray::Dimension>:
@@ -62,7 +62,7 @@ where
     ) -> error_stack::Result<ndarray::Array<T, ndarray::Ix3>, NdCvError> {
         let mat = self.as_image_mat().change_context(NdCvError)?;
         let transformation = transformation.as_image_mat().change_context(NdCvError)?;
-        let mut dest = ndarray::Array2::zeros(output_size);
+        let mut dest = ndarray::Array3::zeros((output_size.0, output_size.1, self.channels()));
         let mut dest_mat = dest.as_image_mat_mut().change_context(NdCvError)?;
 
         opencv::imgproc::warp_affine(

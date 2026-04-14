@@ -14,6 +14,29 @@ pub trait NdCvWarpAffine<T: bytemuck::Pod + num::Zero, D: ndarray::Dimension>:
     ) -> Result<ndarray::Array<T, D>, NdCvError>;
 }
 
+pub trait NdCvInvertWarpAffine<T: bytemuck::Pod + num::Zero, D: ndarray::Dimension>:
+    crate::image::NdImage + crate::conversions::NdAsImage<T, D>
+{
+    fn invert_warp_affine(&self) -> Result<ndarray::Array<T, D>, NdCvError>;
+}
+
+impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvInvertWarpAffine<T, ndarray::Ix2>
+    for ndarray::ArrayBase<S, ndarray::Ix2>
+{
+    fn invert_warp_affine(&self) -> Result<ndarray::Array<T, ndarray::Ix2>, NdCvError> {
+        let mat = self.as_image_mat().change_context(NdCvError)?;
+        let mut dest = ndarray::Array2::zeros((self.shape()[0], self.shape()[1]));
+
+        opencv::imgproc::invert_affine_transform(
+            mat.as_ref(),
+            dest.as_image_mat_mut().change_context(NdCvError)?.as_mut(),
+        )
+        .change_context(NdCvError)?;
+
+        Ok(dest)
+    }
+}
+
 impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvWarpAffine<T, ndarray::Ix2>
     for ndarray::ArrayBase<S, ndarray::Ix2>
 {

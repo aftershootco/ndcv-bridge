@@ -30,6 +30,8 @@ pub mod normalize;
 pub mod resize;
 #[cfg(feature = "opencv")]
 pub mod warp_affine;
+#[cfg(feature = "opencv")]
+pub mod blob;
 
 // pub mod codec;
 pub mod orient;

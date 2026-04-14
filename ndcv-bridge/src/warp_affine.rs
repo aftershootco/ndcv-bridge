@@ -10,14 +10,12 @@ pub trait NdCvWarpAffine<T: bytemuck::Pod + num::Zero, D: ndarray::Dimension>:
         output_size: (usize, usize),
         interpolation: Interpolation,
         border_type: BorderType,
-        border_value: T,
+        border_value: (f64, f64, f64, f64),
     ) -> Result<ndarray::Array<T, D>, NdCvError>;
 }
 
 impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvWarpAffine<T, ndarray::Ix2>
     for ndarray::ArrayBase<S, ndarray::Ix2>
-where
-    opencv::core::VecN<f64, 4>: From<T>,
 {
     fn warp_affine(
         &self,
@@ -25,7 +23,7 @@ where
         output_size: (usize, usize),
         interpolation: Interpolation,
         border_type: BorderType,
-        border_value: T,
+        border_value: (f64, f64, f64, f64),
     ) -> error_stack::Result<ndarray::Array<T, ndarray::Ix2>, NdCvError> {
         let mat = self.as_image_mat().change_context(NdCvError)?;
         let transformation = transformation.as_image_mat().change_context(NdCvError)?;
@@ -49,8 +47,6 @@ where
 
 impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvWarpAffine<T, ndarray::Ix3>
     for ndarray::ArrayBase<S, ndarray::Ix3>
-where
-    opencv::core::VecN<f64, 4>: From<T>,
 {
     fn warp_affine(
         &self,
@@ -58,7 +54,7 @@ where
         output_size: (usize, usize),
         interpolation: Interpolation,
         border_type: BorderType,
-        border_value: T,
+        border_value: (f64, f64, f64, f64),
     ) -> error_stack::Result<ndarray::Array<T, ndarray::Ix3>, NdCvError> {
         let mat = self.as_image_mat().change_context(NdCvError)?;
         let transformation = transformation.as_image_mat().change_context(NdCvError)?;

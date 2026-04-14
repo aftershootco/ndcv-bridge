@@ -25,9 +25,9 @@ pub mod conversions;
 #[cfg(feature = "opencv")]
 pub mod gaussian;
 #[cfg(feature = "opencv")]
-pub mod resize;
-#[cfg(feature = "opencv")]
 pub mod normalize;
+#[cfg(feature = "opencv")]
+pub mod resize;
 #[cfg(feature = "opencv")]
 pub mod warp_affine;
 
@@ -57,7 +57,11 @@ pub use connected_components::{Connectivity, NdCvConnectedComponents};
 #[cfg(feature = "opencv")]
 pub use conversions::{MatAsNd, NdAsImage, NdAsImageMut, NdAsMat, NdAsMatMut};
 #[cfg(feature = "opencv")]
+pub use normalize::{NdCvNormalize, NormType};
+#[cfg(feature = "opencv")]
 pub use resize::{Interpolation, NdCvResize};
+#[cfg(feature = "opencv")]
+pub use warp_affine::NdCvWarpAffine;
 
 pub(crate) mod prelude_ {
     pub use crate::errors::NdCvError;

@@ -80,3 +80,39 @@ impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvMorphologyEx<
         Ok(dst)
     }
 }
+
+impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvMorphologyEx<T, ndarray::Ix2>
+    for ndarray::ArrayBase<S, ndarray::Ix2>
+{
+    fn morpohology_ex(
+        &self,
+        morph_type: MorphType,
+        kernel: &ndarray::Array2<u8>,
+        iterations: usize,
+        anchor: Point2<i32>,
+        border_type: BorderType,
+        border_value: Vector4<f64>,
+    ) -> error_stack::Result<ndarray::Array<T, ndarray::Ix2>, NdCvError> {
+        let img_mat = self.as_image_mat().change_context(NdCvError)?;
+        let mut dst = ndarray::Array::zeros(self.dim());
+
+        opencv::imgproc::morphology_ex(
+            img_mat.as_ref(),
+            dst.as_image_mat_mut().change_context(NdCvError)?.as_mut(),
+            morph_type as i32,
+            kernel.as_image_mat().change_context(NdCvError)?.as_ref(),
+            opencv::core::Point::new(anchor.x, anchor.y),
+            iterations as i32,
+            border_type as i32,
+            opencv::core::VecN([
+                border_value.x,
+                border_value.y,
+                border_value.z,
+                border_value.w,
+            ]),
+        )
+        .change_context(NdCvError)?;
+
+        Ok(dst)
+    }
+}

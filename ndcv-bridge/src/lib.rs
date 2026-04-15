@@ -66,7 +66,7 @@ pub use normalize::{NdCvNormalize, NormType};
 #[cfg(feature = "opencv")]
 pub use resize::{Interpolation, NdCvResize};
 #[cfg(feature = "opencv")]
-pub use warp_affine::NdCvWarpAffine;
+pub use affine::NdCvWarpAffine;
 
 pub(crate) mod prelude_ {
     pub use crate::errors::NdCvError;

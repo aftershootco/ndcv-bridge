@@ -73,6 +73,7 @@ impl ConversionError {
 }
 
 impl From<ConversionErrorKind> for ConversionError {
+    #[track_caller]
     fn from(kind: ConversionErrorKind) -> Self {
         ConversionError {
             kind,

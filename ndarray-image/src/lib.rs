@@ -90,6 +90,7 @@ mod gray_alpha8 {
         let data = image.into_raw();
         ndarray::Array3::from_shape_vec((height as usize, width as usize, 2), data)
     }
+
     pub(super) fn ndarray_to_image(
         array: &ndarray::ArrayView3<u8>,
     ) -> Result<image::GrayAlphaImage> {
@@ -140,34 +141,6 @@ pub trait ImageToNdarray {
     fn as_ndarray<'a>(&'a self) -> Result<Self::RefOutput<'a>>;
     fn to_ndarray(&self) -> Result<Self::OwnedOutput>;
     fn into_ndarray(self) -> Result<Self::OwnedOutput>;
-}
-
-pub trait NdarrayToImage<ImageOutput> {
-    fn to_image(&self) -> Result<ImageOutput>;
-}
-
-impl NdarrayToImage<image::RgbImage> for ndarray::ArrayView3<'_, u8> {
-    fn to_image(&self) -> Result<image::RgbImage> {
-        rgb8::ndarray_to_image(self)
-    }
-}
-
-impl NdarrayToImage<image::RgbaImage> for ndarray::ArrayView3<'_, u8> {
-    fn to_image(&self) -> Result<image::RgbaImage> {
-        rgba8::ndarray_to_image(self)
-    }
-}
-
-impl NdarrayToImage<image::GrayImage> for ndarray::ArrayView2<'_, u8> {
-    fn to_image(&self) -> Result<image::GrayImage> {
-        gray8::ndarray_to_image(self)
-    }
-}
-
-impl NdarrayToImage<image::GrayAlphaImage> for ndarray::ArrayView3<'_, u8> {
-    fn to_image(&self) -> Result<image::GrayAlphaImage> {
-        gray_alpha8::ndarray_to_image(self)
-    }
 }
 
 impl ImageToNdarray for image::RgbImage {
@@ -252,5 +225,111 @@ impl ImageToNdarray for image::DynamicImage {
 
     fn into_ndarray(self) -> Result<Self::OwnedOutput> {
         dynamic_image::image_into_ndarray(self)
+    }
+}
+
+pub trait NdarrayToImage<ImageOutput> {
+    fn to_image(&self) -> Result<ImageOutput>;
+}
+
+impl NdarrayToImage<image::RgbImage> for ndarray::ArrayView3<'_, u8> {
+    fn to_image(&self) -> Result<image::RgbImage> {
+        rgb8::ndarray_to_image(self)
+    }
+}
+
+impl NdarrayToImage<image::RgbaImage> for ndarray::ArrayView3<'_, u8> {
+    fn to_image(&self) -> Result<image::RgbaImage> {
+        rgba8::ndarray_to_image(self)
+    }
+}
+
+impl NdarrayToImage<image::GrayImage> for ndarray::ArrayView2<'_, u8> {
+    fn to_image(&self) -> Result<image::GrayImage> {
+        gray8::ndarray_to_image(self)
+    }
+}
+
+impl NdarrayToImage<image::GrayAlphaImage> for ndarray::ArrayView3<'_, u8> {
+    fn to_image(&self) -> Result<image::GrayAlphaImage> {
+        gray_alpha8::ndarray_to_image(self)
+    }
+}
+
+impl NdarrayToImage<image::DynamicImage> for ndarray::ArrayViewD<'_, u8> {
+    fn to_image(&self) -> Result<image::DynamicImage> {
+        match self.ndim() {
+            2 => {
+                let gray_image = gray8::ndarray_to_image(&self.view().into_dimensionality()?)?;
+                Ok(image::DynamicImage::ImageLuma8(gray_image))
+            }
+            3 => {
+                let shape = self.shape();
+                match shape[2] {
+                    2 => {
+                        let gray_alpha_image =
+                            gray_alpha8::ndarray_to_image(&self.view().into_dimensionality()?)?;
+                        Ok(image::DynamicImage::ImageLumaA8(gray_alpha_image))
+                    }
+                    3 => {
+                        let rgb_image =
+                            rgb8::ndarray_to_image(&self.view().into_dimensionality()?)?;
+                        Ok(image::DynamicImage::ImageRgb8(rgb_image))
+                    }
+                    4 => {
+                        let rgba_image =
+                            rgba8::ndarray_to_image(&self.view().into_dimensionality()?)?;
+                        Ok(image::DynamicImage::ImageRgba8(rgba_image))
+                    }
+                    _ => Err(shape_error()),
+                }
+            }
+            _ => Err(shape_error()),
+        }
+    }
+}
+
+impl NdarrayToImage<image::DynamicImage> for ndarray::ArrayD<u8> {
+    fn to_image(&self) -> Result<image::DynamicImage> {
+        self.view().to_image()
+    }
+}
+
+impl NdarrayToImage<image::DynamicImage> for ndarray::ArrayView3<'_, u8> {
+    fn to_image(&self) -> Result<image::DynamicImage> {
+        match self.dim() {
+            (_, _, 2) => {
+                let gray_alpha_image = gray_alpha8::ndarray_to_image(&self.view())?;
+                Ok(image::DynamicImage::ImageLumaA8(gray_alpha_image))
+            }
+            (_, _, 3) => {
+                let rgb_image = rgb8::ndarray_to_image(&self.view())?;
+                Ok(image::DynamicImage::ImageRgb8(rgb_image))
+            }
+            (_, _, 4) => {
+                let rgba_image = rgba8::ndarray_to_image(&self.view())?;
+                Ok(image::DynamicImage::ImageRgba8(rgba_image))
+            }
+            _ => Err(shape_error()),
+        }
+    }
+}
+
+impl NdarrayToImage<image::DynamicImage> for ndarray::ArrayView2<'_, u8> {
+    fn to_image(&self) -> Result<image::DynamicImage> {
+        let gray_image = gray8::ndarray_to_image(&self.view())?;
+        Ok(image::DynamicImage::ImageLuma8(gray_image))
+    }
+}
+
+impl NdarrayToImage<image::DynamicImage> for ndarray::Array3<u8> {
+    fn to_image(&self) -> Result<image::DynamicImage> {
+        self.view().to_image()
+    }
+}
+
+impl NdarrayToImage<image::DynamicImage> for ndarray::Array2<u8> {
+    fn to_image(&self) -> Result<image::DynamicImage> {
+        self.view().to_image()
     }
 }

@@ -405,7 +405,12 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         let inter_max = lhs_max.inf(&rhs_max);
         if inter_max >= inter_min {
             let intersection = Aabb::new(inter_min, inter_max).measure();
-            intersection / (self.measure() + other.measure() - intersection)
+            let union = self.measure() + other.measure() - intersection;
+            if union == T::zero() {
+                T::zero()
+            } else {
+                intersection / union
+            }
         } else {
             T::zero()
         }

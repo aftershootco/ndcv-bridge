@@ -6,10 +6,8 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 bounding-box.workspace = true
-nalgebra.workspace = true
+nalgebra = { workspace = true, features = ["bytemuck"], optional = true }
 bytemuck.workspace = true
-error-stack.workspace = true
-fast_image_resize.workspace = true
 ndarray = { workspace = true, features = ["rayon"] }
 num.workspace = true
 opencv = { workspace = true, optional = true }
@@ -20,6 +18,8 @@ wide = "1.1.1"
 tap = { workspace = true }
 img-parts.workspace = true
 pretty_assertions = "1.4.1"
+derive_builder = "0.20.2"
+glam = { version = "0.32.0", features = ["bytemuck"], optional = true }
 
 [dev-dependencies]
 divan.workspace = true
@@ -27,7 +27,9 @@ ndarray-npy.workspace = true
 
 [features]
 opencv = ["dep:opencv"]
-default = ["opencv"]
+glam = ["dep:glam"]
+nalgebra = ["dep:nalgebra"]
+default = ["opencv", "glam", "nalgebra"]
 
 
 [[bench]]

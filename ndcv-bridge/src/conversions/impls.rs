@@ -1,10 +1,11 @@
+use crate::types::CvType;
+
 use super::ConversionError;
 use super::ConversionErrorKind;
-use super::type_depth;
 use core::ffi::*;
 use opencv::core::prelude::*;
 pub(crate) unsafe fn ndarray_to_mat_regular<
-    T,
+    T: CvType,
     S: ndarray::Data<Elem = T>,
     D: ndarray::Dimension,
 >(
@@ -33,7 +34,7 @@ pub(crate) unsafe fn ndarray_to_mat_regular<
 
     let data_ptr = input.as_ptr() as *const c_void;
 
-    let typ = opencv::core::CV_MAKETYPE(type_depth::<T>(), 1);
+    let typ = opencv::core::CV_MAKETYPE(<T as CvType>::cv_depth(), 1);
     let mat = unsafe {
         opencv::core::Mat::new_nd_with_data_unsafe(
             size.as_slice(),
@@ -47,7 +48,7 @@ pub(crate) unsafe fn ndarray_to_mat_regular<
 }
 
 pub(crate) unsafe fn ndarray_to_mat_consolidated<
-    T,
+    T: CvType,
     S: ndarray::Data<Elem = T>,
     D: ndarray::Dimension,
 >(
@@ -94,7 +95,7 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
 
     let data_ptr = input.as_ptr() as *const c_void;
 
-    let typ = opencv::core::CV_MAKETYPE(type_depth::<T>(), channels as i32);
+    let typ = opencv::core::CV_MAKETYPE(<T as CvType>::cv_depth(), channels as i32);
 
     let mat = unsafe {
         opencv::core::Mat::new_nd_with_data_unsafe(
@@ -108,25 +109,17 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
     Ok(mat)
 }
 
-pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
+pub(crate) unsafe fn mat_to_ndarray<T: CvType, D: ndarray::Dimension>(
     mat: &opencv::core::Mat,
 ) -> Result<ndarray::ArrayView<'_, T, D>, ConversionError> {
     let depth = mat.depth();
-    if type_depth::<T>() != depth {
+    if crate::type_depth::<T>() != depth {
         Err(ConversionErrorKind::TypeMismatch {
             expected: std::any::type_name::<T>()
                 .rsplit_once("::")
-                .expect("Impossible")
-                .1,
+                .map_or_else(|| std::any::type_name::<T>(), |(_, name)| name),
             got: crate::depth_type(depth),
         })?;
-        // return Err(Report::new(ConversionError).attach(format!(
-        //     "Expected type Mat<{}> ({}), got Mat<{}> ({})",
-        //     std::any::type_name::<T>(),
-        //     type_depth::<T>(),
-        //     crate::depth_type(depth),
-        //     depth,
-        // )));
     }
 
     let channels = mat.channels();

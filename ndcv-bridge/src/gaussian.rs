@@ -1,7 +1,8 @@
 //! <https://docs.rs/opencv/latest/opencv/imgproc/fn.gaussian_blur.html>
-use crate::conversions::*;
+use crate::*;
+use crate::{conversions::*, types::CvType};
+use glam::{DVec2, U16Vec2};
 use ndarray::*;
-use opencv::core::AlgorithmHint as OpencvAlgorithmHint;
 
 #[derive(Debug, thiserror::Error)]
 pub enum GaussianBlurError {
@@ -11,95 +12,65 @@ pub enum GaussianBlurError {
     OpenCvError(#[from] opencv::Error),
 }
 
-#[repr(C)]
-#[derive(Default, Debug, Copy, Clone)]
-pub enum BorderType {
-    #[default]
-    BorderConstant = 0,
-    BorderReplicate = 1,
-    BorderReflect = 2,
-    BorderWrap = 3,
-    BorderReflect101 = 4,
-    BorderTransparent = 5,
-    BorderIsolated = 16,
+/// Allowed type depth for GaussianBlur.
+/// src: input image; the image can have any number of channels, which are processed independently, but the depth should be CV_8U, CV_16U, CV_16S, CV_32F or CV_64F.
+/// Marker type to ensure only supported type depths are used
+pub trait GaussianBlurAllowedDepth {
+    crate::seal!();
 }
+crate::seal!(impl, GaussianBlurAllowedDepth, u8, u16, i16, f32, f64);
 
-#[repr(C)]
-#[derive(Default, Debug, Copy, Clone)]
-pub enum AlgorithmHint {
-    #[default]
-    AlgoHintDefault = OpencvAlgorithmHint::ALGO_HINT_DEFAULT as isize,
-    AlgoHintAccurate = OpencvAlgorithmHint::ALGO_HINT_ACCURATE as isize,
-    AlgoHintApprox = OpencvAlgorithmHint::ALGO_HINT_APPROX as isize,
-}
-
-impl AlgorithmHint {
-    pub fn to_opencv(self) -> OpencvAlgorithmHint {
-        match self {
-            AlgorithmHint::AlgoHintDefault => OpencvAlgorithmHint::ALGO_HINT_DEFAULT,
-            AlgorithmHint::AlgoHintAccurate => OpencvAlgorithmHint::ALGO_HINT_ACCURATE,
-            AlgorithmHint::AlgoHintApprox => OpencvAlgorithmHint::ALGO_HINT_APPROX,
-        }
-    }
-}
-
-mod seal {
-    pub trait Sealed {}
-    // src: input image; the image can have any number of channels, which are processed independently, but the depth should be CV_8U, CV_16U, CV_16S, CV_32F or CV_64F.
-    impl Sealed for u8 {}
-    impl Sealed for u16 {}
-    impl Sealed for i16 {}
-    impl Sealed for f32 {}
-    impl Sealed for f64 {}
-}
-
-pub trait NdCvGaussianBlur<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
+pub trait NdCvGaussianBlur<T, D>:
     crate::image::NdImage + crate::conversions::NdAsImage<T, D>
+where
+    T: CvType,
+    <T as CvType>::Depth: GaussianBlurAllowedDepth,
+    D: ndarray::Dimension,
 {
     fn gaussian_blur(
         &self,
-        kernel_size: (u16, u16),
-        sigma_x: f64,
-        sigma_y: f64,
+        kernel_size: impl Into<U16Vec2>,
+        sigma: impl Into<DVec2>,
         border_type: BorderType,
     ) -> Result<ndarray::Array<T, D>, GaussianBlurError>;
     fn gaussian_blur_def(
         &self,
-        kernel: (u16, u16),
-        sigma_x: f64,
+        kernel: impl Into<U16Vec2>,
+        sigma: f64,
     ) -> Result<ndarray::Array<T, D>, GaussianBlurError> {
-        self.gaussian_blur(kernel, sigma_x, sigma_x, BorderType::BorderConstant)
+        self.gaussian_blur(kernel, (sigma, sigma), BorderType::BorderConstant)
     }
 }
 
-impl<
-    T: bytemuck::Pod + num::Zero + seal::Sealed,
+impl<T, S, D> NdCvGaussianBlur<T, D> for ArrayBase<S, D>
+where
+    T: CvType + num::Zero,
+    <T as CvType>::Depth: GaussianBlurAllowedDepth,
     S: ndarray::RawData + ndarray::Data<Elem = T>,
     D: ndarray::Dimension,
-> NdCvGaussianBlur<T, D> for ArrayBase<S, D>
-where
-    ndarray::ArrayBase<S, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>,
     ndarray::Array<T, D>: crate::conversions::NdAsImageMut<T, D>,
+    ndarray::ArrayBase<S, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>,
 {
     fn gaussian_blur(
         &self,
-        kernel_size: (u16, u16),
-        sigma_x: f64,
-        sigma_y: f64,
+        kernel_size: impl Into<U16Vec2>,
+        sigma: impl Into<DVec2>,
         border_type: BorderType,
     ) -> Result<ndarray::Array<T, D>, GaussianBlurError> {
         let mut dst = ndarray::Array::zeros(self.dim());
         let cv_self = self.as_image_mat()?;
         let mut cv_dst = dst.as_image_mat_mut()?;
+        let k_size = kernel_size.into();
+        let sigma = sigma.into();
         opencv::imgproc::gaussian_blur(
             &*cv_self,
             &mut *cv_dst,
             opencv::core::Size {
-                width: kernel_size.0 as i32,
-                height: kernel_size.1 as i32,
+                width: k_size.x as i32,
+                height: k_size.y as i32,
             },
-            sigma_x,
-            sigma_y,
+            sigma.x,
+            sigma.y,
             border_type as i32,
             OpencvAlgorithmHint::ALGO_HINT_DEFAULT,
         )?;
@@ -107,107 +78,47 @@ where
     }
 }
 
-// impl<
-//         T: bytemuck::Pod + num::Zero + seal::Sealed,
-//         S: ndarray::RawData + ndarray::Data<Elem = T>,
-//     > NdCvGaussianBlur<T, Ix3> for ArrayBase<S, Ix3>
-// {
-//     fn gaussian_blur(
-//         &self,
-//         kernel_size: (u8, u8),
-//         sigma_x: f64,
-//         sigma_y: f64,
-//         border_type: BorderType,
-//     ) -> Result<ndarray::Array<T, Ix3>, GaussianBlurError> {
-//         let mut dst = ndarray::Array::zeros(self.dim());
-//         let cv_self = self.as_image_mat()?;
-//         let mut cv_dst = dst.as_image_mat_mut()?;
-//         opencv::imgproc::gaussian_blur(
-//             &*cv_self,
-//             &mut *cv_dst,
-//             opencv::core::Size {
-//                 width: kernel_size.0 as i32,
-//                 height: kernel_size.1 as i32,
-//             },
-//             sigma_x,
-//             sigma_y,
-//             border_type as i32,
-//         )
-//
-//         .attach("Failed to apply gaussian blur")?;
-//         Ok(dst)
-//     }
-// }
-//
-// impl<
-//         T: bytemuck::Pod + num::Zero + seal::Sealed,
-//         S: ndarray::RawData + ndarray::Data<Elem = T>,
-//     > NdCvGaussianBlur<T, Ix2> for ArrayBase<S, Ix2>
-// {
-//     fn gaussian_blur(
-//         &self,
-//         kernel_size: (u8, u8),
-//         sigma_x: f64,
-//         sigma_y: f64,
-//         border_type: BorderType,
-//     ) -> Result<ndarray::Array<T, Ix2>, GaussianBlurError> {
-//         let mut dst = ndarray::Array::zeros(self.dim());
-//         let cv_self = self.as_image_mat()?;
-//         let mut cv_dst = dst.as_image_mat_mut()?;
-//         opencv::imgproc::gaussian_blur(
-//             &*cv_self,
-//             &mut *cv_dst,
-//             opencv::core::Size {
-//                 width: kernel_size.0 as i32,
-//                 height: kernel_size.1 as i32,
-//             },
-//             sigma_x,
-//             sigma_y,
-//             border_type as i32,
-//         )
-//
-//         .attach("Failed to apply gaussian blur")?;
-//         Ok(dst)
-//     }
-// }
-
 /// For smaller values it is faster to use the allocated version
 /// For example in a 4k f32 image this is about 50% faster than the allocated one
-pub trait NdCvGaussianBlurInPlace<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
+pub trait NdCvGaussianBlurInPlace<T, D>:
     crate::image::NdImage + crate::conversions::NdAsImageMut<T, D>
+where
+    T: CvType,
+    <T as CvType>::Depth: GaussianBlurAllowedDepth,
+    D: ndarray::Dimension,
 {
     fn gaussian_blur_inplace(
         &mut self,
-        kernel_size: (u16, u16),
-        sigma_x: f64,
-        sigma_y: f64,
+        kernel_size: impl Into<U16Vec2>,
+        sigma: impl Into<DVec2>,
         border_type: BorderType,
     ) -> Result<&mut Self, GaussianBlurError>;
     fn gaussian_blur_def_inplace(
         &mut self,
-        kernel: (u16, u16),
-        sigma_x: f64,
+        kernel: impl Into<U16Vec2>,
+        sigma: f64,
     ) -> Result<&mut Self, GaussianBlurError> {
-        self.gaussian_blur_inplace(kernel, sigma_x, sigma_x, BorderType::BorderConstant)
+        self.gaussian_blur_inplace(kernel, (sigma, sigma), BorderType::BorderConstant)
     }
 }
 
-impl<
-    T: bytemuck::Pod + num::Zero + seal::Sealed,
-    S: ndarray::RawData + ndarray::DataMut<Elem = T>,
-    D: ndarray::Dimension,
-> NdCvGaussianBlurInPlace<T, D> for ArrayBase<S, D>
+impl<T, S, D> NdCvGaussianBlurInPlace<T, D> for ArrayBase<S, D>
 where
     Self: crate::image::NdImage + crate::conversions::NdAsImageMut<T, D>,
+    T: CvType + num::Zero,
+    <T as CvType>::Depth: GaussianBlurAllowedDepth,
+    S: ndarray::RawData + ndarray::DataMut<Elem = T>,
+    D: ndarray::Dimension,
 {
     fn gaussian_blur_inplace(
         &mut self,
-        kernel_size: (u16, u16),
-        sigma_x: f64,
-        sigma_y: f64,
+        kernel_size: impl Into<U16Vec2>,
+        sigma: impl Into<DVec2>,
         border_type: BorderType,
     ) -> Result<&mut Self, GaussianBlurError> {
         let mut cv_self = self.as_image_mat_mut()?;
+        let sigma = sigma.into();
+        let kernel_size = kernel_size.into();
 
         unsafe {
             crate::inplace::op_inplace(&mut cv_self, |this, out| {
@@ -215,11 +126,11 @@ where
                     this,
                     out,
                     opencv::core::Size {
-                        width: kernel_size.0 as i32,
-                        height: kernel_size.1 as i32,
+                        width: kernel_size.x as i32,
+                        height: kernel_size.y as i32,
                     },
-                    sigma_x,
-                    sigma_y,
+                    sigma.x,
+                    sigma.y,
                     border_type as i32,
                     OpencvAlgorithmHint::ALGO_HINT_DEFAULT,
                 )
@@ -242,9 +153,10 @@ mod tests {
         let sigma_y = 0.0;
         let border_type = BorderType::BorderConstant;
         let res = arr
-            .gaussian_blur(kernel_size, sigma_x, sigma_y, border_type)
+            .gaussian_blur(kernel_size, (sigma_x, sigma_y), border_type)
             .unwrap();
         assert_eq!(res.shape(), &[10, 10, 3]);
+        assert_eq!(res, arr);
     }
 
     #[test]
@@ -254,7 +166,7 @@ mod tests {
         arr.slice_mut(s![..5, .., ..]).fill(255); // Top half white, bottom half black
 
         let res = arr
-            .gaussian_blur((3, 3), 1.0, 1.0, BorderType::BorderConstant)
+            .gaussian_blur((3, 3), (1.0, 1.0), BorderType::BorderConstant)
             .unwrap();
 
         // Check that the middle row (edge) has intermediate values
@@ -270,7 +182,7 @@ mod tests {
         let kernel_sizes = [(3, 3), (5, 5), (7, 7)];
         for &kernel_size in &kernel_sizes {
             let res = arr
-                .gaussian_blur(kernel_size, 1.0, 1.0, BorderType::BorderConstant)
+                .gaussian_blur(kernel_size, (1.0, 1.0), BorderType::BorderConstant)
                 .unwrap();
             assert_eq!(res.shape(), &[20, 20, 3]);
         }
@@ -289,9 +201,9 @@ mod tests {
         ];
 
         for border_type in border_types {
-            let _res = arr.gaussian_blur((3, 3), 1.0, 1.0, border_type).unwrap();
+            let _res = arr.gaussian_blur((3, 3), (1.0, 1.0), border_type).unwrap();
             let res = arr
-                .gaussian_blur_inplace((3, 3), 1.0, 1.0, border_type)
+                .gaussian_blur_inplace((3, 3), (1.0, 1.0), border_type)
                 .unwrap();
             assert_eq!(res.shape(), &[10, 10, 3]);
         }
@@ -304,10 +216,10 @@ mod tests {
         let arr_f32 = Array3::<f32>::ones((10, 10, 3));
 
         let res_u8 = arr_u8
-            .gaussian_blur((3, 3), 1.0, 1.0, BorderType::BorderConstant)
+            .gaussian_blur((3, 3), (1.0, 1.0), BorderType::BorderConstant)
             .unwrap();
         let res_f32 = arr_f32
-            .gaussian_blur((3, 3), 1.0, 1.0, BorderType::BorderConstant)
+            .gaussian_blur((3, 3), (1.0, 1.0), BorderType::BorderConstant)
             .unwrap();
 
         assert_eq!(res_u8.shape(), &[10, 10, 3]);
@@ -320,7 +232,7 @@ mod tests {
         let arr = Array3::<u8>::ones((10, 10, 3));
         // Even kernel sizes should fail
         let _ = arr
-            .gaussian_blur((2, 2), 1.0, 1.0, BorderType::BorderConstant)
+            .gaussian_blur((2, 2), (1.0, 1.0), BorderType::BorderConstant)
             .unwrap();
     }
 }

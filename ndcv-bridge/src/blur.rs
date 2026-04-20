@@ -1,5 +1,6 @@
 //! <https://docs.rs/opencv/latest/opencv/imgproc/fn.blur.html>
-use crate::conversions::*;
+use crate::{conversions::*, types::CvType};
+use glam::{IVec2, U16Vec2};
 use ndarray::*;
 
 #[derive(Debug, thiserror::Error)]
@@ -9,58 +10,53 @@ pub enum BlurError {
     #[error("OpenCV error: {0}")]
     OpenCvError(#[from] opencv::Error),
 }
-
-mod seal {
-    pub trait Sealed {}
-    // src: input image; the image can have any number of channels, which are processed independently, but the depth should be CV_8U, CV_16U, CV_16S, CV_32F or CV_64F.
-    impl Sealed for u8 {}
-    impl Sealed for u16 {}
-    impl Sealed for i16 {}
-    impl Sealed for f32 {}
-    impl Sealed for f64 {}
+pub trait BlurAllowedDepth {
+    crate::seal!();
 }
+crate::seal!(impl, BlurAllowedDepth, u8, u16, i16, f32, f64);
 
-pub trait NdCvBlur<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
-    crate::image::NdImage + crate::conversions::NdAsImage<T, D>
+pub trait NdCvBlur<T, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>
+where
+    T: bytemuck::Pod + CvType,
+    <T as CvType>::Depth: BlurAllowedDepth,
+    D: ndarray::Dimension,
 {
     fn blur(
         &self,
-        kernel_size: (u16, u16),
-        anchor: (i32, i32),
-        border_type: crate::gaussian::BorderType,
+        kernel_size: impl Into<U16Vec2>,
+        anchor: impl Into<IVec2>,
+        border_type: crate::BorderType,
     ) -> Result<ndarray::Array<T, D>, BlurError>;
-    fn blur_def(&self, kernel_size: (u16, u16)) -> Result<ndarray::Array<T, D>, BlurError> {
-        self.blur(
-            kernel_size,
-            (-1, -1),
-            crate::gaussian::BorderType::BorderConstant,
-        )
+    fn blur_def(&self, kernel_size: impl Into<U16Vec2>) -> Result<ndarray::Array<T, D>, BlurError> {
+        self.blur(kernel_size, (-1, -1), crate::BorderType::BorderConstant)
     }
 }
 
-impl<
-    T: bytemuck::Pod + num::Zero + seal::Sealed,
-    S: ndarray::RawData + ndarray::Data<Elem = T>,
-    D: ndarray::Dimension,
-> NdCvBlur<T, D> for ArrayBase<S, D>
+impl<T, S, D> NdCvBlur<T, D> for ArrayBase<S, D>
 where
     ndarray::ArrayBase<S, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>,
     ndarray::Array<T, D>: crate::conversions::NdAsImageMut<T, D>,
+    T: bytemuck::Pod + num::Zero + CvType,
+    <T as CvType>::Depth: BlurAllowedDepth,
+    S: ndarray::RawData + ndarray::Data<Elem = T>,
+    D: ndarray::Dimension,
 {
     fn blur(
         &self,
-        kernel_size: (u16, u16),
-        anchor: (i32, i32),
-        border_type: crate::gaussian::BorderType,
+        kernel_size: impl Into<U16Vec2>,
+        anchor: impl Into<IVec2>,
+        border_type: crate::BorderType,
     ) -> Result<ndarray::Array<T, D>, BlurError> {
+        let kernel_size = kernel_size.into();
+        let anchor = anchor.into();
         let mut dst = ndarray::Array::zeros(self.dim());
         let cv_self = self.as_image_mat()?;
         let mut cv_dst = dst.as_image_mat_mut()?;
         opencv::imgproc::blur(
             &*cv_self,
             &mut *cv_dst,
-            opencv::core::Size::new(kernel_size.0 as i32, kernel_size.1 as i32),
-            opencv::core::Point::new(anchor.0, anchor.1),
+            opencv::core::Size::new(kernel_size.x.into(), kernel_size.y.into()),
+            opencv::core::Point::new(anchor.x, anchor.y),
             border_type as i32,
         )?;
         Ok(dst)
@@ -70,7 +66,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gaussian::BorderType;
+    use crate::BorderType;
     use ndarray::Array3;
 
     #[test]

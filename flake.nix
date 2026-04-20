@@ -39,7 +39,7 @@
         };
         inherit (pkgs) lib;
         # cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
-        name = "ndcv-bridge";
+        name = "ndcv";
 
         stableToolchain = pkgs.rust-bin.stable.latest.default;
         stableToolchainWithLLvmTools = stableToolchain.override {
@@ -50,6 +50,10 @@
         };
         craneLib = (crane.mkLib pkgs).overrideToolchain stableToolchain;
         craneLibLLvmTools = (crane.mkLib pkgs).overrideToolchain stableToolchainWithLLvmTools;
+
+        nightlyToolchainWithRustAnalyzer = pkgs.rust-bin.nightly.latest.default.override {
+          extensions = ["rust-src" "rust-analyzer" "llvm-tools"];
+        };
 
         src = let
           filterBySuffix = path: exts: lib.any (ext: lib.hasSuffix ext path) exts;
@@ -84,7 +88,7 @@
             # BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.llvmPackages.libclang.lib}/lib/clang/18/include";
           });
         cargoArtifacts = craneLib.buildPackage commonArgs;
-      in {
+      in rec {
         checks =
           {
             "${name}-clippy" = craneLib.cargoClippy (commonArgs
@@ -121,6 +125,7 @@
           pkg = craneLib.buildPackage (commonArgs
             // {inherit cargoArtifacts;}
             // {
+              cargoExtraArgs = "--package ndcv-cli";
               postInstall = ''
                 mkdir -p $out/bin
                 mkdir -p $out/share/bash-completions
@@ -141,11 +146,28 @@
             // {
               packages = with pkgs;
                 [
+                  #packages.default
                   stableToolchainWithRustAnalyzer
                   cargo-nextest
                   cargo-deny
                   just
                   cargo-llvm-cov
+                  cargo-fuzz
+                ]
+                ++ (lib.optionals pkgs.stdenv.isDarwin [
+                  apple-sdk_26
+                ]);
+            });
+          nightly = pkgs.mkShell.override {stdenv = pkgs.clangStdenv;} (commonArgs
+            // {
+              packages = with pkgs;
+                [
+                  nightlyToolchainWithRustAnalyzer
+                  cargo-nextest
+                  cargo-deny
+                  just
+                  cargo-llvm-cov
+                  cargo-fuzz
                 ]
                 ++ (lib.optionals pkgs.stdenv.isDarwin [
                   apple-sdk_26

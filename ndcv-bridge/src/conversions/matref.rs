@@ -10,6 +10,28 @@ impl MatRef<'_> {
     }
 }
 
+impl<'a> opencv::core::ToOutputArray for MatRefMut<'a> {
+    fn output_array(
+        &mut self,
+    ) -> std::result::Result<
+        opencv::boxed_ref::BoxedRefMut<'a, opencv::core::_OutputArray>,
+        opencv::Error,
+    > {
+        unsafe { core::mem::transmute(self.mat.output_array()) }
+    }
+}
+
+impl<'a> opencv::core::ToInputArray for MatRef<'a> {
+    fn input_array(
+        &self,
+    ) -> std::result::Result<
+        opencv::boxed_ref::BoxedRef<'a, opencv::core::_InputArray>,
+        opencv::Error,
+    > {
+        unsafe { core::mem::transmute(self.mat.input_array()) }
+    }
+}
+
 impl MatRef<'_> {
     pub fn new<'a>(mat: opencv::core::Mat) -> MatRef<'a> {
         MatRef {

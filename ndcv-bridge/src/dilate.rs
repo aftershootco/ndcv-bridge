@@ -1,6 +1,6 @@
 //! <https://docs.rs/opencv/latest/opencv/imgproc/fn.dilate.html>
 //! <https://docs.opencv.org/4.x/d4/d86/group__imgproc__filter.html#ga4ff0f3318642c4f469d0e11f242f3b6c>
-use crate::conversions::*;
+use crate::{conversions::*, types::CvType};
 use nalgebra::{Point2, Vector4};
 use ndarray::*;
 
@@ -23,8 +23,11 @@ mod seal {
     impl Sealed for f64 {}
 }
 
-pub trait NdCvDilate<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
-    crate::image::NdImage + crate::conversions::NdAsImage<T, D>
+pub trait NdCvDilate<T, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>
+where
+    T: CvType,
+    <T as CvType>::Depth: seal::Sealed,
+    D: ndarray::Dimension,
 {
     /// Dilates an image using a structuring element with all parameters exposed.
     ///
@@ -38,7 +41,7 @@ pub trait NdCvDilate<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
         kernel: ndarray::ArrayView2<u8>,
         anchor: Point2<i32>,
         iterations: u16,
-        border_type: crate::gaussian::BorderType,
+        border_type: crate::BorderType,
         border_value: Vector4<f64>,
     ) -> Result<ndarray::Array<T, D>, DilateError>;
 
@@ -55,18 +58,18 @@ pub trait NdCvDilate<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
             kernel,
             Point2::new(-1, -1),
             iterations,
-            crate::gaussian::BorderType::BorderConstant,
+            crate::BorderType::BorderConstant,
             border_value,
         )
     }
 }
 
-impl<
-    T: bytemuck::Pod + num::Zero + seal::Sealed,
-    S: ndarray::RawData + ndarray::Data<Elem = T>,
-    D: ndarray::Dimension,
-> NdCvDilate<T, D> for ArrayBase<S, D>
+impl<T, S, D> NdCvDilate<T, D> for ArrayBase<S, D>
 where
+    T: CvType + num::Zero,
+    <T as CvType>::Depth: seal::Sealed,
+    D: ndarray::Dimension,
+    S: ndarray::RawData + ndarray::Data<Elem = T>,
     ndarray::ArrayBase<S, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>,
     ndarray::Array<T, D>: crate::conversions::NdAsImageMut<T, D>,
 {
@@ -75,7 +78,7 @@ where
         kernel: ndarray::ArrayView2<u8>,
         anchor: Point2<i32>,
         iterations: u16,
-        border_type: crate::gaussian::BorderType,
+        border_type: crate::BorderType,
         border_value: Vector4<f64>,
     ) -> Result<ndarray::Array<T, D>, DilateError> {
         let mut dst = ndarray::Array::zeros(self.dim());
@@ -101,15 +104,19 @@ where
 }
 
 /// In-place variant of dilation.
-pub trait NdCvDilateInPlace<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
+pub trait NdCvDilateInPlace<T, D>:
     crate::image::NdImage + crate::conversions::NdAsImageMut<T, D>
+where
+    T: CvType,
+    <T as CvType>::Depth: seal::Sealed,
+    D: ndarray::Dimension,
 {
     fn dilate_inplace(
         &mut self,
         kernel: ndarray::ArrayView2<u8>,
         anchor: Point2<i32>,
         iterations: u16,
-        border_type: crate::gaussian::BorderType,
+        border_type: crate::BorderType,
         border_value: Vector4<f64>,
     ) -> Result<&mut Self, DilateError>;
 
@@ -124,18 +131,18 @@ pub trait NdCvDilateInPlace<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimensi
             kernel,
             Point2::new(-1, -1),
             iterations,
-            crate::gaussian::BorderType::BorderConstant,
+            crate::BorderType::BorderConstant,
             border_value,
         )
     }
 }
 
-impl<
-    T: bytemuck::Pod + num::Zero + seal::Sealed,
+impl<T, S, D> NdCvDilateInPlace<T, D> for ArrayBase<S, D>
+where
+    T: CvType + num::Zero,
+    <T as CvType>::Depth: seal::Sealed,
     S: ndarray::RawData + ndarray::DataMut<Elem = T>,
     D: ndarray::Dimension,
-> NdCvDilateInPlace<T, D> for ArrayBase<S, D>
-where
     Self: crate::image::NdImage + crate::conversions::NdAsImageMut<T, D>,
 {
     fn dilate_inplace(
@@ -143,7 +150,7 @@ where
         kernel: ndarray::ArrayView2<u8>,
         anchor: Point2<i32>,
         iterations: u16,
-        border_type: crate::gaussian::BorderType,
+        border_type: crate::BorderType,
         border_value: Vector4<f64>,
     ) -> Result<&mut Self, DilateError> {
         let cv_kernel = kernel.as_image_mat()?;
@@ -173,7 +180,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gaussian::BorderType;
+    use crate::BorderType;
     use ndarray::{Array2, Array3};
 
     fn rect_kernel(size: usize) -> Array2<u8> {

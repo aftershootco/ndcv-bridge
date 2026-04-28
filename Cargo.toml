@@ -24,7 +24,7 @@ nalgebra = { version = "0.34.0", default-features = false, features = [
   "std",
   "bytemuck",
 ] }
-opencv = { version = "0.95.0", features = ["clang-runtime"] }
+opencv = { version = "0.95.0", features = ["clang-runtime", "dnn"] }
 bounding-box = { version = "0.2.0", path = "bounding-box" }
 bytemuck = "1.23.2"
 error-stack = "0.6.0"

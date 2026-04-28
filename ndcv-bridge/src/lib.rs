@@ -11,6 +11,10 @@ mod roi;
 pub use errors::NdCvError;
 
 #[cfg(feature = "opencv")]
+pub mod affine;
+#[cfg(feature = "opencv")]
+pub mod blob;
+#[cfg(feature = "opencv")]
 pub mod blur;
 #[cfg(feature = "opencv")]
 pub mod bounding_rect;
@@ -25,6 +29,10 @@ pub mod conversions;
 #[cfg(feature = "opencv")]
 pub mod gaussian;
 #[cfg(feature = "opencv")]
+pub mod morphology;
+#[cfg(feature = "opencv")]
+pub mod normalize;
+#[cfg(feature = "opencv")]
 pub mod resize;
 
 // pub mod codec;
@@ -35,6 +43,7 @@ pub use dilate::{DilateError, NdCvDilate, NdCvDilateInPlace};
 pub use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 pub use fir::NdFir;
 pub use gaussian::{BorderType, NdCvGaussianBlur, NdCvGaussianBlurInPlace};
+pub use image::NdImage;
 pub use roi::{NdRoiZeroPadded, Roi as NdRoi, RoiMut as NdRoiMut};
 
 #[cfg(feature = "opencv")]
@@ -53,7 +62,11 @@ pub use connected_components::{Connectivity, NdCvConnectedComponents};
 #[cfg(feature = "opencv")]
 pub use conversions::{MatAsNd, NdAsImage, NdAsImageMut, NdAsMat, NdAsMatMut};
 #[cfg(feature = "opencv")]
+pub use normalize::{NdCvNormalize, NormType};
+#[cfg(feature = "opencv")]
 pub use resize::{Interpolation, NdCvResize};
+#[cfg(feature = "opencv")]
+pub use affine::NdCvWarpAffine;
 
 pub(crate) mod prelude_ {
     pub use crate::errors::NdCvError;

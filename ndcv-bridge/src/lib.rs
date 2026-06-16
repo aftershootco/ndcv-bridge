@@ -23,6 +23,7 @@
 mod blend;
 #[cfg(feature = "opencv")]
 pub mod dilate;
+pub mod erode;
 mod errors;
 pub mod fir;
 mod image;

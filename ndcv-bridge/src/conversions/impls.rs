@@ -34,7 +34,7 @@ pub(crate) unsafe fn ndarray_to_mat_regular<
 
     let data_ptr = input.as_ptr() as *const c_void;
 
-    let typ = opencv::core::CV_MAKETYPE(<T as CvType>::cv_depth(), 1);
+    let typ = <T as CvType>::cv_type();
     let mat = unsafe {
         opencv::core::Mat::new_nd_with_data_unsafe(
             size.as_slice(),
@@ -123,7 +123,18 @@ pub(crate) unsafe fn mat_to_ndarray<T: CvType, D: ndarray::Dimension>(
     }
 
     let channels = mat.channels();
-    let multi_channel = channels > 1;
+    let type_channels = <T as CvType>::cv_channels();
+    let multi_channel = channels > 1 && type_channels == 1;
+
+    if type_channels > 1 && channels != type_channels {
+        Err(ConversionErrorKind::IncompatibleDimensions {
+            mat_dims: mat.dims() as _,
+            rows: mat.rows() as _,
+            cols: mat.cols() as _,
+            channels: channels as _,
+            ndarray_dims: D::NDIM.unwrap_or(0),
+        })?;
+    }
 
     let mat_dims = mat.dims(); // dims is always >= 2
     let maybe_1d = mat_dims == 2
@@ -192,11 +203,23 @@ pub(crate) unsafe fn mat_to_ndarray<T: CvType, D: ndarray::Dimension>(
         .map(|x| x.map(|x| x as usize))
         .take(dim)
         .collect::<Result<Vec<_>, ConversionError>>()?;
-    let strides = (0..(mat.dims() - 1 - multi_channel_1d as i32))
-        .map(|i| mat.step1(i).map_err(ConversionError::from))
-        .chain([Ok(channels as usize), Ok(1)])
-        .take(dim)
-        .collect::<Result<Vec<_>, ConversionError>>()?;
+    let strides = if type_channels > 1 {
+        (0..(mat.dims() - 1))
+            .map(|i| {
+                mat.step1(i)
+                    .map(|step| step / type_channels as usize)
+                    .map_err(ConversionError::from)
+            })
+            .chain([Ok(1)])
+            .take(dim)
+            .collect::<Result<Vec<_>, ConversionError>>()?
+    } else {
+        (0..(mat.dims() - 1 - multi_channel_1d as i32))
+            .map(|i| mat.step1(i).map_err(ConversionError::from))
+            .chain([Ok(channels as usize), Ok(1)])
+            .take(dim)
+            .collect::<Result<Vec<_>, ConversionError>>()?
+    };
     let shape = sizes.strides(strides);
 
     let raw_array = unsafe {

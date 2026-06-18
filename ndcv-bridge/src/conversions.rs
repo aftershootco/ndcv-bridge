@@ -411,6 +411,31 @@ pub fn test_2d_array_regular() {
 }
 
 #[test]
+pub fn test_2d_array_of_rgb_pixels_as_image_mat_preserves_channels() {
+    use opencv::prelude::MatTraitConst;
+
+    let array = ndarray::Array2::from_elem((2, 3), [10_u8, 20, 30]);
+    let mat = array.as_image_mat().unwrap();
+
+    assert_eq!(mat.channels(), 3);
+    assert_eq!(mat.typ(), opencv::core::CV_8UC3);
+    assert_eq!(mat.rows(), 2);
+    assert_eq!(mat.cols(), 3);
+}
+
+#[test]
+pub fn test_2d_array_of_rgb_pixels_roundtrips_through_image_mat() {
+    let array = ndarray::arr2(&[
+        [[10_u8, 20, 30], [40, 50, 60], [70, 80, 90]],
+        [[100, 110, 120], [130, 140, 150], [160, 170, 180]],
+    ]);
+    let mat = array.as_image_mat().unwrap();
+    let roundtrip: ndarray::ArrayView2<[u8; 3]> = mat.as_ndarray().unwrap();
+
+    assert_eq!(roundtrip, array.view());
+}
+
+#[test]
 #[allow(deprecated)]
 pub fn test_ndcv_1024_1024_to_mat() {
     let array = ndarray::Array2::<f32>::ones((1024, 1024));

@@ -181,17 +181,3 @@ fn test_cv_type() {
     assert_eq!(<u8 as CvType>::cv_type(), opencv::core::CV_8UC1);
     assert_eq!(<glam::Vec3 as CvType>::cv_type(), opencv::core::CV_32FC3);
 }
-
-// use num::{One, Zero};
-// pub trait CvTypeSplat: CvType
-// where
-//     Self::Depth: num::One + num::Zero,
-// {
-//     fn splat(value: Self::Depth) -> Self;
-//     fn zero() -> Self {
-//         Self::splat(Self::Depth::zero())
-//     }
-//     fn one() -> Self {
-//         Self::splat(Self::Depth::one())
-//     }
-// }

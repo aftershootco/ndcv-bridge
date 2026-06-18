@@ -436,6 +436,66 @@ pub fn test_2d_array_of_rgb_pixels_roundtrips_through_image_mat() {
 }
 
 #[test]
+pub fn test_single_row_of_rgb_pixels_roundtrips_through_image_mat() {
+    // A 1xN image of pixel-typed elements should round-trip preserving values
+    // and column order (exercises the multi-channel stride path with mat.rows() == 1).
+    let array = ndarray::arr2(&[[[10_u8, 20, 30], [40, 50, 60], [70, 80, 90], [100, 110, 120]]]);
+    let mat = array.as_image_mat().unwrap();
+    let roundtrip: ndarray::ArrayView2<[u8; 3]> = mat.as_ndarray().unwrap();
+
+    assert_eq!(roundtrip.shape(), &[1, 4]);
+    assert_eq!(roundtrip, array.view());
+}
+
+#[test]
+pub fn test_glam_vec3_pixels_roundtrip_through_image_mat() {
+    use opencv::prelude::MatTraitConst;
+
+    let array = ndarray::Array2::from_shape_fn((2, 3), |(r, c)| {
+        glam::Vec3::new(r as f32, c as f32, (r + c) as f32)
+    });
+    let mat = array.as_image_mat().unwrap();
+
+    assert_eq!(mat.typ(), opencv::core::CV_32FC3);
+    assert_eq!(mat.channels(), 3);
+
+    let roundtrip: ndarray::ArrayView2<glam::Vec3> = mat.as_ndarray().unwrap();
+    assert_eq!(roundtrip, array.view());
+}
+
+#[test]
+pub fn test_mat_to_ndarray_errors_when_pixel_channels_mismatch() {
+    // CV_8UC3 Mat read as a 4-channel pixel type must error, not read out of bounds.
+    let array = ndarray::Array2::from_elem((2, 3), [10_u8, 20, 30]);
+    let mat = array.as_image_mat().unwrap();
+
+    let err = mat
+        .as_ndarray::<[u8; 4], ndarray::Ix2>()
+        .expect_err("4-channel read of a 3-channel Mat should fail");
+    assert!(
+        matches!(err.kind, ConversionErrorKind::IncompatibleDimensions { .. }),
+        "unexpected error kind: {:?}",
+        err.kind
+    );
+}
+
+#[test]
+pub fn test_mat_to_ndarray_errors_reading_single_channel_as_pixel() {
+    // CV_8UC1 Mat (matching depth) read as a multi-channel pixel type must error.
+    let array = ndarray::Array2::<u8>::ones((4, 5));
+    let mat = array.as_image_mat().unwrap();
+
+    let err = mat
+        .as_ndarray::<[u8; 3], ndarray::Ix2>()
+        .expect_err("3-channel read of a single-channel Mat should fail");
+    assert!(
+        matches!(err.kind, ConversionErrorKind::IncompatibleDimensions { .. }),
+        "unexpected error kind: {:?}",
+        err.kind
+    );
+}
+
+#[test]
 #[allow(deprecated)]
 pub fn test_ndcv_1024_1024_to_mat() {
     let array = ndarray::Array2::<f32>::ones((1024, 1024));

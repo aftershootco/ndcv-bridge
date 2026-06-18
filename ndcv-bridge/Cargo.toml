@@ -27,7 +27,9 @@ divan.workspace = true
 ndarray-npy.workspace = true
 
 [features]
-opencv = ["dep:opencv"]
+# The OpenCV operator modules (blur, gaussian, ...) use glam types, so opencv
+# requires glam.
+opencv = ["dep:opencv", "glam"]
 glam = ["dep:glam"]
 nalgebra = []
 default = ["opencv", "glam", "nalgebra"]

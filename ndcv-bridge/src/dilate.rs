@@ -23,7 +23,7 @@ mod seal {
     impl Sealed for f64 {}
 }
 
-pub trait NdCvDilate<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
+pub trait NdCvDilate<T: bytemuck::Pod + seal::Sealed + crate::types::CvType, D: ndarray::Dimension>:
     crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
     /// Dilates an image using a structuring element with all parameters exposed.
@@ -62,7 +62,7 @@ pub trait NdCvDilate<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
 }
 
 impl<
-    T: bytemuck::Pod + num::Zero + seal::Sealed,
+    T: bytemuck::Pod + num::Zero + seal::Sealed + crate::types::CvType,
     S: ndarray::RawData + ndarray::Data<Elem = T>,
     D: ndarray::Dimension,
 > NdCvDilate<T, D> for ArrayBase<S, D>
@@ -101,7 +101,7 @@ where
 }
 
 /// In-place variant of dilation.
-pub trait NdCvDilateInPlace<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
+pub trait NdCvDilateInPlace<T: bytemuck::Pod + seal::Sealed + crate::types::CvType, D: ndarray::Dimension>:
     crate::image::NdImage + crate::conversions::NdAsImageMut<T, D>
 {
     fn dilate_inplace(
@@ -131,7 +131,7 @@ pub trait NdCvDilateInPlace<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimensi
 }
 
 impl<
-    T: bytemuck::Pod + num::Zero + seal::Sealed,
+    T: bytemuck::Pod + num::Zero + seal::Sealed + crate::types::CvType,
     S: ndarray::RawData + ndarray::DataMut<Elem = T>,
     D: ndarray::Dimension,
 > NdCvDilateInPlace<T, D> for ArrayBase<S, D>

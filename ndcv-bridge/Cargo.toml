@@ -20,6 +20,7 @@ wide = "1.1.1"
 tap = { workspace = true }
 img-parts.workspace = true
 pretty_assertions = "1.4.1"
+glam = { version = "0.32.0", features = ["bytemuck"], optional = true }
 
 [dev-dependencies]
 divan.workspace = true
@@ -27,7 +28,9 @@ ndarray-npy.workspace = true
 
 [features]
 opencv = ["dep:opencv"]
-default = ["opencv"]
+glam = ["dep:glam"]
+nalgebra = []
+default = ["opencv", "glam", "nalgebra"]
 
 
 [[bench]]

@@ -15,9 +15,9 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: DeterminateSystems/nix-installer-action@main
-      - uses: cachix/cachix-action@v15
+      - uses: cachix/cachix-action@v17
         with:
           name: toshokan
       - id: set-matrix
@@ -33,9 +33,9 @@ jobs:
     strategy:
       matrix: ${{fromJSON(needs.checks-matrix.outputs.matrix)}}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: DeterminateSystems/nix-installer-action@main
-      - uses: cachix/cachix-action@v15
+      - uses: cachix/cachix-action@v17
         with:
           name: toshokan
       - run: nix build -L '.#${{ matrix.attr }}'
@@ -47,9 +47,9 @@ jobs:
       contents: "read"
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: DeterminateSystems/nix-installer-action@main
-    - uses: cachix/cachix-action@v15
+    - uses: cachix/cachix-action@v17
       with:
         name: toshokan
 
@@ -57,7 +57,7 @@ jobs:
       run: nix build .#checks.x86_64-linux.ndcv-bridge-llvm-cov
 
     - name: Upload coverage reports to Codecov
-      uses: codecov/codecov-action@v5.5.2
+      uses: codecov/codecov-action@v7
       with:
         flags: unittests
         name: codecov-ndcv-bridge

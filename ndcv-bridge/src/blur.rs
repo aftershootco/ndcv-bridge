@@ -30,10 +30,7 @@ pub trait NdCvBlur<T: bytemuck::Pod + seal::Sealed + crate::types::CvType, D: nd
         anchor: impl Into<IVec2>,
         border_type: crate::gaussian::BorderType,
     ) -> Result<ndarray::Array<T, D>, BlurError>;
-    fn blur_def(
-        &self,
-        kernel_size: impl Into<U16Vec2>,
-    ) -> Result<ndarray::Array<T, D>, BlurError> {
+    fn blur_def(&self, kernel_size: impl Into<U16Vec2>) -> Result<ndarray::Array<T, D>, BlurError> {
         self.blur(
             kernel_size,
             (-1, -1),

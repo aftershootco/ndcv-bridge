@@ -101,8 +101,10 @@ where
 }
 
 /// In-place variant of dilation.
-pub trait NdCvDilateInPlace<T: bytemuck::Pod + seal::Sealed + crate::types::CvType, D: ndarray::Dimension>:
-    crate::image::NdImage + crate::conversions::NdAsImageMut<T, D>
+pub trait NdCvDilateInPlace<
+    T: bytemuck::Pod + seal::Sealed + crate::types::CvType,
+    D: ndarray::Dimension,
+>: crate::image::NdImage + crate::conversions::NdAsImageMut<T, D>
 {
     fn dilate_inplace(
         &mut self,

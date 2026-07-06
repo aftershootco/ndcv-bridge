@@ -965,7 +965,7 @@ dependencies = [
 
 [[package]]
 name = "ndarray-safetensors"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "bytemuck",
  "half",
@@ -976,7 +976,7 @@ dependencies = [
 
 [[package]]
 name = "ndcv-bridge"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "bounding-box",
  "bytemuck",

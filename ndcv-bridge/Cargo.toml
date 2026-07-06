@@ -31,6 +31,8 @@ ndarray-npy.workspace = true
 # requires glam.
 opencv = ["dep:opencv", "glam"]
 glam = ["dep:glam"]
+# nalgebra is a non-optional dependency (roi, contours and dilate use it
+# unconditionally); this feature only gates the SVector CvType impls.
 nalgebra = []
 default = ["opencv", "glam", "nalgebra"]
 

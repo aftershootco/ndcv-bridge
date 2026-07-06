@@ -168,8 +168,11 @@ const _: () = {
     {
         type Depth = T;
         fn channels() -> usize {
-            if N > opencv::core::CV_CN_MAX as usize {
-                panic!("Number of channels exceeds OpenCV's maximum");
+            const {
+                assert!(
+                    N <= opencv::core::CV_CN_MAX as usize,
+                    "Number of channels exceeds OpenCV's maximum"
+                );
             }
             N
         }

@@ -54,6 +54,16 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
 >(
     input: &ndarray::ArrayBase<S, D>,
 ) -> Result<opencv::core::Mat, ConversionError> {
+    // The consolidated layout folds the last ndarray axis into Mat channels,
+    // which only makes sense for scalar elements: a pixel-typed T would need
+    // CV_MAKETYPE(depth, last_dim * T::cv_channels()) and nothing downstream
+    // expects such Mats. Use the regular path (Ix2 of pixel T) instead.
+    if <T as CvType>::cv_channels() > 1 {
+        Err(ConversionErrorKind::UnsupportedDataType(
+            std::any::type_name::<T>(),
+        ))?;
+    }
+
     let shape = input.shape();
     let strides = input.strides();
 
@@ -206,9 +216,21 @@ pub(crate) unsafe fn mat_to_ndarray<T: CvType, D: ndarray::Dimension>(
     let strides = if type_channels > 1 {
         (0..(mat.dims() - 1))
             .map(|i| {
-                mat.step1(i)
-                    .map(|step| step / type_channels as usize)
-                    .map_err(ConversionError::from)
+                let step = mat.step1(i)?;
+                // A step that is not a whole number of pixels cannot be
+                // expressed as a stride over T; flooring it would produce a
+                // garbage view.
+                if !step.is_multiple_of(type_channels as usize) {
+                    return Err(ConversionErrorKind::IncompatibleDimensions {
+                        mat_dims: mat.dims() as _,
+                        rows: mat.rows() as _,
+                        cols: mat.cols() as _,
+                        channels: channels as _,
+                        ndarray_dims: D::NDIM.unwrap_or(0),
+                    }
+                    .into());
+                }
+                Ok(step / type_channels as usize)
             })
             .chain([Ok(1)])
             .take(dim)
@@ -221,6 +243,16 @@ pub(crate) unsafe fn mat_to_ndarray<T: CvType, D: ndarray::Dimension>(
             .collect::<Result<Vec<_>, ConversionError>>()?
     };
     let shape = sizes.strides(strides);
+
+    // RawArrayView::from_shape_ptr requires the pointer to be aligned for T.
+    // SIMD-backed pixel types (e.g. glam::Vec4, 16-byte aligned) can exceed
+    // the alignment of a Mat built over a foreign buffer. All strides are in
+    // whole units of T, so checking the base pointer is sufficient.
+    if !(mat.data() as usize).is_multiple_of(core::mem::align_of::<T>()) {
+        Err(ConversionErrorKind::MisalignedData {
+            align: core::mem::align_of::<T>(),
+        })?;
+    }
 
     let raw_array = unsafe {
         ndarray::RawArrayView::from_shape_ptr(shape, mat.data() as *const T)

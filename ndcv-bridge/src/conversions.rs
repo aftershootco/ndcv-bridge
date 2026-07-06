@@ -57,6 +57,10 @@ pub enum ConversionErrorKind {
         expected: &'static str,
         got: &'static str,
     },
+    #[error(
+        "Mat data pointer is not aligned for the target element type ({align}-byte alignment required)"
+    )]
+    MisalignedData { align: usize },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -490,6 +494,90 @@ pub fn test_mat_to_ndarray_errors_reading_single_channel_as_pixel() {
         .expect_err("3-channel read of a single-channel Mat should fail");
     assert!(
         matches!(err.kind, ConversionErrorKind::IncompatibleDimensions { .. }),
+        "unexpected error kind: {:?}",
+        err.kind
+    );
+}
+
+#[test]
+pub fn test_3d_array_of_pixel_elements_errors_as_image_mat() {
+    // The consolidated path folds the last axis into channels, which is only
+    // meaningful for scalar elements. An Array3 of pixel-typed elements must
+    // error instead of silently building a Mat with a mismatched element size.
+    let array = ndarray::Array3::from_elem((2, 3, 4), glam::Vec3::ONE);
+
+    let err = array
+        .as_image_mat()
+        .expect_err("pixel-typed elements must be rejected by the multi-channel path");
+    assert!(
+        matches!(err.kind, ConversionErrorKind::UnsupportedDataType(_)),
+        "unexpected error kind: {:?}",
+        err.kind
+    );
+}
+
+#[test]
+pub fn test_mat_step_not_multiple_of_pixel_errors() {
+    // A Mat whose row step (10 bytes) is not a whole number of 3-byte pixels
+    // cannot be expressed as a stride over [u8; 3]; flooring would produce a
+    // garbage view.
+    let data = [0_u8; 32];
+    let mat = unsafe {
+        opencv::core::Mat::new_nd_with_data_unsafe(
+            &[2, 3],
+            opencv::core::CV_8UC3,
+            data.as_ptr() as *mut core::ffi::c_void,
+            Some(&[10]),
+        )
+    }
+    .unwrap();
+
+    let err = mat
+        .as_ndarray::<[u8; 3], ndarray::Ix2>()
+        .expect_err("step not divisible by pixel size should fail");
+    assert!(
+        matches!(err.kind, ConversionErrorKind::IncompatibleDimensions { .. }),
+        "unexpected error kind: {:?}",
+        err.kind
+    );
+
+    // The scalar view of the same Mat is still representable.
+    let scalar: ndarray::ArrayView3<u8> = mat.as_ndarray().unwrap();
+    assert_eq!(scalar.shape(), &[2, 3, 3]);
+}
+
+#[test]
+pub fn test_mat_with_misaligned_data_errors_for_simd_pixel() {
+    // glam::Vec4 is 16-byte aligned on SIMD targets; a Mat over a buffer that
+    // breaks that alignment must error instead of constructing a UB view.
+    let align = core::mem::align_of::<glam::Vec4>();
+    if align <= core::mem::align_of::<f32>() {
+        // Scalar-math build of glam; nothing to misalign.
+        return;
+    }
+
+    let backing = [0_f32; 24];
+    let mut offset = 0;
+    while (backing.as_ptr() as usize + offset * 4).is_multiple_of(align) {
+        offset += 1;
+    }
+    let ptr = unsafe { backing.as_ptr().add(offset) };
+
+    let mat = unsafe {
+        opencv::core::Mat::new_nd_with_data_unsafe(
+            &[1, 2],
+            opencv::core::CV_32FC4,
+            ptr as *mut core::ffi::c_void,
+            None,
+        )
+    }
+    .unwrap();
+
+    let err = mat
+        .as_ndarray::<glam::Vec4, ndarray::Ix2>()
+        .expect_err("misaligned Mat data should fail for a 16-byte-aligned pixel type");
+    assert!(
+        matches!(err.kind, ConversionErrorKind::MisalignedData { .. }),
         "unexpected error kind: {:?}",
         err.kind
     );

@@ -22,7 +22,7 @@ pub(crate) mod seal {
         Sized + Copy + bytemuck::Pod + num::Zero + crate::types::CvType
     {
         fn as_cv_type() -> i32 {
-            crate::type_depth::<Self>()
+            <Self as crate::types::CvType>::cv_type()
         }
     }
     impl ConnectedComponentOutput for i32 {}

@@ -1,7 +1,6 @@
-use error_stack::ResultExt;
 use nalgebra::{Point2, Vector4};
 
-use crate::{BorderType, NdAsImage, NdAsImageMut, NdCvError};
+use crate::{BorderType, NdAsImage, NdAsImageMut};
 
 #[repr(i32)]
 #[derive(Debug, Copy, Clone)]
@@ -10,27 +9,44 @@ pub enum MorphType {
     Open = opencv::imgproc::MORPH_OPEN,
 }
 
-pub trait NdCvMorphologyEx<T: bytemuck::Pod + num::Zero, D: ndarray::Dimension>:
+#[derive(Debug, thiserror::Error)]
+pub enum MorphError {
+    #[error("Conversion error: {0}")]
+    ConversionError(#[from] crate::conversions::ConversionError),
+    #[error("OpenCV error: {0}")]
+    OpenCvError(#[from] opencv::Error),
+}
+
+mod seal {
+    pub trait Sealed {}
+    // src: input image; the number of channels can be arbitrary, but the depth should be
+    // CV_8U, CV_16U, CV_16S, CV_32F or CV_64F.
+    impl Sealed for u8 {}
+    impl Sealed for u16 {}
+    impl Sealed for i16 {}
+    impl Sealed for f32 {}
+    impl Sealed for f64 {}
+}
+
+pub trait NdCvMorphologyEx<T: bytemuck::Pod + num::Zero + seal::Sealed, D: ndarray::Dimension>:
     crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
     fn morpohology_ex(
         &self,
         morph_type: MorphType,
-        kernel: &ndarray::Array2<u8>,
+        kernel: ndarray::ArrayView2<u8>,
         iterations: usize,
         anchor: Point2<i32>,
         border: BorderType,
         border_value: Vector4<f64>,
-    ) -> error_stack::Result<ndarray::Array<T, D>, NdCvError>;
+    ) -> Result<ndarray::Array<T, D>, MorphError>;
 
     fn morpohology_ex_def(
         &self,
         morph_type: MorphType,
-        kernel: &ndarray::Array2<u8>,
-    ) -> error_stack::Result<ndarray::Array<T, D>, NdCvError> {
-        let bv = opencv::imgproc::morphology_default_border_value()
-            .change_context(NdCvError)?
-            .0;
+        kernel: ndarray::ArrayView2<u8>,
+    ) -> Result<ndarray::Array<T, D>, MorphError> {
+        let bv = opencv::imgproc::morphology_default_border_value()?.0;
 
         let border_value = bytemuck::cast::<[f64; 4], Vector4<f64>>(bv);
 
@@ -45,26 +61,26 @@ pub trait NdCvMorphologyEx<T: bytemuck::Pod + num::Zero, D: ndarray::Dimension>:
     }
 }
 
-impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvMorphologyEx<T, ndarray::Ix3>
-    for ndarray::ArrayBase<S, ndarray::Ix3>
+impl<T: bytemuck::Pod + num::Zero + seal::Sealed, S: ndarray::Data<Elem = T>>
+    NdCvMorphologyEx<T, ndarray::Ix3> for ndarray::ArrayBase<S, ndarray::Ix3>
 {
     fn morpohology_ex(
         &self,
         morph_type: MorphType,
-        kernel: &ndarray::Array2<u8>,
+        kernel: ndarray::ArrayView2<u8>,
         iterations: usize,
         anchor: Point2<i32>,
         border_type: BorderType,
         border_value: Vector4<f64>,
-    ) -> error_stack::Result<ndarray::Array<T, ndarray::Ix3>, NdCvError> {
-        let img_mat = self.as_image_mat().change_context(NdCvError)?;
+    ) -> Result<ndarray::Array<T, ndarray::Ix3>, MorphError> {
+        let img_mat = self.as_image_mat()?;
         let mut dst = ndarray::Array::zeros(self.dim());
 
         opencv::imgproc::morphology_ex(
             img_mat.as_ref(),
-            dst.as_image_mat_mut().change_context(NdCvError)?.as_mut(),
+            dst.as_image_mat_mut()?.as_mut(),
             morph_type as i32,
-            kernel.as_image_mat().change_context(NdCvError)?.as_ref(),
+            kernel.as_image_mat()?.as_ref(),
             opencv::core::Point::new(anchor.x, anchor.y),
             iterations as i32,
             border_type as i32,
@@ -74,33 +90,32 @@ impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvMorphologyEx<
                 border_value.z,
                 border_value.w,
             ]),
-        )
-        .change_context(NdCvError)?;
+        )?;
 
         Ok(dst)
     }
 }
 
-impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvMorphologyEx<T, ndarray::Ix2>
-    for ndarray::ArrayBase<S, ndarray::Ix2>
+impl<T: bytemuck::Pod + num::Zero + seal::Sealed, S: ndarray::Data<Elem = T>>
+    NdCvMorphologyEx<T, ndarray::Ix2> for ndarray::ArrayBase<S, ndarray::Ix2>
 {
     fn morpohology_ex(
         &self,
         morph_type: MorphType,
-        kernel: &ndarray::Array2<u8>,
+        kernel: ndarray::ArrayView2<u8>,
         iterations: usize,
         anchor: Point2<i32>,
         border_type: BorderType,
         border_value: Vector4<f64>,
-    ) -> error_stack::Result<ndarray::Array<T, ndarray::Ix2>, NdCvError> {
-        let img_mat = self.as_image_mat().change_context(NdCvError)?;
+    ) -> Result<ndarray::Array<T, ndarray::Ix2>, MorphError> {
+        let img_mat = self.as_image_mat()?;
         let mut dst = ndarray::Array::zeros(self.dim());
 
         opencv::imgproc::morphology_ex(
             img_mat.as_ref(),
-            dst.as_image_mat_mut().change_context(NdCvError)?.as_mut(),
+            dst.as_image_mat_mut()?.as_mut(),
             morph_type as i32,
-            kernel.as_image_mat().change_context(NdCvError)?.as_ref(),
+            kernel.as_image_mat()?.as_ref(),
             opencv::core::Point::new(anchor.x, anchor.y),
             iterations as i32,
             border_type as i32,
@@ -110,8 +125,7 @@ impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvMorphologyEx<
                 border_value.z,
                 border_value.w,
             ]),
-        )
-        .change_context(NdCvError)?;
+        )?;
 
         Ok(dst)
     }

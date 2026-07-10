@@ -1,37 +1,42 @@
-use crate::{BorderType, Interpolation, MatAsNd, NdAsImage, NdAsImageMut, NdImage, prelude_::*};
-use error_stack::ResultExt;
+use nalgebra::{Vector2, Vector4};
+
+use crate::{BorderType, Interpolation, MatAsNd, NdAsImage, NdAsImageMut, NdImage};
+
+#[derive(Debug, thiserror::Error)]
+pub enum AffineError {
+    #[error("Conversion error: {0}")]
+    ConversionError(#[from] crate::conversions::ConversionError),
+    #[error("OpenCV error: {0}")]
+    OpenCvError(#[from] opencv::Error),
+}
 
 pub trait NdCvWarpAffine<T: bytemuck::Pod + num::Zero, D: ndarray::Dimension>:
     crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
     fn warp_affine(
         &self,
-        transformation: &ndarray::Array2<f32>,
-        output_size: (usize, usize),
+        transformation: ndarray::ArrayView2<f32>,
+        output_size: Vector2<usize>,
         interpolation: Interpolation,
         border_type: BorderType,
-        border_value: (f64, f64, f64, f64),
-    ) -> Result<ndarray::Array<T, D>, NdCvError>;
+        border_value: Vector4<f64>,
+    ) -> Result<ndarray::Array<T, D>, AffineError>;
 }
 
 pub trait NdCvInvertWarpAffine<T: bytemuck::Pod + num::Zero, D: ndarray::Dimension>:
     crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
-    fn invert_warp_affine(&self) -> Result<ndarray::Array<T, D>, NdCvError>;
+    fn invert_warp_affine(&self) -> Result<ndarray::Array<T, D>, AffineError>;
 }
 
 impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvInvertWarpAffine<T, ndarray::Ix2>
     for ndarray::ArrayBase<S, ndarray::Ix2>
 {
-    fn invert_warp_affine(&self) -> Result<ndarray::Array<T, ndarray::Ix2>, NdCvError> {
-        let mat = self.as_image_mat().change_context(NdCvError)?;
+    fn invert_warp_affine(&self) -> Result<ndarray::Array<T, ndarray::Ix2>, AffineError> {
+        let mat = self.as_image_mat()?;
         let mut dest = ndarray::Array2::zeros((self.shape()[0], self.shape()[1]));
 
-        opencv::imgproc::invert_affine_transform(
-            mat.as_ref(),
-            dest.as_image_mat_mut().change_context(NdCvError)?.as_mut(),
-        )
-        .change_context(NdCvError)?;
+        opencv::imgproc::invert_affine_transform(mat.as_ref(), dest.as_image_mat_mut()?.as_mut())?;
 
         Ok(dest)
     }
@@ -42,27 +47,31 @@ impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvWarpAffine<T,
 {
     fn warp_affine(
         &self,
-        transformation: &ndarray::Array2<f32>,
-        output_size: (usize, usize),
+        transformation: ndarray::ArrayView2<f32>,
+        output_size: Vector2<usize>,
         interpolation: Interpolation,
         border_type: BorderType,
-        border_value: (f64, f64, f64, f64),
-    ) -> error_stack::Result<ndarray::Array<T, ndarray::Ix2>, NdCvError> {
-        let mat = self.as_image_mat().change_context(NdCvError)?;
-        let transformation = transformation.as_image_mat().change_context(NdCvError)?;
-        let mut dest = ndarray::Array2::zeros(output_size);
-        let mut dest_mat = dest.as_image_mat_mut().change_context(NdCvError)?;
+        border_value: Vector4<f64>,
+    ) -> Result<ndarray::Array<T, ndarray::Ix2>, AffineError> {
+        let mat = self.as_image_mat()?;
+        let transformation = transformation.as_image_mat()?;
+        let mut dest = ndarray::Array2::zeros((output_size.x, output_size.y));
+        let mut dest_mat = dest.as_image_mat_mut()?;
 
         opencv::imgproc::warp_affine(
             mat.as_ref(),
             dest_mat.as_mut(),
             transformation.as_ref(),
-            opencv::core::Size::new(output_size.0 as i32, output_size.1 as i32),
+            opencv::core::Size::new(output_size.x as i32, output_size.y as i32),
             interpolation as i32,
             border_type as i32,
-            opencv::core::Scalar::from(border_value),
-        )
-        .change_context(NdCvError)?;
+            opencv::core::VecN([
+                border_value.x,
+                border_value.y,
+                border_value.z,
+                border_value.w,
+            ]),
+        )?;
 
         Ok(dest)
     }
@@ -73,27 +82,31 @@ impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvWarpAffine<T,
 {
     fn warp_affine(
         &self,
-        transformation: &ndarray::Array2<f32>,
-        output_size: (usize, usize),
+        transformation: ndarray::ArrayView2<f32>,
+        output_size: Vector2<usize>,
         interpolation: Interpolation,
         border_type: BorderType,
-        border_value: (f64, f64, f64, f64),
-    ) -> error_stack::Result<ndarray::Array<T, ndarray::Ix3>, NdCvError> {
-        let mat = self.as_image_mat().change_context(NdCvError)?;
-        let transformation = transformation.as_image_mat().change_context(NdCvError)?;
-        let mut dest = ndarray::Array3::zeros((output_size.0, output_size.1, self.channels()));
-        let mut dest_mat = dest.as_image_mat_mut().change_context(NdCvError)?;
+        border_value: Vector4<f64>,
+    ) -> Result<ndarray::Array<T, ndarray::Ix3>, AffineError> {
+        let mat = self.as_image_mat()?;
+        let transformation = transformation.as_image_mat()?;
+        let mut dest = ndarray::Array3::zeros((output_size.x, output_size.y, self.channels()));
+        let mut dest_mat = dest.as_image_mat_mut()?;
 
         opencv::imgproc::warp_affine(
             mat.as_ref(),
             dest_mat.as_mut(),
             transformation.as_ref(),
-            opencv::core::Size::new(output_size.0 as i32, output_size.1 as i32),
+            opencv::core::Size::new(output_size.x as i32, output_size.y as i32),
             interpolation as i32,
             border_type as i32,
-            opencv::core::Scalar::from(border_value),
-        )
-        .change_context(NdCvError)?;
+            opencv::core::VecN([
+                border_value.x,
+                border_value.y,
+                border_value.z,
+                border_value.w,
+            ]),
+        )?;
 
         Ok(dest)
     }
@@ -121,7 +134,7 @@ pub trait NdCvEstimateAffinePartial2D<T: bytemuck::Pod + num::Zero, D: ndarray::
         max_iters: usize,
         confidence: f64,
         refine_iters: usize,
-    ) -> Result<EstimateAffineResult<T, D>, NdCvError>;
+    ) -> Result<EstimateAffineResult<T, D>, AffineError>;
 }
 
 impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>>
@@ -135,28 +148,23 @@ impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>>
         max_iters: usize,
         confidence: f64,
         refine_iters: usize,
-    ) -> Result<EstimateAffineResult<T, ndarray::Ix2>, NdCvError> {
-        let input_mat = self.as_image_mat().change_context(NdCvError)?;
-        let reference_mat = reference.as_image_mat().change_context(NdCvError)?;
+    ) -> Result<EstimateAffineResult<T, ndarray::Ix2>, AffineError> {
+        let input_mat = self.as_image_mat()?;
+        let reference_mat = reference.as_image_mat()?;
 
         let mut inliers = ndarray::Array2::<T>::zeros(reference.dim());
 
         let transformation_mat = opencv::calib3d::estimate_affine_partial_2d(
             input_mat.as_ref(),
             reference_mat.as_ref(),
-            inliers
-                .as_image_mat_mut()
-                .change_context(NdCvError)?
-                .as_mut(),
+            inliers.as_image_mat_mut()?.as_mut(),
             method as i32,
             ransac_reproj_threshold,
             max_iters,
             confidence,
             refine_iters,
-        )
-        .change_context(NdCvError)?
-        .as_ndarray()
-        .change_context(NdCvError)?
+        )?
+        .as_ndarray()?
         .to_owned();
 
         Ok(EstimateAffineResult {

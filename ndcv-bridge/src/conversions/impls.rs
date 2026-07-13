@@ -1,10 +1,11 @@
+use crate::types::CvType;
+
 use super::ConversionError;
 use super::ConversionErrorKind;
-use super::type_depth;
 use core::ffi::*;
 use opencv::core::prelude::*;
 pub(crate) unsafe fn ndarray_to_mat_regular<
-    T,
+    T: CvType,
     S: ndarray::Data<Elem = T>,
     D: ndarray::Dimension,
 >(
@@ -33,7 +34,7 @@ pub(crate) unsafe fn ndarray_to_mat_regular<
 
     let data_ptr = input.as_ptr() as *const c_void;
 
-    let typ = opencv::core::CV_MAKETYPE(type_depth::<T>(), 1);
+    let typ = <T as CvType>::cv_type();
     let mat = unsafe {
         opencv::core::Mat::new_nd_with_data_unsafe(
             size.as_slice(),
@@ -47,12 +48,22 @@ pub(crate) unsafe fn ndarray_to_mat_regular<
 }
 
 pub(crate) unsafe fn ndarray_to_mat_consolidated<
-    T,
+    T: CvType,
     S: ndarray::Data<Elem = T>,
     D: ndarray::Dimension,
 >(
     input: &ndarray::ArrayBase<S, D>,
 ) -> Result<opencv::core::Mat, ConversionError> {
+    // The consolidated layout folds the last ndarray axis into Mat channels,
+    // which only makes sense for scalar elements: a pixel-typed T would need
+    // CV_MAKETYPE(depth, last_dim * T::cv_channels()) and nothing downstream
+    // expects such Mats. Use the regular path (Ix2 of pixel T) instead.
+    if <T as CvType>::cv_channels() > 1 {
+        Err(ConversionErrorKind::UnsupportedDataType(
+            std::any::type_name::<T>(),
+        ))?;
+    }
+
     let shape = input.shape();
     let strides = input.strides();
 
@@ -94,7 +105,7 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
 
     let data_ptr = input.as_ptr() as *const c_void;
 
-    let typ = opencv::core::CV_MAKETYPE(type_depth::<T>(), channels as i32);
+    let typ = opencv::core::CV_MAKETYPE(<T as CvType>::cv_depth(), channels as i32);
 
     let mat = unsafe {
         opencv::core::Mat::new_nd_with_data_unsafe(
@@ -108,29 +119,32 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
     Ok(mat)
 }
 
-pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
+pub(crate) unsafe fn mat_to_ndarray<T: CvType, D: ndarray::Dimension>(
     mat: &opencv::core::Mat,
 ) -> Result<ndarray::ArrayView<'_, T, D>, ConversionError> {
     let depth = mat.depth();
-    if type_depth::<T>() != depth {
+    if crate::type_depth::<T>() != depth {
         Err(ConversionErrorKind::TypeMismatch {
             expected: std::any::type_name::<T>()
                 .rsplit_once("::")
-                .expect("Impossible")
-                .1,
+                .map_or_else(|| std::any::type_name::<T>(), |(_, name)| name),
             got: crate::depth_type(depth),
         })?;
-        // return Err(Report::new(ConversionError).attach(format!(
-        //     "Expected type Mat<{}> ({}), got Mat<{}> ({})",
-        //     std::any::type_name::<T>(),
-        //     type_depth::<T>(),
-        //     crate::depth_type(depth),
-        //     depth,
-        // )));
     }
 
     let channels = mat.channels();
-    let multi_channel = channels > 1;
+    let type_channels = <T as CvType>::cv_channels();
+    let multi_channel = channels > 1 && type_channels == 1;
+
+    if type_channels > 1 && channels != type_channels {
+        Err(ConversionErrorKind::IncompatibleDimensions {
+            mat_dims: mat.dims() as _,
+            rows: mat.rows() as _,
+            cols: mat.cols() as _,
+            channels: channels as _,
+            ndarray_dims: D::NDIM.unwrap_or(0),
+        })?;
+    }
 
     let mat_dims = mat.dims(); // dims is always >= 2
     let maybe_1d = mat_dims == 2
@@ -199,12 +213,46 @@ pub(crate) unsafe fn mat_to_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
         .map(|x| x.map(|x| x as usize))
         .take(dim)
         .collect::<Result<Vec<_>, ConversionError>>()?;
-    let strides = (0..(mat.dims() - 1 - multi_channel_1d as i32))
-        .map(|i| mat.step1(i).map_err(ConversionError::from))
-        .chain([Ok(channels as usize), Ok(1)])
-        .take(dim)
-        .collect::<Result<Vec<_>, ConversionError>>()?;
+    let strides = if type_channels > 1 {
+        (0..(mat.dims() - 1))
+            .map(|i| {
+                let step = mat.step1(i)?;
+                // A step that is not a whole number of pixels cannot be
+                // expressed as a stride over T; flooring it would produce a
+                // garbage view.
+                if !step.is_multiple_of(type_channels as usize) {
+                    return Err(ConversionErrorKind::IncompatibleDimensions {
+                        mat_dims: mat.dims() as _,
+                        rows: mat.rows() as _,
+                        cols: mat.cols() as _,
+                        channels: channels as _,
+                        ndarray_dims: D::NDIM.unwrap_or(0),
+                    }
+                    .into());
+                }
+                Ok(step / type_channels as usize)
+            })
+            .chain([Ok(1)])
+            .take(dim)
+            .collect::<Result<Vec<_>, ConversionError>>()?
+    } else {
+        (0..(mat.dims() - 1 - multi_channel_1d as i32))
+            .map(|i| mat.step1(i).map_err(ConversionError::from))
+            .chain([Ok(channels as usize), Ok(1)])
+            .take(dim)
+            .collect::<Result<Vec<_>, ConversionError>>()?
+    };
     let shape = sizes.strides(strides);
+
+    // RawArrayView::from_shape_ptr requires the pointer to be aligned for T.
+    // SIMD-backed pixel types (e.g. glam::Vec4, 16-byte aligned) can exceed
+    // the alignment of a Mat built over a foreign buffer. All strides are in
+    // whole units of T, so checking the base pointer is sufficient.
+    if !(mat.data() as usize).is_multiple_of(core::mem::align_of::<T>()) {
+        Err(ConversionErrorKind::MisalignedData {
+            align: core::mem::align_of::<T>(),
+        })?;
+    }
 
     let raw_array = unsafe {
         ndarray::RawArrayView::from_shape_ptr(shape, mat.data() as *const T)

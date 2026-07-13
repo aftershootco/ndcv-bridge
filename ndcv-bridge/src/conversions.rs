@@ -17,15 +17,15 @@
 //! | Array<T, Ix6>     | Mat(ndims = 5, channels = X)   |
 //!
 //! // X is the last dimension
-use crate::type_depth;
 use ndarray::{Ix2, Ix3};
 pub mod impls;
 pub(crate) mod matref;
 use matref::{MatRef, MatRefMut};
 
 pub(crate) mod seal {
+    use crate::types::CvType;
     pub trait SealedInternal {}
-    impl<T, S: ndarray::Data<Elem = T>, D> SealedInternal for ndarray::ArrayBase<S, D> {}
+    impl<T: CvType, S: ndarray::Data<Elem = T>, D> SealedInternal for ndarray::ArrayBase<S, D> {}
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -57,6 +57,10 @@ pub enum ConversionErrorKind {
         expected: &'static str,
         got: &'static str,
     },
+    #[error(
+        "Mat data pointer is not aligned for the target element type ({align}-byte alignment required)"
+    )]
+    MisalignedData { align: usize },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -103,7 +107,7 @@ impl From<ndarray::ShapeError> for ConversionError {
 }
 
 // #[deprecated = "Use NdAsMat and NdAsImage traits instead"]
-pub trait NdCvConversion<T: bytemuck::Pod + Copy, D: ndarray::Dimension>:
+pub trait NdCvConversion<T: crate::types::CvType, D: ndarray::Dimension>:
     seal::SealedInternal + Sized
 {
     // #[deprecated = "Use NdAsMat and NdAsImage traits instead"]
@@ -115,7 +119,7 @@ pub trait NdCvConversion<T: bytemuck::Pod + Copy, D: ndarray::Dimension>:
 }
 
 #[allow(deprecated)]
-impl<T: bytemuck::Pod + Copy, S: ndarray::Data<Elem = T>, D: ndarray::Dimension>
+impl<T: crate::types::CvType, S: ndarray::Data<Elem = T>, D: ndarray::Dimension>
     NdCvConversion<T, D> for ndarray::ArrayBase<S, D>
 where
     Self: NdAsImage<T, D>,
@@ -133,30 +137,30 @@ where
 }
 
 pub trait MatAsNd {
-    fn as_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
+    fn as_ndarray<T: crate::types::CvType, D: ndarray::Dimension>(
         &self,
     ) -> Result<ndarray::ArrayView<'_, T, D>, ConversionError>;
 }
 
 impl MatAsNd for opencv::core::Mat {
-    fn as_ndarray<T: bytemuck::Pod, D: ndarray::Dimension>(
+    fn as_ndarray<T: crate::types::CvType, D: ndarray::Dimension>(
         &self,
     ) -> Result<ndarray::ArrayView<'_, T, D>, ConversionError> {
         unsafe { impls::mat_to_ndarray::<T, D>(self) }
     }
 }
 
-pub trait NdAsMat<T: bytemuck::Pod + Copy, D: ndarray::Dimension> {
+pub trait NdAsMat<T: crate::types::CvType, D: ndarray::Dimension> {
     fn as_single_channel_mat(&self) -> Result<MatRef<'_>, ConversionError>;
     fn as_multi_channel_mat(&self) -> Result<MatRef<'_>, ConversionError>;
 }
 
-pub trait NdAsMatMut<T: bytemuck::Pod + Copy, D: ndarray::Dimension>: NdAsMat<T, D> {
+pub trait NdAsMatMut<T: crate::types::CvType, D: ndarray::Dimension>: NdAsMat<T, D> {
     fn as_single_channel_mat_mut(&mut self) -> Result<MatRefMut<'_>, ConversionError>;
     fn as_multi_channel_mat_mut(&mut self) -> Result<MatRefMut<'_>, ConversionError>;
 }
 
-impl<T: bytemuck::Pod, S: ndarray::Data<Elem = T>, D: ndarray::Dimension> NdAsMat<T, D>
+impl<T: crate::types::CvType, S: ndarray::Data<Elem = T>, D: ndarray::Dimension> NdAsMat<T, D>
     for ndarray::ArrayBase<S, D>
 {
     fn as_single_channel_mat(&self) -> Result<MatRef<'_>, ConversionError> {
@@ -169,7 +173,7 @@ impl<T: bytemuck::Pod, S: ndarray::Data<Elem = T>, D: ndarray::Dimension> NdAsMa
     }
 }
 
-impl<T: bytemuck::Pod, S: ndarray::DataMut<Elem = T>, D: ndarray::Dimension> NdAsMatMut<T, D>
+impl<T: crate::types::CvType, S: ndarray::DataMut<Elem = T>, D: ndarray::Dimension> NdAsMatMut<T, D>
     for ndarray::ArrayBase<S, D>
 {
     fn as_single_channel_mat_mut(&mut self) -> Result<MatRefMut<'_>, ConversionError> {
@@ -183,17 +187,17 @@ impl<T: bytemuck::Pod, S: ndarray::DataMut<Elem = T>, D: ndarray::Dimension> NdA
     }
 }
 
-pub trait NdAsImage<T: bytemuck::Pod, D: ndarray::Dimension> {
+pub trait NdAsImage<T: crate::types::CvType, D: ndarray::Dimension> {
     fn as_image_mat(&self) -> Result<MatRef<'_>, ConversionError>;
 }
 
-pub trait NdAsImageMut<T: bytemuck::Pod, D: ndarray::Dimension> {
+pub trait NdAsImageMut<T: crate::types::CvType, D: ndarray::Dimension> {
     fn as_image_mat_mut(&mut self) -> Result<MatRefMut<'_>, ConversionError>;
 }
 
 impl<T, S> NdAsImage<T, Ix2> for ndarray::ArrayBase<S, Ix2>
 where
-    T: bytemuck::Pod + Copy,
+    T: crate::types::CvType,
     S: ndarray::Data<Elem = T>,
 {
     fn as_image_mat(&self) -> Result<MatRef<'_>, ConversionError> {
@@ -203,7 +207,7 @@ where
 
 impl<T, S> NdAsImageMut<T, Ix2> for ndarray::ArrayBase<S, Ix2>
 where
-    T: bytemuck::Pod + Copy,
+    T: crate::types::CvType,
     S: ndarray::DataMut<Elem = T>,
 {
     fn as_image_mat_mut(&mut self) -> Result<MatRefMut<'_>, ConversionError> {
@@ -213,7 +217,7 @@ where
 
 impl<T, S> NdAsImage<T, Ix3> for ndarray::ArrayBase<S, Ix3>
 where
-    T: bytemuck::Pod + Copy,
+    T: crate::types::CvType,
     S: ndarray::Data<Elem = T>,
 {
     fn as_image_mat(&self) -> Result<MatRef<'_>, ConversionError> {
@@ -223,7 +227,7 @@ where
 
 impl<T, S> NdAsImageMut<T, Ix3> for ndarray::ArrayBase<S, Ix3>
 where
-    T: bytemuck::Pod + Copy,
+    T: crate::types::CvType,
     S: ndarray::DataMut<Elem = T>,
 {
     fn as_image_mat_mut(&mut self) -> Result<MatRefMut<'_>, ConversionError> {
@@ -408,6 +412,175 @@ pub fn test_2d_array_regular() {
     let mat = unsafe { impls::ndarray_to_mat_regular(&array) }.unwrap();
     let arr = unsafe { impls::mat_to_ndarray::<f32, ndarray::Ix2>(&mat).unwrap() };
     assert_eq!(array, arr);
+}
+
+#[test]
+pub fn test_2d_array_of_rgb_pixels_as_image_mat_preserves_channels() {
+    use opencv::prelude::MatTraitConst;
+
+    let array = ndarray::Array2::from_elem((2, 3), [10_u8, 20, 30]);
+    let mat = array.as_image_mat().unwrap();
+
+    assert_eq!(mat.channels(), 3);
+    assert_eq!(mat.typ(), opencv::core::CV_8UC3);
+    assert_eq!(mat.rows(), 2);
+    assert_eq!(mat.cols(), 3);
+}
+
+#[test]
+pub fn test_2d_array_of_rgb_pixels_roundtrips_through_image_mat() {
+    let array = ndarray::arr2(&[
+        [[10_u8, 20, 30], [40, 50, 60], [70, 80, 90]],
+        [[100, 110, 120], [130, 140, 150], [160, 170, 180]],
+    ]);
+    let mat = array.as_image_mat().unwrap();
+    let roundtrip: ndarray::ArrayView2<[u8; 3]> = mat.as_ndarray().unwrap();
+
+    assert_eq!(roundtrip, array.view());
+}
+
+#[test]
+pub fn test_single_row_of_rgb_pixels_roundtrips_through_image_mat() {
+    // A 1xN image of pixel-typed elements should round-trip preserving values
+    // and column order (exercises the multi-channel stride path with mat.rows() == 1).
+    let array = ndarray::arr2(&[[[10_u8, 20, 30], [40, 50, 60], [70, 80, 90], [100, 110, 120]]]);
+    let mat = array.as_image_mat().unwrap();
+    let roundtrip: ndarray::ArrayView2<[u8; 3]> = mat.as_ndarray().unwrap();
+
+    assert_eq!(roundtrip.shape(), &[1, 4]);
+    assert_eq!(roundtrip, array.view());
+}
+
+#[test]
+pub fn test_glam_vec3_pixels_roundtrip_through_image_mat() {
+    use opencv::prelude::MatTraitConst;
+
+    let array = ndarray::Array2::from_shape_fn((2, 3), |(r, c)| {
+        glam::Vec3::new(r as f32, c as f32, (r + c) as f32)
+    });
+    let mat = array.as_image_mat().unwrap();
+
+    assert_eq!(mat.typ(), opencv::core::CV_32FC3);
+    assert_eq!(mat.channels(), 3);
+
+    let roundtrip: ndarray::ArrayView2<glam::Vec3> = mat.as_ndarray().unwrap();
+    assert_eq!(roundtrip, array.view());
+}
+
+#[test]
+pub fn test_mat_to_ndarray_errors_when_pixel_channels_mismatch() {
+    // CV_8UC3 Mat read as a 4-channel pixel type must error, not read out of bounds.
+    let array = ndarray::Array2::from_elem((2, 3), [10_u8, 20, 30]);
+    let mat = array.as_image_mat().unwrap();
+
+    let err = mat
+        .as_ndarray::<[u8; 4], ndarray::Ix2>()
+        .expect_err("4-channel read of a 3-channel Mat should fail");
+    assert!(
+        matches!(err.kind, ConversionErrorKind::IncompatibleDimensions { .. }),
+        "unexpected error kind: {:?}",
+        err.kind
+    );
+}
+
+#[test]
+pub fn test_mat_to_ndarray_errors_reading_single_channel_as_pixel() {
+    // CV_8UC1 Mat (matching depth) read as a multi-channel pixel type must error.
+    let array = ndarray::Array2::<u8>::ones((4, 5));
+    let mat = array.as_image_mat().unwrap();
+
+    let err = mat
+        .as_ndarray::<[u8; 3], ndarray::Ix2>()
+        .expect_err("3-channel read of a single-channel Mat should fail");
+    assert!(
+        matches!(err.kind, ConversionErrorKind::IncompatibleDimensions { .. }),
+        "unexpected error kind: {:?}",
+        err.kind
+    );
+}
+
+#[test]
+pub fn test_3d_array_of_pixel_elements_errors_as_image_mat() {
+    // The consolidated path folds the last axis into channels, which is only
+    // meaningful for scalar elements. An Array3 of pixel-typed elements must
+    // error instead of silently building a Mat with a mismatched element size.
+    let array = ndarray::Array3::from_elem((2, 3, 4), glam::Vec3::ONE);
+
+    let err = array
+        .as_image_mat()
+        .expect_err("pixel-typed elements must be rejected by the multi-channel path");
+    assert!(
+        matches!(err.kind, ConversionErrorKind::UnsupportedDataType(_)),
+        "unexpected error kind: {:?}",
+        err.kind
+    );
+}
+
+#[test]
+pub fn test_mat_step_not_multiple_of_pixel_errors() {
+    // A Mat whose row step (10 bytes) is not a whole number of 3-byte pixels
+    // cannot be expressed as a stride over [u8; 3]; flooring would produce a
+    // garbage view.
+    let data = [0_u8; 32];
+    let mat = unsafe {
+        opencv::core::Mat::new_nd_with_data_unsafe(
+            &[2, 3],
+            opencv::core::CV_8UC3,
+            data.as_ptr() as *mut core::ffi::c_void,
+            Some(&[10]),
+        )
+    }
+    .unwrap();
+
+    let err = mat
+        .as_ndarray::<[u8; 3], ndarray::Ix2>()
+        .expect_err("step not divisible by pixel size should fail");
+    assert!(
+        matches!(err.kind, ConversionErrorKind::IncompatibleDimensions { .. }),
+        "unexpected error kind: {:?}",
+        err.kind
+    );
+
+    // The scalar view of the same Mat is still representable.
+    let scalar: ndarray::ArrayView3<u8> = mat.as_ndarray().unwrap();
+    assert_eq!(scalar.shape(), &[2, 3, 3]);
+}
+
+#[test]
+pub fn test_mat_with_misaligned_data_errors_for_simd_pixel() {
+    // glam::Vec4 is 16-byte aligned on SIMD targets; a Mat over a buffer that
+    // breaks that alignment must error instead of constructing a UB view.
+    let align = core::mem::align_of::<glam::Vec4>();
+    if align <= core::mem::align_of::<f32>() {
+        // Scalar-math build of glam; nothing to misalign.
+        return;
+    }
+
+    let backing = [0_f32; 24];
+    let mut offset = 0;
+    while (backing.as_ptr() as usize + offset * 4).is_multiple_of(align) {
+        offset += 1;
+    }
+    let ptr = unsafe { backing.as_ptr().add(offset) };
+
+    let mat = unsafe {
+        opencv::core::Mat::new_nd_with_data_unsafe(
+            &[1, 2],
+            opencv::core::CV_32FC4,
+            ptr as *mut core::ffi::c_void,
+            None,
+        )
+    }
+    .unwrap();
+
+    let err = mat
+        .as_ndarray::<glam::Vec4, ndarray::Ix2>()
+        .expect_err("misaligned Mat data should fail for a 16-byte-aligned pixel type");
+    assert!(
+        matches!(err.kind, ConversionErrorKind::MisalignedData { .. }),
+        "unexpected error kind: {:?}",
+        err.kind
+    );
 }
 
 #[test]

@@ -56,6 +56,8 @@ pub use contours::{
 pub use conversions::NdCvConversion;
 
 #[cfg(feature = "opencv")]
+pub use affine::NdCvWarpAffine;
+#[cfg(feature = "opencv")]
 pub use bounding_rect::BoundingRect;
 #[cfg(feature = "opencv")]
 pub use connected_components::{Connectivity, NdCvConnectedComponents};
@@ -65,8 +67,6 @@ pub use conversions::{MatAsNd, NdAsImage, NdAsImageMut, NdAsMat, NdAsMatMut};
 pub use normalize::{NdCvNormalize, NormType};
 #[cfg(feature = "opencv")]
 pub use resize::{Interpolation, NdCvResize};
-#[cfg(feature = "opencv")]
-pub use affine::NdCvWarpAffine;
 
 pub(crate) mod prelude_ {
     pub use crate::errors::NdCvError;

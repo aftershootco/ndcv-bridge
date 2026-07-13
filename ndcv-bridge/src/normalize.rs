@@ -134,3 +134,41 @@ impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvNormalize<T, 
         Ok(dest)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ndarray::{Array2, Array3};
+
+    #[test]
+    fn test_normalize_minmax_range() {
+        let mut arr = Array2::<u8>::from_elem((10, 10), 50);
+        arr[[0, 0]] = 10;
+        arr[[9, 9]] = 90;
+        let res = arr
+            .normalize(0., 255., NormType::MinMax, -1, &None)
+            .unwrap();
+        assert_eq!(res[[0, 0]], 0);
+        assert_eq!(res[[9, 9]], 255);
+    }
+
+    #[test]
+    fn test_normalize_l2() {
+        let arr = Array3::<f32>::ones((4, 4, 1));
+        let res = arr.normalize(1., 0., NormType::L2, -1, &None).unwrap();
+        // L2 norm of 16 ones is 4, so every element becomes 1/4
+        assert!(res.iter().all(|&v| (v - 0.25).abs() < 1e-6));
+    }
+
+    #[test]
+    fn test_normalize_def() {
+        let mut arr = Array2::<f32>::zeros((10, 10));
+        arr[[0, 0]] = 20.;
+        arr[[5, 5]] = 10.;
+        let res = arr.normalize_def().unwrap();
+        // MinMax into [-1, 1]: max -> 1, midpoint -> 0, min -> -1
+        assert!((res[[0, 0]] - 1.).abs() < 1e-6);
+        assert!(res[[5, 5]].abs() < 1e-6);
+        assert!((res[[1, 1]] + 1.).abs() < 1e-6);
+    }
+}

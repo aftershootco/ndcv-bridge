@@ -130,3 +130,54 @@ impl<T: bytemuck::Pod + num::Zero + seal::Sealed, S: ndarray::Data<Elem = T>>
         Ok(dst)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ndarray::{Array2, Array3};
+
+    fn rect_kernel(size: usize) -> Array2<u8> {
+        Array2::ones((size, size))
+    }
+
+    #[test]
+    fn test_morphology_open_removes_speck() {
+        let mut arr = Array2::<u8>::zeros((10, 10));
+        arr[[5, 5]] = 255;
+        let res = arr
+            .morpohology_ex_def(MorphType::Open, rect_kernel(3).view())
+            .unwrap();
+        assert!(res.iter().all(|&v| v == 0));
+    }
+
+    #[test]
+    fn test_morphology_close_fills_hole() {
+        let mut arr = Array2::<u8>::from_elem((10, 10), 255);
+        arr[[5, 5]] = 0;
+        let res = arr
+            .morpohology_ex_def(MorphType::Close, rect_kernel(3).view())
+            .unwrap();
+        assert!(res.iter().all(|&v| v == 255));
+    }
+
+    #[test]
+    fn test_morphology_full_params_array3() {
+        let arr = Array3::<u8>::ones((10, 10, 3));
+        let bv = opencv::imgproc::morphology_default_border_value()
+            .unwrap()
+            .0;
+        let border_value = bytemuck::cast::<[f64; 4], Vector4<f64>>(bv);
+        let res = arr
+            .morpohology_ex(
+                MorphType::Open,
+                rect_kernel(3).view(),
+                1,
+                Point2::new(-1, -1),
+                BorderType::BorderConstant,
+                border_value,
+            )
+            .unwrap();
+        assert_eq!(res.shape(), &[10, 10, 3]);
+        assert!(res.iter().all(|&v| v == 1));
+    }
+}

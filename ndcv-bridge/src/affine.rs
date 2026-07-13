@@ -116,6 +116,7 @@ impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvWarpAffine<T,
 #[derive(Debug, Copy, Clone)]
 pub enum EstimateAffineMethod {
     Lmeds = opencv::calib3d::LMEDS,
+    Ransac = opencv::calib3d::RANSAC,
 }
 
 pub struct EstimateAffineResult<T, D> {

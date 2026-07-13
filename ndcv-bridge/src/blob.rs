@@ -10,8 +10,11 @@ pub enum BlobError {
     OpenCvError(#[from] opencv::Error),
 }
 
-pub trait NdCvBlobFromImage<T: bytemuck::Pod + num::Zero, D: ndarray::Dimension>:
-    crate::image::NdImage + crate::conversions::NdAsImage<T, D>
+pub trait NdCvBlobFromImage<
+    T: bytemuck::Pod + num::Zero,
+    D: ndarray::Dimension,
+    U: bytemuck::Pod + seal::Sealed,
+>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
     fn blob_from_image(
         &self,
@@ -20,11 +23,29 @@ pub trait NdCvBlobFromImage<T: bytemuck::Pod + num::Zero, D: ndarray::Dimension>
         mean: Vector4<f64>,
         swap_rb: bool,
         crop: bool,
-    ) -> Result<ndarray::Array4<f32>, BlobError>;
+    ) -> Result<ndarray::Array4<U>, BlobError>;
 }
 
-impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvBlobFromImage<T, ndarray::Ix3>
-    for ndarray::ArrayBase<S, ndarray::Ix3>
+mod seal {
+    pub trait Sealed {
+        fn dtype() -> i32;
+    }
+
+    impl Sealed for u8 {
+        fn dtype() -> i32 {
+            opencv::core::CV_8U
+        }
+    }
+
+    impl Sealed for f32 {
+        fn dtype() -> i32 {
+            opencv::core::CV_32F
+        }
+    }
+}
+
+impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>, U: bytemuck::Pod + seal::Sealed>
+    NdCvBlobFromImage<T, ndarray::Ix3, U> for ndarray::ArrayBase<S, ndarray::Ix3>
 {
     fn blob_from_image(
         &self,
@@ -33,7 +54,9 @@ impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvBlobFromImage
         mean: Vector4<f64>,
         swap_rb: bool,
         crop: bool,
-    ) -> Result<ndarray::Array4<f32>, BlobError> {
+    ) -> Result<ndarray::Array4<U>, BlobError> {
+        let dtype = U::dtype();
+
         let dest = opencv::dnn::blob_from_image(
             self.as_image_mat()?.as_ref(),
             scalefactor,
@@ -44,7 +67,7 @@ impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvBlobFromImage
             opencv::core::VecN([mean.x, mean.y, mean.z, mean.w]),
             swap_rb,
             crop,
-            opencv::core::CV_32F,
+            dtype,
         )?
         .as_ndarray()?
         .to_owned();

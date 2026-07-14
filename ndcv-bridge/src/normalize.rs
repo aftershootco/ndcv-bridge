@@ -21,37 +21,47 @@ pub enum NormType {
     Relative = opencv::core::NORM_RELATIVE,
 }
 
-pub trait NdCvNormalize<T: bytemuck::Pod + num::Zero + crate::types::CvType, D: ndarray::Dimension>:
-    crate::image::NdImage + crate::conversions::NdAsImage<T, D>
+pub trait NdCvNormalize<
+    T: bytemuck::Pod + num::Zero + crate::types::CvType,
+    U: bytemuck::Pod + num::Zero + crate::types::CvType,
+    D: ndarray::Dimension,
+>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
     fn normalize(
         &self,
         alpha: f64,
         beta: f64,
         norm_type: NormType,
-        dtype: i32,
         mask: &Option<ndarray::Array2<T>>,
-    ) -> Result<ndarray::Array<T, D>, NormalizeError>;
+    ) -> Result<ndarray::Array<U, D>, NormalizeError>;
 
-    fn normalize_def(&self) -> Result<ndarray::Array<T, D>, NormalizeError> {
-        self.normalize(-1., 1., NormType::MinMax, -1, &None)
+    fn normalize_def(&self) -> Result<ndarray::Array<U, D>, NormalizeError> {
+        self.normalize(-1., 1., NormType::MinMax, &None)
     }
 }
 
-impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem = T>>
-    NdCvNormalize<T, ndarray::Ix3> for ndarray::ArrayBase<S, ndarray::Ix3>
+impl<
+    T: bytemuck::Pod + num::Zero + crate::types::CvType,
+    U: bytemuck::Pod + num::Zero + crate::types::CvType,
+    S: ndarray::Data<Elem = T>,
+> NdCvNormalize<T, U, ndarray::Ix3> for ndarray::ArrayBase<S, ndarray::Ix3>
 {
     fn normalize(
         &self,
         alpha: f64,
         beta: f64,
         norm_type: NormType,
-        dtype: i32,
         mask: &Option<ndarray::Array2<T>>,
-    ) -> Result<ndarray::Array<T, ndarray::Ix3>, NormalizeError> {
+    ) -> Result<ndarray::Array<U, ndarray::Ix3>, NormalizeError> {
         let mat = self.as_image_mat()?;
         let mut dest = ndarray::Array3::zeros(self.dim());
         let mut dest_mat = dest.as_image_mat_mut()?;
+
+        let dtype = if U::cv_type() == T::cv_type() {
+            -1
+        } else {
+            U::cv_type()
+        };
 
         match mask {
             Some(mask) => {
@@ -86,20 +96,28 @@ impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem 
     }
 }
 
-impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem = T>>
-    NdCvNormalize<T, ndarray::Ix2> for ndarray::ArrayBase<S, ndarray::Ix2>
+impl<
+    T: bytemuck::Pod + num::Zero + crate::types::CvType,
+    U: bytemuck::Pod + num::Zero + crate::types::CvType,
+    S: ndarray::Data<Elem = T>,
+> NdCvNormalize<T, U, ndarray::Ix2> for ndarray::ArrayBase<S, ndarray::Ix2>
 {
     fn normalize(
         &self,
         alpha: f64,
         beta: f64,
         norm_type: NormType,
-        dtype: i32,
         mask: &Option<ndarray::Array2<T>>,
-    ) -> Result<ndarray::Array<T, ndarray::Ix2>, NormalizeError> {
+    ) -> Result<ndarray::Array<U, ndarray::Ix2>, NormalizeError> {
         let mat = self.as_image_mat()?;
         let mut dest = ndarray::Array2::zeros((self.shape()[0], self.shape()[1]));
         let mut dest_mat = dest.as_image_mat_mut()?;
+
+        let dtype = if U::cv_type() == T::cv_type() {
+            -1
+        } else {
+            U::cv_type()
+        };
 
         match mask {
             Some(mask) => {
@@ -145,9 +163,7 @@ mod tests {
         let mut arr = Array2::<u8>::from_elem((10, 10), 50);
         arr[[0, 0]] = 10;
         arr[[9, 9]] = 90;
-        let res = arr
-            .normalize(0., 255., NormType::MinMax, -1, &None)
-            .unwrap();
+        let res: Array2<u8> = arr.normalize(0., 255., NormType::MinMax, &None).unwrap();
         assert_eq!(res[[0, 0]], 0);
         assert_eq!(res[[9, 9]], 255);
     }
@@ -155,7 +171,7 @@ mod tests {
     #[test]
     fn test_normalize_l2() {
         let arr = Array3::<f32>::ones((4, 4, 1));
-        let res = arr.normalize(1., 0., NormType::L2, -1, &None).unwrap();
+        let res: Array3<f32> = arr.normalize(1., 0., NormType::L2, &None).unwrap();
         // L2 norm of 16 ones is 4, so every element becomes 1/4
         assert!(res.iter().all(|&v| (v - 0.25).abs() < 1e-6));
     }
@@ -165,10 +181,22 @@ mod tests {
         let mut arr = Array2::<f32>::zeros((10, 10));
         arr[[0, 0]] = 20.;
         arr[[5, 5]] = 10.;
-        let res = arr.normalize_def().unwrap();
+        let res: Array2<f32> = arr.normalize_def().unwrap();
         // MinMax into [-1, 1]: max -> 1, midpoint -> 0, min -> -1
         assert!((res[[0, 0]] - 1.).abs() < 1e-6);
         assert!(res[[5, 5]].abs() < 1e-6);
         assert!((res[[1, 1]] + 1.).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_normalize_u8_to_f32_output() {
+        let mut arr = Array2::<u8>::from_elem((10, 10), 50);
+        arr[[0, 0]] = 10;
+        arr[[9, 9]] = 90;
+        let res: Array2<f32> = arr.normalize(0., 1., NormType::MinMax, &None).unwrap();
+        assert!(res[[0, 0]].abs() < 1e-6);
+        assert!((res[[9, 9]] - 1.).abs() < 1e-6);
+        // 50 -> (50 - 10) / 80 = 0.5
+        assert!((res[[1, 1]] - 0.5).abs() < 1e-6);
     }
 }

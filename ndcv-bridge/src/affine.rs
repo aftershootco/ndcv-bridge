@@ -56,7 +56,7 @@ impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem 
         let mat = self.as_image_mat()?;
         let transformation = transformation.as_image_mat()?;
         let output_size = output_size.into();
-        let mut dest = ndarray::Array2::zeros((output_size.x, output_size.y));
+        let mut dest = ndarray::Array2::zeros((output_size.y, output_size.x));
         let mut dest_mat = dest.as_image_mat_mut()?;
         let border_value = border_value.into();
 
@@ -93,7 +93,7 @@ impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem 
         let mat = self.as_image_mat()?;
         let transformation = transformation.as_image_mat()?;
         let output_size = output_size.into();
-        let mut dest = ndarray::Array3::zeros((output_size.x, output_size.y, self.channels()));
+        let mut dest = ndarray::Array3::zeros((output_size.y, output_size.x, self.channels()));
         let mut dest_mat = dest.as_image_mat_mut()?;
         let border_value = border_value.into();
 
@@ -185,7 +185,7 @@ impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem 
 mod tests {
     use super::*;
     use glam::{DVec4, USizeVec2};
-    use ndarray::{Array2, Array3, array};
+    use ndarray::{Array2, Array3, array, s};
 
     fn assert_close(actual: &Array2<f64>, expected: &Array2<f64>) {
         assert_eq!(actual.shape(), expected.shape());
@@ -248,6 +248,46 @@ mod tests {
             .unwrap();
         assert_eq!(res.shape(), &[5, 5, 3]);
         assert!(res.iter().all(|&v| v == 7));
+    }
+
+    #[test]
+    fn test_warp_affine_non_square_output() {
+        let arr = Array3::<u8>::from_elem((10, 10, 3), 7);
+        let identity = array![[1.0f32, 0., 0.], [0., 1., 0.]];
+        let res = arr
+            .warp_affine(
+                identity.view(),
+                USizeVec2::new(20, 10),
+                Interpolation::Nearest,
+                BorderType::BorderConstant,
+                DVec4::ZERO,
+            )
+            .unwrap();
+        // output_size (20, 10) is (width, height) -> shape (rows 10, cols 20)
+        assert_eq!(res.shape(), &[10, 20, 3]);
+        // source fills the left 10 columns; the rest is border fill
+        assert!(res.slice(s![.., ..10, ..]).iter().all(|&v| v == 7));
+        assert!(res.slice(s![.., 10.., ..]).iter().all(|&v| v == 0));
+    }
+
+    #[test]
+    fn test_warp_affine_translation_non_square() {
+        let mut arr = Array2::<u8>::zeros((10, 10));
+        arr[[2, 2]] = 255;
+        let translation = array![[1.0f32, 0., 3.], [0., 1., 1.]];
+        let res = arr
+            .warp_affine(
+                translation.view(),
+                USizeVec2::new(20, 10),
+                Interpolation::Nearest,
+                BorderType::BorderConstant,
+                DVec4::ZERO,
+            )
+            .unwrap();
+        assert_eq!(res.shape(), &[10, 20]);
+        // x maps to columns, y to rows: (col 2, row 2) -> (col 5, row 3)
+        assert_eq!(res[[3, 5]], 255);
+        assert_eq!(res[[2, 2]], 0);
     }
 
     #[test]

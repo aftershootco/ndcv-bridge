@@ -104,13 +104,7 @@ mod tests {
     fn test_blob_from_image_f32_input() {
         let arr = Array3::<f32>::from_elem((8, 10, 3), 0.75);
         let blob: Array4<f32> = arr
-            .blob_from_image(
-                2.0,
-                USizeVec2::new(10, 8),
-                DVec4::splat(0.25),
-                false,
-                false,
-            )
+            .blob_from_image(2.0, USizeVec2::new(10, 8), DVec4::splat(0.25), false, false)
             .unwrap();
         assert_eq!(blob.shape(), &[1, 3, 8, 10]);
         // mean is subtracted before scaling: (0.75 - 0.25) * 2 = 1

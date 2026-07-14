@@ -390,12 +390,17 @@ pub fn test_2d_array_consolidated() {
 }
 
 #[test]
-#[should_panic]
 pub fn test_1d_array_consolidated() {
+    // The consolidated path folds the last axis into channels, leaving a 1d
+    // array with no spatial axes; it is rejected rather than misread.
     let array = ndarray::Array1::<f32>::ones(23);
-    let mat = unsafe { impls::ndarray_to_mat_consolidated(&array) }.unwrap();
-    let arr = unsafe { impls::mat_to_ndarray::<f32, ndarray::Ix1>(&mat).unwrap() };
-    assert_eq!(array, arr);
+    let err = unsafe { impls::ndarray_to_mat_consolidated(&array) }
+        .expect_err("1d arrays should be rejected by the consolidated path");
+    assert!(
+        matches!(err.kind, ConversionErrorKind::UnsupportedNdarrayShape),
+        "unexpected error kind: {:?}",
+        err.kind
+    );
 }
 
 #[test]

@@ -347,26 +347,36 @@ mod tests {
     #[test]
     fn test_dilate_invalid_anchor_returns_err() {
         let arr = Array3::<u8>::ones((10, 10, 3));
-        let res = arr.dilate(
-            rect_kernel(3).view(),
-            Point2::new(10, 10),
-            1,
-            BorderType::BorderConstant,
-            Vector4::zeros(),
+        let err = arr
+            .dilate(
+                rect_kernel(3).view(),
+                Point2::new(10, 10),
+                1,
+                BorderType::BorderConstant,
+                Vector4::zeros(),
+            )
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("anchor"),
+            "expected the anchor bounds assertion, got: {err}"
         );
-        assert!(res.is_err());
     }
 
     #[test]
     fn test_dilate_inplace_invalid_anchor_returns_err() {
         let mut arr = Array3::<u8>::ones((10, 10, 3));
-        let res = arr.dilate_inplace(
-            rect_kernel(3).view(),
-            Point2::new(10, 10),
-            1,
-            BorderType::BorderConstant,
-            Vector4::zeros(),
+        let err = arr
+            .dilate_inplace(
+                rect_kernel(3).view(),
+                Point2::new(10, 10),
+                1,
+                BorderType::BorderConstant,
+                Vector4::zeros(),
+            )
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("anchor"),
+            "expected the anchor bounds assertion, got: {err}"
         );
-        assert!(res.is_err());
     }
 }

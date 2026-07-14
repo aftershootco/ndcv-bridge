@@ -587,8 +587,20 @@ mod tests {
         // Create an array with 3 channels but claim it's RGBA
         let rgb_data = Array3::<u8>::zeros((5, 5, 3));
 
-        let result = rgb_data.try_cvt::<Rgba<u8>, Rgb<u8>>();
-        assert!(result.is_err());
+        let err = rgb_data
+            .try_cvt::<Rgba<u8>, Rgb<u8>>()
+            .expect_err("3-channel array declared as Rgba should fail");
+        assert!(
+            matches!(
+                err,
+                ColorConversionError::ChannelMismatch {
+                    expected: 3,
+                    got: 4,
+                    ..
+                }
+            ),
+            "unexpected error: {err:?}"
+        );
     }
 
     #[test]

@@ -32,7 +32,7 @@ pub trait NdCvNormalize<
         alpha: f64,
         beta: f64,
         norm_type: NormType,
-        mask: &Option<ndarray::Array2<T>>,
+        mask: &Option<ndarray::ArrayView2<u8>>,
     ) -> Result<ndarray::Array<U, D>, NormalizeError>;
 
     fn normalize_def(&self) -> Result<ndarray::Array<U, D>, NormalizeError> {
@@ -51,7 +51,7 @@ impl<
         alpha: f64,
         beta: f64,
         norm_type: NormType,
-        mask: &Option<ndarray::Array2<T>>,
+        mask: &Option<ndarray::ArrayView2<u8>>,
     ) -> Result<ndarray::Array<U, ndarray::Ix3>, NormalizeError> {
         let mat = self.as_image_mat()?;
         let mut dest = ndarray::Array3::zeros(self.dim());
@@ -107,7 +107,7 @@ impl<
         alpha: f64,
         beta: f64,
         norm_type: NormType,
-        mask: &Option<ndarray::Array2<T>>,
+        mask: &Option<ndarray::ArrayView2<u8>>,
     ) -> Result<ndarray::Array<U, ndarray::Ix2>, NormalizeError> {
         let mat = self.as_image_mat()?;
         let mut dest = ndarray::Array2::zeros((self.shape()[0], self.shape()[1]));
@@ -186,6 +186,65 @@ mod tests {
         assert!((res[[0, 0]] - 1.).abs() < 1e-6);
         assert!(res[[5, 5]].abs() < 1e-6);
         assert!((res[[1, 1]] + 1.).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_normalize_masked_minmax() {
+        let mut arr = Array2::<u8>::from_elem((10, 10), 50);
+        arr[[0, 0]] = 10;
+        arr[[9, 9]] = 90;
+        arr[[5, 5]] = 255; // masked out; would dominate the max if the mask were ignored
+        let mut mask = Array2::<u8>::from_elem((10, 10), 255);
+        mask[[5, 5]] = 0;
+        let res: Array2<u8> = arr
+            .normalize(0., 255., NormType::MinMax, &Some(mask.view()))
+            .unwrap();
+        assert_eq!(res[[0, 0]], 0);
+        assert_eq!(res[[9, 9]], 255);
+        // masked-out pixels are not written; dest stays zero-initialized there
+        assert_eq!(res[[5, 5]], 0);
+    }
+
+    #[test]
+    fn test_normalize_masked_u8_to_f32_output() {
+        let mut arr = Array2::<u8>::from_elem((10, 10), 50);
+        arr[[0, 0]] = 10;
+        arr[[9, 9]] = 90;
+        arr[[5, 5]] = 255;
+        let mut mask = Array2::<u8>::from_elem((10, 10), 255);
+        mask[[5, 5]] = 0;
+        let res: Array2<f32> = arr
+            .normalize(0., 1., NormType::MinMax, &Some(mask.view()))
+            .unwrap();
+        assert!(res[[0, 0]].abs() < 1e-6);
+        assert!((res[[9, 9]] - 1.).abs() < 1e-6);
+        // 50 -> (50 - 10) / 80 = 0.5 using the masked min/max
+        assert!((res[[1, 1]] - 0.5).abs() < 1e-6);
+        assert!(res[[5, 5]].abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_normalize_masked_u16() {
+        let mut arr = Array2::<u16>::from_elem((10, 10), 50);
+        arr[[0, 0]] = 10;
+        arr[[9, 9]] = 90;
+        let mask = Array2::<u8>::ones((10, 10));
+        let res: Array2<u16> = arr
+            .normalize(0., 255., NormType::MinMax, &Some(mask.view()))
+            .unwrap();
+        assert_eq!(res[[0, 0]], 0);
+        assert_eq!(res[[9, 9]], 255);
+    }
+
+    #[test]
+    fn test_normalize_masked_f32() {
+        let arr = Array2::<f32>::ones((4, 4));
+        let mask = Array2::<u8>::ones((4, 4));
+        let res: Array2<f32> = arr
+            .normalize(1., 0., NormType::L2, &Some(mask.view()))
+            .unwrap();
+        // L2 norm of 16 ones is 4, so every element becomes 1/4
+        assert!(res.iter().all(|&v| (v - 0.25).abs() < 1e-6));
     }
 
     #[test]

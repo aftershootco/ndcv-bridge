@@ -1,5 +1,5 @@
 use crate::{MatAsNd, NdAsImage};
-use nalgebra::{Vector2, Vector4};
+use glam::{DVec4, USizeVec2};
 use opencv::core::Size_;
 
 #[derive(Debug, thiserror::Error)]
@@ -11,51 +11,50 @@ pub enum BlobError {
 }
 
 pub trait NdCvBlobFromImage<
-    T: bytemuck::Pod + num::Zero,
+    T: bytemuck::Pod + num::Zero + crate::types::CvType,
     D: ndarray::Dimension,
-    U: bytemuck::Pod + seal::Sealed,
+    U: bytemuck::Pod + seal::BlobOutputs + crate::types::CvType,
 >: crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
     fn blob_from_image(
         &self,
         scalefactor: f64,
-        size: Vector2<usize>,
-        mean: Vector4<f64>,
+        size: impl Into<USizeVec2>,
+        mean: impl Into<DVec4>,
         swap_rb: bool,
         crop: bool,
     ) -> Result<ndarray::Array4<U>, BlobError>;
 }
 
 mod seal {
-    pub trait Sealed {
-        fn dtype() -> i32;
-    }
-
-    impl Sealed for u8 {
-        fn dtype() -> i32 {
-            opencv::core::CV_8U
+    pub trait BlobOutputs: Sized + Copy + bytemuck::Pod + num::Zero + crate::types::CvType {
+        fn as_cv_type() -> i32 {
+            <Self as crate::types::CvType>::cv_type()
         }
     }
 
-    impl Sealed for f32 {
-        fn dtype() -> i32 {
-            opencv::core::CV_32F
-        }
-    }
+    impl BlobOutputs for u8 {}
+
+    impl BlobOutputs for f32 {}
 }
 
-impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>, U: bytemuck::Pod + seal::Sealed>
-    NdCvBlobFromImage<T, ndarray::Ix3, U> for ndarray::ArrayBase<S, ndarray::Ix3>
+impl<
+    T: bytemuck::Pod + num::Zero + crate::types::CvType,
+    S: ndarray::Data<Elem = T>,
+    U: bytemuck::Pod + seal::BlobOutputs + crate::types::CvType,
+> NdCvBlobFromImage<T, ndarray::Ix3, U> for ndarray::ArrayBase<S, ndarray::Ix3>
 {
     fn blob_from_image(
         &self,
         scalefactor: f64,
-        size: Vector2<usize>,
-        mean: Vector4<f64>,
+        size: impl Into<USizeVec2>,
+        mean: impl Into<DVec4>,
         swap_rb: bool,
         crop: bool,
     ) -> Result<ndarray::Array4<U>, BlobError> {
-        let dtype = U::dtype();
+        let dtype = U::as_cv_type();
+        let size = size.into();
+        let mean = mean.into();
 
         let dest = opencv::dnn::blob_from_image(
             self.as_image_mat()?.as_ref(),
@@ -85,7 +84,7 @@ mod tests {
     fn test_blob_from_image_u8_nchw_shape() {
         let arr = Array3::<u8>::ones((8, 10, 3));
         let blob: Array4<u8> = arr
-            .blob_from_image(1.0, Vector2::new(10, 8), Vector4::zeros(), false, false)
+            .blob_from_image(1.0, (10, 8), DVec4::ZERO, false, false)
             .unwrap();
         assert_eq!(blob.shape(), &[1, 3, 8, 10]);
         assert!(blob.iter().all(|&v| v == 1));
@@ -95,7 +94,7 @@ mod tests {
     fn test_blob_from_image_f32_scalefactor() {
         let arr = Array3::<u8>::from_elem((8, 10, 3), 200);
         let blob: Array4<f32> = arr
-            .blob_from_image(0.5, Vector2::new(10, 8), Vector4::zeros(), false, false)
+            .blob_from_image(0.5, USizeVec2::new(10, 8), DVec4::ZERO, false, false)
             .unwrap();
         assert_eq!(blob.shape(), &[1, 3, 8, 10]);
         assert!(blob.iter().all(|&v| (v - 100.0).abs() < 1e-6));
@@ -107,8 +106,8 @@ mod tests {
         let blob: Array4<f32> = arr
             .blob_from_image(
                 2.0,
-                Vector2::new(10, 8),
-                Vector4::repeat(0.25),
+                USizeVec2::new(10, 8),
+                DVec4::splat(0.25),
                 false,
                 false,
             )
@@ -125,7 +124,7 @@ mod tests {
         arr.slice_mut(s![.., .., 1]).fill(100.0);
         arr.slice_mut(s![.., .., 2]).fill(5.0);
         let blob: Array4<u8> = arr
-            .blob_from_image(1.0, Vector2::new(10, 8), Vector4::zeros(), false, false)
+            .blob_from_image(1.0, USizeVec2::new(10, 8), DVec4::ZERO, false, false)
             .unwrap();
         assert_eq!(blob.shape(), &[1, 3, 8, 10]);
         assert_eq!(blob[[0, 0, 0, 0]], 200);
@@ -140,7 +139,7 @@ mod tests {
         arr.slice_mut(s![.., .., 1]).fill(20);
         arr.slice_mut(s![.., .., 2]).fill(30);
         let blob: Array4<u8> = arr
-            .blob_from_image(1.0, Vector2::new(10, 8), Vector4::zeros(), true, false)
+            .blob_from_image(1.0, USizeVec2::new(10, 8), DVec4::ZERO, true, false)
             .unwrap();
         assert_eq!(blob[[0, 0, 0, 0]], 30);
         assert_eq!(blob[[0, 1, 0, 0]], 20);

@@ -1,4 +1,4 @@
-use nalgebra::{Point2, Vector4};
+use nalgebra::Vector4;
 
 use crate::{BorderType, NdAsImage, NdAsImageMut};
 
@@ -28,15 +28,17 @@ mod seal {
     impl Sealed for f64 {}
 }
 
-pub trait NdCvMorphologyEx<T: bytemuck::Pod + num::Zero + seal::Sealed, D: ndarray::Dimension>:
-    crate::image::NdImage + crate::conversions::NdAsImage<T, D>
+pub trait NdCvMorphologyEx<
+    T: bytemuck::Pod + num::Zero + seal::Sealed + crate::types::CvType,
+    D: ndarray::Dimension,
+>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
     fn morpohology_ex(
         &self,
         morph_type: MorphType,
         kernel: ndarray::ArrayView2<u8>,
         iterations: usize,
-        anchor: Point2<i32>,
+        anchor: impl Into<glam::ISizeVec2>,
         border: BorderType,
         border_value: Vector4<f64>,
     ) -> Result<ndarray::Array<T, D>, MorphError>;
@@ -54,14 +56,14 @@ pub trait NdCvMorphologyEx<T: bytemuck::Pod + num::Zero + seal::Sealed, D: ndarr
             morph_type,
             kernel,
             1,
-            Point2::new(-1, -1),
+            glam::ISizeVec2::new(-1, -1),
             BorderType::BorderConstant,
             border_value,
         )
     }
 }
 
-impl<T: bytemuck::Pod + num::Zero + seal::Sealed, S: ndarray::Data<Elem = T>>
+impl<T: bytemuck::Pod + num::Zero + seal::Sealed + crate::types::CvType, S: ndarray::Data<Elem = T>>
     NdCvMorphologyEx<T, ndarray::Ix3> for ndarray::ArrayBase<S, ndarray::Ix3>
 {
     fn morpohology_ex(
@@ -69,19 +71,20 @@ impl<T: bytemuck::Pod + num::Zero + seal::Sealed, S: ndarray::Data<Elem = T>>
         morph_type: MorphType,
         kernel: ndarray::ArrayView2<u8>,
         iterations: usize,
-        anchor: Point2<i32>,
+        anchor: impl Into<glam::ISizeVec2>,
         border_type: BorderType,
         border_value: Vector4<f64>,
     ) -> Result<ndarray::Array<T, ndarray::Ix3>, MorphError> {
         let img_mat = self.as_image_mat()?;
         let mut dst = ndarray::Array::zeros(self.dim());
+        let anchor = anchor.into();
 
         opencv::imgproc::morphology_ex(
             img_mat.as_ref(),
             dst.as_image_mat_mut()?.as_mut(),
             morph_type as i32,
             kernel.as_image_mat()?.as_ref(),
-            opencv::core::Point::new(anchor.x, anchor.y),
+            opencv::core::Point::new(anchor.x as i32, anchor.y as i32),
             iterations as i32,
             border_type as i32,
             opencv::core::VecN([
@@ -96,7 +99,7 @@ impl<T: bytemuck::Pod + num::Zero + seal::Sealed, S: ndarray::Data<Elem = T>>
     }
 }
 
-impl<T: bytemuck::Pod + num::Zero + seal::Sealed, S: ndarray::Data<Elem = T>>
+impl<T: bytemuck::Pod + num::Zero + seal::Sealed + crate::types::CvType, S: ndarray::Data<Elem = T>>
     NdCvMorphologyEx<T, ndarray::Ix2> for ndarray::ArrayBase<S, ndarray::Ix2>
 {
     fn morpohology_ex(
@@ -104,19 +107,20 @@ impl<T: bytemuck::Pod + num::Zero + seal::Sealed, S: ndarray::Data<Elem = T>>
         morph_type: MorphType,
         kernel: ndarray::ArrayView2<u8>,
         iterations: usize,
-        anchor: Point2<i32>,
+        anchor: impl Into<glam::ISizeVec2>,
         border_type: BorderType,
         border_value: Vector4<f64>,
     ) -> Result<ndarray::Array<T, ndarray::Ix2>, MorphError> {
         let img_mat = self.as_image_mat()?;
         let mut dst = ndarray::Array::zeros(self.dim());
+        let anchor = anchor.into();
 
         opencv::imgproc::morphology_ex(
             img_mat.as_ref(),
             dst.as_image_mat_mut()?.as_mut(),
             morph_type as i32,
             kernel.as_image_mat()?.as_ref(),
-            opencv::core::Point::new(anchor.x, anchor.y),
+            opencv::core::Point::new(anchor.x as i32, anchor.y as i32),
             iterations as i32,
             border_type as i32,
             opencv::core::VecN([
@@ -172,7 +176,7 @@ mod tests {
                 MorphType::Open,
                 rect_kernel(3).view(),
                 1,
-                Point2::new(-1, -1),
+                glam::ISizeVec2::new(-1, -1),
                 BorderType::BorderConstant,
                 border_value,
             )

@@ -21,7 +21,7 @@ pub enum NormType {
     Relative = opencv::core::NORM_RELATIVE,
 }
 
-pub trait NdCvNormalize<T: bytemuck::Pod + num::Zero, D: ndarray::Dimension>:
+pub trait NdCvNormalize<T: bytemuck::Pod + num::Zero + crate::types::CvType, D: ndarray::Dimension>:
     crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
     fn normalize(
@@ -38,8 +38,8 @@ pub trait NdCvNormalize<T: bytemuck::Pod + num::Zero, D: ndarray::Dimension>:
     }
 }
 
-impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvNormalize<T, ndarray::Ix3>
-    for ndarray::ArrayBase<S, ndarray::Ix3>
+impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem = T>>
+    NdCvNormalize<T, ndarray::Ix3> for ndarray::ArrayBase<S, ndarray::Ix3>
 {
     fn normalize(
         &self,
@@ -86,8 +86,8 @@ impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvNormalize<T, 
     }
 }
 
-impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvNormalize<T, ndarray::Ix2>
-    for ndarray::ArrayBase<S, ndarray::Ix2>
+impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem = T>>
+    NdCvNormalize<T, ndarray::Ix2> for ndarray::ArrayBase<S, ndarray::Ix2>
 {
     fn normalize(
         &self,

@@ -1,5 +1,3 @@
-use nalgebra::{Vector2, Vector4};
-
 use crate::{BorderType, Interpolation, MatAsNd, NdAsImage, NdAsImageMut, NdImage};
 
 #[derive(Debug, thiserror::Error)]
@@ -10,27 +8,29 @@ pub enum AffineError {
     OpenCvError(#[from] opencv::Error),
 }
 
-pub trait NdCvWarpAffine<T: bytemuck::Pod + num::Zero, D: ndarray::Dimension>:
+pub trait NdCvWarpAffine<T: bytemuck::Pod + num::Zero + crate::types::CvType, D: ndarray::Dimension>:
     crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
     fn warp_affine(
         &self,
         transformation: ndarray::ArrayView2<f32>,
-        output_size: Vector2<usize>,
+        output_size: impl Into<glam::USizeVec2>,
         interpolation: Interpolation,
         border_type: BorderType,
-        border_value: Vector4<f64>,
+        border_value: impl Into<glam::DVec4>,
     ) -> Result<ndarray::Array<T, D>, AffineError>;
 }
 
-pub trait NdCvInvertWarpAffine<T: bytemuck::Pod + num::Zero, D: ndarray::Dimension>:
-    crate::image::NdImage + crate::conversions::NdAsImage<T, D>
+pub trait NdCvInvertWarpAffine<
+    T: bytemuck::Pod + num::Zero + crate::types::CvType,
+    D: ndarray::Dimension,
+>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
     fn invert_warp_affine(&self) -> Result<ndarray::Array<T, D>, AffineError>;
 }
 
-impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvInvertWarpAffine<T, ndarray::Ix2>
-    for ndarray::ArrayBase<S, ndarray::Ix2>
+impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem = T>>
+    NdCvInvertWarpAffine<T, ndarray::Ix2> for ndarray::ArrayBase<S, ndarray::Ix2>
 {
     fn invert_warp_affine(&self) -> Result<ndarray::Array<T, ndarray::Ix2>, AffineError> {
         let mat = self.as_image_mat()?;
@@ -42,21 +42,23 @@ impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvInvertWarpAff
     }
 }
 
-impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvWarpAffine<T, ndarray::Ix2>
-    for ndarray::ArrayBase<S, ndarray::Ix2>
+impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem = T>>
+    NdCvWarpAffine<T, ndarray::Ix2> for ndarray::ArrayBase<S, ndarray::Ix2>
 {
     fn warp_affine(
         &self,
         transformation: ndarray::ArrayView2<f32>,
-        output_size: Vector2<usize>,
+        output_size: impl Into<glam::USizeVec2>,
         interpolation: Interpolation,
         border_type: BorderType,
-        border_value: Vector4<f64>,
+        border_value: impl Into<glam::DVec4>,
     ) -> Result<ndarray::Array<T, ndarray::Ix2>, AffineError> {
         let mat = self.as_image_mat()?;
         let transformation = transformation.as_image_mat()?;
+        let output_size = output_size.into();
         let mut dest = ndarray::Array2::zeros((output_size.x, output_size.y));
         let mut dest_mat = dest.as_image_mat_mut()?;
+        let border_value = border_value.into();
 
         opencv::imgproc::warp_affine(
             mat.as_ref(),
@@ -77,21 +79,23 @@ impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvWarpAffine<T,
     }
 }
 
-impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>> NdCvWarpAffine<T, ndarray::Ix3>
-    for ndarray::ArrayBase<S, ndarray::Ix3>
+impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem = T>>
+    NdCvWarpAffine<T, ndarray::Ix3> for ndarray::ArrayBase<S, ndarray::Ix3>
 {
     fn warp_affine(
         &self,
         transformation: ndarray::ArrayView2<f32>,
-        output_size: Vector2<usize>,
+        output_size: impl Into<glam::USizeVec2>,
         interpolation: Interpolation,
         border_type: BorderType,
-        border_value: Vector4<f64>,
+        border_value: impl Into<glam::DVec4>,
     ) -> Result<ndarray::Array<T, ndarray::Ix3>, AffineError> {
         let mat = self.as_image_mat()?;
         let transformation = transformation.as_image_mat()?;
+        let output_size = output_size.into();
         let mut dest = ndarray::Array3::zeros((output_size.x, output_size.y, self.channels()));
         let mut dest_mat = dest.as_image_mat_mut()?;
+        let border_value = border_value.into();
 
         opencv::imgproc::warp_affine(
             mat.as_ref(),
@@ -124,8 +128,10 @@ pub struct EstimateAffineResult<T, D> {
     pub transformation: ndarray::Array<T, D>,
 }
 
-pub trait NdCvEstimateAffinePartial2D<T: bytemuck::Pod + num::Zero, D: ndarray::Dimension>:
-    crate::image::NdImage + crate::conversions::NdAsImage<T, D>
+pub trait NdCvEstimateAffinePartial2D<
+    T: bytemuck::Pod + num::Zero + crate::types::CvType,
+    D: ndarray::Dimension,
+>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
     fn estimate_affine_partial_2d(
         &self,
@@ -138,7 +144,7 @@ pub trait NdCvEstimateAffinePartial2D<T: bytemuck::Pod + num::Zero, D: ndarray::
     ) -> Result<EstimateAffineResult<T, D>, AffineError>;
 }
 
-impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>>
+impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem = T>>
     NdCvEstimateAffinePartial2D<T, ndarray::Ix2> for ndarray::ArrayBase<S, ndarray::Ix2>
 {
     fn estimate_affine_partial_2d(
@@ -178,6 +184,7 @@ impl<T: bytemuck::Pod + num::Zero, S: ndarray::Data<Elem = T>>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use glam::{DVec4, USizeVec2};
     use ndarray::{Array2, Array3, array};
 
     fn assert_close(actual: &Array2<f64>, expected: &Array2<f64>) {
@@ -198,10 +205,10 @@ mod tests {
         let res = arr
             .warp_affine(
                 identity.view(),
-                Vector2::new(10, 10),
+                USizeVec2::new(10, 10),
                 Interpolation::Nearest,
                 BorderType::BorderConstant,
-                Vector4::zeros(),
+                DVec4::ZERO,
             )
             .unwrap();
         assert_eq!(res, arr);
@@ -215,10 +222,10 @@ mod tests {
         let res = arr
             .warp_affine(
                 translation.view(),
-                Vector2::new(10, 10),
+                USizeVec2::new(10, 10),
                 Interpolation::Nearest,
                 BorderType::BorderConstant,
-                Vector4::zeros(),
+                DVec4::ZERO,
             )
             .unwrap();
         // x maps to columns, y to rows: (col 2, row 2) -> (col 5, row 3)
@@ -233,10 +240,10 @@ mod tests {
         let res = arr
             .warp_affine(
                 identity.view(),
-                Vector2::new(5, 5),
+                USizeVec2::new(5, 5),
                 Interpolation::Nearest,
                 BorderType::BorderConstant,
-                Vector4::zeros(),
+                DVec4::ZERO,
             )
             .unwrap();
         assert_eq!(res.shape(), &[5, 5, 3]);

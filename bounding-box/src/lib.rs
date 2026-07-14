@@ -287,7 +287,7 @@ impl<T: Num, const D: usize> AxisAlignedBoundingBox<T, D> {
         T: nalgebra::SimdPartialOrd,
     {
         let min = self.min_vertex().inf(&other.min_vertex());
-        let max = self.min_vertex().sup(&other.max_vertex());
+        let max = self.max_vertex().sup(&other.max_vertex());
         Self::new(min, max)
     }
 

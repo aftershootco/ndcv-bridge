@@ -1,5 +1,6 @@
 //! <https://docs.rs/opencv/latest/opencv/imgproc/fn.blur.html>
 use crate::conversions::*;
+use glam::{IVec2, U16Vec2};
 use ndarray::*;
 
 #[derive(Debug, thiserror::Error)]
@@ -20,16 +21,16 @@ mod seal {
     impl Sealed for f64 {}
 }
 
-pub trait NdCvBlur<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
+pub trait NdCvBlur<T: bytemuck::Pod + seal::Sealed + crate::types::CvType, D: ndarray::Dimension>:
     crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
     fn blur(
         &self,
-        kernel_size: (u16, u16),
-        anchor: (i32, i32),
+        kernel_size: impl Into<U16Vec2>,
+        anchor: impl Into<IVec2>,
         border_type: crate::gaussian::BorderType,
     ) -> Result<ndarray::Array<T, D>, BlurError>;
-    fn blur_def(&self, kernel_size: (u16, u16)) -> Result<ndarray::Array<T, D>, BlurError> {
+    fn blur_def(&self, kernel_size: impl Into<U16Vec2>) -> Result<ndarray::Array<T, D>, BlurError> {
         self.blur(
             kernel_size,
             (-1, -1),
@@ -39,7 +40,7 @@ pub trait NdCvBlur<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
 }
 
 impl<
-    T: bytemuck::Pod + num::Zero + seal::Sealed,
+    T: bytemuck::Pod + num::Zero + seal::Sealed + crate::types::CvType,
     S: ndarray::RawData + ndarray::Data<Elem = T>,
     D: ndarray::Dimension,
 > NdCvBlur<T, D> for ArrayBase<S, D>
@@ -49,18 +50,20 @@ where
 {
     fn blur(
         &self,
-        kernel_size: (u16, u16),
-        anchor: (i32, i32),
+        kernel_size: impl Into<U16Vec2>,
+        anchor: impl Into<IVec2>,
         border_type: crate::gaussian::BorderType,
     ) -> Result<ndarray::Array<T, D>, BlurError> {
+        let kernel_size = kernel_size.into();
+        let anchor = anchor.into();
         let mut dst = ndarray::Array::zeros(self.dim());
         let cv_self = self.as_image_mat()?;
         let mut cv_dst = dst.as_image_mat_mut()?;
         opencv::imgproc::blur(
             &*cv_self,
             &mut *cv_dst,
-            opencv::core::Size::new(kernel_size.0 as i32, kernel_size.1 as i32),
-            opencv::core::Point::new(anchor.0, anchor.1),
+            opencv::core::Size::new(kernel_size.x.into(), kernel_size.y.into()),
+            opencv::core::Point::new(anchor.x, anchor.y),
             border_type as i32,
         )?;
         Ok(dst)

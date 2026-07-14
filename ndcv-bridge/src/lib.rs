@@ -34,6 +34,8 @@ pub mod morphology;
 pub mod normalize;
 #[cfg(feature = "opencv")]
 pub mod resize;
+#[cfg(feature = "opencv")]
+pub mod types;
 
 // pub mod codec;
 pub mod orient;
@@ -75,17 +77,9 @@ pub(crate) mod prelude_ {
 }
 
 #[cfg(feature = "opencv")]
-pub fn type_depth<T>() -> i32 {
-    match std::any::type_name::<T>() {
-        "u8" => opencv::core::CV_8U,
-        "i8" => opencv::core::CV_8S,
-        "u16" => opencv::core::CV_16U,
-        "i16" => opencv::core::CV_16S,
-        "i32" => opencv::core::CV_32S,
-        "f32" => opencv::core::CV_32F,
-        "f64" => opencv::core::CV_64F,
-        _ => panic!("Unsupported type"),
-    }
+pub fn type_depth<T: types::CvType>() -> i32 {
+    use types::CvType;
+    <T as CvType>::cv_depth()
 }
 
 #[cfg(feature = "opencv")]

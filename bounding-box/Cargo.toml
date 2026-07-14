@@ -12,7 +12,7 @@ ndarray = { workspace = true, optional = true }
 num = "0.4.3"
 ordered-float = "5.0.0"
 serde = { workspace = true, features = ["derive"], optional = true }
-simba = "0.9.1"
+simba = "0.10"
 thiserror = "2.0.12"
 tracing = { version = "0.1.41", optional = true, default-features = false }
 

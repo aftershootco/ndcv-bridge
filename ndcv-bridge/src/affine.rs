@@ -353,4 +353,62 @@ mod tests {
             &array![[0.0f64, -1., 0.], [1., 0., 0.]],
         );
     }
+
+    // ---- Regression tests for issues found reviewing PR #13 ----
+
+    // Issue 1 (affine.rs, estimate_affine_partial_2d): the inlier mask is never written back.
+    // `inliers` is allocated as an (N, 2) T-typed array over external ndarray memory, but
+    // OpenCV writes an (N, 1) CV_8U mask into a *reallocated* buffer, leaving our array
+    // all-zeros. Asserts the mask is populated -> FAILS on current code.
+    #[test]
+    fn test_estimate_affine_partial_2d_inliers_written_back() {
+        // Four exact correspondences plus one gross outlier RANSAC should reject.
+        let src = array![[0.0f64, 0.], [10., 0.], [10., 10.], [0., 10.], [5., 5.]];
+        let dst = array![
+            [0.0f64, 0.],
+            [10., 0.],
+            [10., 10.],
+            [0., 10.],
+            [900., -900.]
+        ];
+        let res = src
+            .estimate_affine_partial_2d(dst, EstimateAffineMethod::Ransac, 3.0, 2000, 0.99, 10)
+            .unwrap();
+        let marked = res.inliers.iter().filter(|&&v| v != 0.0).count();
+        assert!(
+            marked >= 4,
+            "expected the 4 exact correspondences to be marked as inliers, \
+             got {marked} non-zero entries; inliers = {:?}",
+            res.inliers
+        );
+    }
+
+    // Issue 3a (affine.rs:193): the estimated transform is always CV_64F, so any T other than
+    // f64 fails to convert the result (TypeMismatch). Asserts f32 works -> FAILS on current code.
+    #[test]
+    fn test_estimate_affine_partial_2d_accepts_f32() {
+        let src = array![[0.0f32, 0.], [10., 0.], [10., 10.], [0., 10.]];
+        let dst = src.clone();
+        let res =
+            src.estimate_affine_partial_2d(dst, EstimateAffineMethod::Ransac, 3.0, 2000, 0.99, 10);
+        assert!(
+            res.is_ok(),
+            "f32 estimate_affine_partial_2d should succeed, but errored: {:?}",
+            res.err()
+        );
+    }
+
+    // Issue 3b (affine.rs:54): the `T: CvType` bound compiles for integer arrays, but
+    // invertAffineTransform requires CV_32F/CV_64F and errors at runtime. Characterizes the
+    // current (over-advertised) behavior -> PASSES today, documenting the footgun.
+    #[test]
+    fn test_invert_warp_affine_rejects_integer_type() {
+        let transform = array![[1u8, 0, 5], [0, 1, 3]];
+        let res = transform.invert_warp_affine();
+        assert!(
+            res.is_err(),
+            "integer invert_warp_affine unexpectedly succeeded; the T: CvType bound advertises \
+             support the operation does not have"
+        );
+    }
 }

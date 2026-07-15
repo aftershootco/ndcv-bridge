@@ -258,4 +258,35 @@ mod tests {
         // 50 -> (50 - 10) / 80 = 0.5
         assert!((res[[1, 1]] - 0.5).abs() < 1e-6);
     }
+
+    // ---- Coverage added while reviewing PR #13 ----
+
+    // Issue 2 was RAISED in review as "NORM_MINMAX errors on multi-channel images because
+    // minMaxIdx asserts channels()==1". These two tests REFUTE that: on opencv 0.95 here,
+    // min-max on a consolidated 3-channel Mat (via normalize_def's default path and an
+    // explicit call) succeeds. Kept as regression coverage for the previously-untested
+    // multi-channel path so a future opencv bump that breaks it is caught.
+    #[test]
+    fn test_normalize_def_multichannel() {
+        let mut arr = Array3::<f32>::zeros((10, 10, 3));
+        arr[[0, 0, 0]] = 20.;
+        arr[[5, 5, 0]] = 10.;
+        let res: Result<Array3<f32>, _> = arr.normalize_def();
+        assert!(
+            res.is_ok(),
+            "normalize_def on a 3-channel image should succeed, but errored: {:?}",
+            res.err()
+        );
+    }
+
+    #[test]
+    fn test_normalize_minmax_multichannel() {
+        let arr = Array3::<u8>::from_elem((8, 8, 3), 50);
+        let res: Result<Array3<u8>, _> = arr.normalize(0., 255., NormType::MinMax, &None);
+        assert!(
+            res.is_ok(),
+            "min-max normalize on a 3-channel image should succeed, but errored: {:?}",
+            res.err()
+        );
+    }
 }

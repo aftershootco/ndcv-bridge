@@ -1,4 +1,25 @@
 //! Methods and type conversions for ndarray to opencv and vice versa
+//!
+//! # Public-API surface (PR #13, issue 4)
+//!
+//! Every operation trait should be reachable from the crate root, the way `NdCvResize`,
+//! `NdCvNormalize`, `NdCvWarpAffine` and `NdCvDilate` are. The `blob` and `morphology`
+//! modules, and part of `affine`, are declared `pub mod` but never re-exported, so the
+//! following does NOT compile today. The `compile_fail` marker pins that gap; once the
+//! re-exports are added this doctest starts failing and should be removed.
+//!
+//! ```compile_fail
+//! use ndcv_bridge::{
+//!     NdCvMorphologyEx, NdCvBlobFromImage, NdCvInvertWarpAffine, NdCvEstimateAffinePartial2D,
+//!     MorphType, EstimateAffineMethod,
+//! };
+//! ```
+//!
+//! For reference, these ones already resolve (they are re-exported):
+//!
+//! ```
+//! use ndcv_bridge::{NdCvNormalize, NdCvWarpAffine, NormType};
+//! ```
 mod blend;
 #[cfg(feature = "opencv")]
 pub mod dilate;

@@ -123,9 +123,9 @@ pub enum EstimateAffineMethod {
     Ransac = opencv::calib3d::RANSAC,
 }
 
-pub struct EstimateAffineResult<T, D> {
-    pub inliers: ndarray::Array<T, D>,
-    pub transformation: ndarray::Array<T, D>,
+pub struct EstimateAffineResult {
+    pub inliers: ndarray::Array2<u8>,
+    pub transformation: ndarray::Array2<f64>,
 }
 
 pub trait NdCvEstimateAffinePartial2D<
@@ -141,7 +141,7 @@ pub trait NdCvEstimateAffinePartial2D<
         max_iters: usize,
         confidence: f64,
         refine_iters: usize,
-    ) -> Result<EstimateAffineResult<T, D>, AffineError>;
+    ) -> Result<EstimateAffineResult, AffineError>;
 }
 
 impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem = T>>
@@ -155,28 +155,29 @@ impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem 
         max_iters: usize,
         confidence: f64,
         refine_iters: usize,
-    ) -> Result<EstimateAffineResult<T, ndarray::Ix2>, AffineError> {
+    ) -> Result<EstimateAffineResult, AffineError> {
         let input_mat = self.as_image_mat()?;
         let reference_mat = reference.as_image_mat()?;
-
-        let mut inliers = ndarray::Array2::<T>::zeros(reference.dim());
+        let mut inliers_mat = opencv::core::Mat::default();
 
         let transformation_mat = opencv::calib3d::estimate_affine_partial_2d(
             input_mat.as_ref(),
             reference_mat.as_ref(),
-            inliers.as_image_mat_mut()?.as_mut(),
+            &mut inliers_mat,
             method as i32,
             ransac_reproj_threshold,
             max_iters,
             confidence,
             refine_iters,
-        )?
-        .as_ndarray()?
-        .to_owned();
+        )?;
+
+        let inliers = inliers_mat.as_ndarray()?.to_owned();
+
+        let transformation = transformation_mat.as_ndarray()?.to_owned();
 
         Ok(EstimateAffineResult {
             inliers,
-            transformation: transformation_mat,
+            transformation,
         })
     }
 }
@@ -374,11 +375,137 @@ mod tests {
         let res = src
             .estimate_affine_partial_2d(dst, EstimateAffineMethod::Ransac, 3.0, 2000, 0.99, 10)
             .unwrap();
-        let marked = res.inliers.iter().filter(|&&v| v != 0.0).count();
+        let marked = res.inliers.iter().filter(|&&v| v != 0).count();
         assert!(
             marked >= 4,
             "expected the 4 exact correspondences to be marked as inliers, \
              got {marked} non-zero entries; inliers = {:?}",
+            res.inliers
+        );
+    }
+
+    #[test]
+    fn test_estimate_affine_partial_2d_inliers_shape_is_one_per_point() {
+        // The mask has one entry per point pair, not per coordinate.
+        let src = array![[0.0f64, 0.], [10., 0.], [10., 10.], [0., 10.], [5., 5.]];
+        let res = src
+            .estimate_affine_partial_2d(
+                src.clone(),
+                EstimateAffineMethod::Ransac,
+                3.0,
+                2000,
+                0.99,
+                10,
+            )
+            .unwrap();
+        assert_eq!(res.inliers.shape(), &[5, 1], "inliers = {:?}", res.inliers);
+    }
+
+    #[test]
+    fn test_estimate_affine_partial_2d_inliers_all_marked_for_exact_fit() {
+        let src = array![[0.0f64, 0.], [10., 0.], [10., 10.], [0., 10.]];
+        let dst = array![[5.0f64, -3.], [15., -3.], [15., 7.], [5., 7.]];
+        let res = src
+            .estimate_affine_partial_2d(dst, EstimateAffineMethod::Ransac, 3.0, 2000, 0.99, 10)
+            .unwrap();
+        assert!(
+            res.inliers.iter().all(|&v| v != 0),
+            "every exact correspondence should be an inlier; inliers = {:?}",
+            res.inliers
+        );
+    }
+
+    #[test]
+    fn test_estimate_affine_partial_2d_inliers_flags_outlier_rows() {
+        // Six correspondences under a pure translation, with rows 2 and 5 grossly
+        // corrupted. The mask must identify exactly the corrupted rows.
+        let src = array![
+            [0.0f64, 0.],
+            [10., 0.],
+            [10., 10.],
+            [0., 10.],
+            [5., 5.],
+            [20., 20.]
+        ];
+        let dst = array![
+            [5.0f64, -3.],
+            [15., -3.],
+            [-800., 600.], // outlier
+            [5., 7.],
+            [10., 2.],
+            [900., -900.] // outlier
+        ];
+        let res = src
+            .estimate_affine_partial_2d(dst, EstimateAffineMethod::Ransac, 3.0, 2000, 0.99, 10)
+            .unwrap();
+        for (i, expected_inlier) in [true, true, false, true, true, false].iter().enumerate() {
+            assert_eq!(
+                res.inliers[[i, 0]] != 0,
+                *expected_inlier,
+                "point {i} misclassified; inliers = {:?}",
+                res.inliers
+            );
+        }
+        // The outliers must not have dragged the estimate off the exact translation.
+        assert_close(
+            &res.transformation,
+            &array![[1.0f64, 0., 5.], [0., 1., -3.]],
+        );
+    }
+
+    #[test]
+    fn test_estimate_affine_partial_2d_inliers_written_back_lmeds() {
+        // LMEDS fills the inlier mask too, not just RANSAC.
+        let src = array![[0.0f64, 0.], [10., 0.], [10., 10.], [0., 10.], [5., 5.]];
+        let dst = array![
+            [0.0f64, 0.],
+            [10., 0.],
+            [10., 10.],
+            [0., 10.],
+            [900., -900.] // outlier
+        ];
+        let res = src
+            .estimate_affine_partial_2d(dst, EstimateAffineMethod::Lmeds, 3.0, 2000, 0.99, 10)
+            .unwrap();
+        let marked = res.inliers.iter().filter(|&&v| v != 0).count();
+        assert!(
+            marked >= 4,
+            "LMEDS should mark the 4 exact correspondences as inliers; inliers = {:?}",
+            res.inliers
+        );
+        assert_eq!(
+            res.inliers[[4, 0]],
+            0,
+            "LMEDS should reject the gross outlier; inliers = {:?}",
+            res.inliers
+        );
+    }
+
+    #[test]
+    fn test_estimate_affine_partial_2d_inliers_written_back_f32() {
+        // The mask stays u8 and is populated for f32 point arrays as well.
+        let src = array![[0.0f32, 0.], [10., 0.], [10., 10.], [0., 10.], [5., 5.]];
+        let dst = array![
+            [0.0f32, 0.],
+            [10., 0.],
+            [10., 10.],
+            [0., 10.],
+            [900., -900.] // outlier
+        ];
+        let res = src
+            .estimate_affine_partial_2d(dst, EstimateAffineMethod::Ransac, 3.0, 2000, 0.99, 10)
+            .unwrap();
+        assert_eq!(res.inliers.shape(), &[5, 1]);
+        let marked = res.inliers.iter().filter(|&&v| v != 0).count();
+        assert!(
+            marked >= 4,
+            "expected the 4 exact f32 correspondences to be marked as inliers; inliers = {:?}",
+            res.inliers
+        );
+        assert_eq!(
+            res.inliers[[4, 0]],
+            0,
+            "the gross outlier should not be an inlier; inliers = {:?}",
             res.inliers
         );
     }

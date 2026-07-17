@@ -51,10 +51,10 @@ impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem 
         let mut dest = ndarray::Array3::zeros(self.dim());
         let mut dest_mat = dest.as_image_mat_mut()?;
 
-        let dtype = if U::cv_type() == T::cv_type() {
+        let dtype = if U::cv_depth() == T::cv_depth() {
             -1
         } else {
-            U::cv_type()
+            U::cv_depth()
         };
 
         match mask {
@@ -104,10 +104,10 @@ impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem 
         let mut dest = ndarray::Array2::zeros((self.shape()[0], self.shape()[1]));
         let mut dest_mat = dest.as_image_mat_mut()?;
 
-        let dtype = if U::cv_type() == T::cv_type() {
+        let dtype = if U::cv_depth() == T::cv_depth() {
             -1
         } else {
-            U::cv_type()
+            U::cv_depth()
         };
 
         match mask {

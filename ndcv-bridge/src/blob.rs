@@ -28,8 +28,8 @@ pub trait NdCvBlobFromImage<
 
 mod seal {
     pub trait BlobOutputs: Sized + Copy + bytemuck::Pod + num::Zero + crate::types::CvType {
-        fn as_cv_type() -> i32 {
-            <Self as crate::types::CvType>::cv_type()
+        fn as_cv_depth() -> i32 {
+            <Self as crate::types::CvType>::cv_depth()
         }
     }
 
@@ -52,7 +52,7 @@ impl<
         swap_rb: bool,
         crop: bool,
     ) -> Result<ndarray::Array4<U>, BlobError> {
-        let dtype = U::as_cv_type();
+        let dtype = U::as_cv_depth();
         let size = size.into();
         let mean = mean.into();
 

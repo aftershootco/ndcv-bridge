@@ -320,12 +320,15 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_gaussian_invalid_kernel_size() {
         let arr = Array3::<u8>::ones((10, 10, 3));
-        // Even kernel sizes should fail
-        let _ = arr
+        // Even kernel sizes should fail; OpenCV requires odd ksize
+        let err = arr
             .gaussian_blur((2, 2), (1.0, 1.0), BorderType::BorderConstant)
-            .unwrap();
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("ksize"),
+            "expected the odd-ksize assertion, got: {err}"
+        );
     }
 }

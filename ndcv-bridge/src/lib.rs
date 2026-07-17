@@ -1,4 +1,25 @@
 //! Methods and type conversions for ndarray to opencv and vice versa
+//!
+//! # Public-API surface (PR #13, issue 4)
+//!
+//! Every operation trait should be reachable from the crate root, the way `NdCvResize`,
+//! `NdCvNormalize`, `NdCvWarpAffine` and `NdCvDilate` are. The `blob` and `morphology`
+//! modules, and part of `affine`, are declared `pub mod` but never re-exported, so the
+//! following does NOT compile today. The `compile_fail` marker pins that gap; once the
+//! re-exports are added this doctest starts failing and should be removed.
+//!
+//! ```compile_fail
+//! use ndcv_bridge::{
+//!     NdCvMorphologyEx, NdCvBlobFromImage, NdCvInvertWarpAffine, NdCvEstimateAffinePartial2D,
+//!     MorphType, EstimateAffineMethod,
+//! };
+//! ```
+//!
+//! For reference, these ones already resolve (they are re-exported):
+//!
+//! ```
+//! use ndcv_bridge::{NdCvNormalize, NdCvWarpAffine, NormType};
+//! ```
 mod blend;
 #[cfg(feature = "opencv")]
 pub mod dilate;
@@ -10,6 +31,10 @@ pub mod percentile;
 mod roi;
 pub use errors::NdCvError;
 
+#[cfg(feature = "opencv")]
+pub mod affine;
+#[cfg(feature = "opencv")]
+pub mod blob;
 #[cfg(feature = "opencv")]
 pub mod blur;
 #[cfg(feature = "opencv")]
@@ -25,6 +50,10 @@ pub mod conversions;
 #[cfg(feature = "opencv")]
 pub mod gaussian;
 #[cfg(feature = "opencv")]
+pub mod morphology;
+#[cfg(feature = "opencv")]
+pub mod normalize;
+#[cfg(feature = "opencv")]
 pub mod resize;
 #[cfg(feature = "opencv")]
 pub mod types;
@@ -37,6 +66,7 @@ pub use dilate::{DilateError, NdCvDilate, NdCvDilateInPlace};
 pub use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 pub use fir::NdFir;
 pub use gaussian::{BorderType, NdCvGaussianBlur, NdCvGaussianBlurInPlace};
+pub use image::NdImage;
 pub use roi::{NdRoiZeroPadded, Roi as NdRoi, RoiMut as NdRoiMut};
 
 #[cfg(feature = "opencv")]
@@ -49,11 +79,17 @@ pub use contours::{
 pub use conversions::NdCvConversion;
 
 #[cfg(feature = "opencv")]
+pub use affine::{NdCvEstimateAffinePartial2D, NdCvInvertWarpAffine, NdCvWarpAffine};
+#[cfg(feature = "opencv")]
 pub use bounding_rect::BoundingRect;
 #[cfg(feature = "opencv")]
 pub use connected_components::{Connectivity, NdCvConnectedComponents};
 #[cfg(feature = "opencv")]
 pub use conversions::{MatAsNd, NdAsImage, NdAsImageMut, NdAsMat, NdAsMatMut};
+#[cfg(feature = "opencv")]
+pub use morphology::{MorphType, NdCvMorphologyEx};
+#[cfg(feature = "opencv")]
+pub use normalize::{NdCvNormalize, NormType};
 #[cfg(feature = "opencv")]
 pub use resize::{Interpolation, NdCvResize};
 

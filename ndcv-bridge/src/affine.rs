@@ -22,14 +22,14 @@ pub trait NdCvWarpAffine<T: bytemuck::Pod + num::Zero + crate::types::CvType, D:
 }
 
 pub trait NdCvInvertWarpAffine<
-    T: bytemuck::Pod + num::Zero + crate::types::CvType,
+    T: bytemuck::Pod + crate::types::CvType + num::Float,
     D: ndarray::Dimension,
 >: crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
     fn invert_warp_affine(&self) -> Result<ndarray::Array<T, D>, AffineError>;
 }
 
-impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem = T>>
+impl<T: bytemuck::Pod + crate::types::CvType + num::Float, S: ndarray::Data<Elem = T>>
     NdCvInvertWarpAffine<T, ndarray::Ix2> for ndarray::ArrayBase<S, ndarray::Ix2>
 {
     fn invert_warp_affine(&self) -> Result<ndarray::Array<T, ndarray::Ix2>, AffineError> {
@@ -525,17 +525,24 @@ mod tests {
         );
     }
 
-    // Issue 3b (affine.rs:54): the `T: CvType` bound compiles for integer arrays, but
-    // invertAffineTransform requires CV_32F/CV_64F and errors at runtime. Characterizes the
-    // current (over-advertised) behavior -> PASSES today, documenting the footgun.
+    // Unlike invertAffineTransform above, estimateAffinePartial2D converts integer point sets
+    // to float internally, so integer T works end to end. Characterizes that integer input
+    // succeeds and still yields the exact f64 transform and inlier mask.
     #[test]
-    fn test_invert_warp_affine_rejects_integer_type() {
-        let transform = array![[1u8, 0, 5], [0, 1, 3]];
-        let res = transform.invert_warp_affine();
+    fn test_estimate_affine_partial_2d_accepts_integer_type() {
+        let src = array![[0i16, 0], [10, 0], [10, 10], [0, 10]];
+        let dst = array![[5i16, -3], [15, -3], [15, 7], [5, 7]];
+        let res = src
+            .estimate_affine_partial_2d(dst, EstimateAffineMethod::Ransac, 3.0, 2000, 0.99, 10)
+            .unwrap();
+        assert_close(
+            &res.transformation,
+            &array![[1.0f64, 0., 5.], [0., 1., -3.]],
+        );
         assert!(
-            res.is_err(),
-            "integer invert_warp_affine unexpectedly succeeded; the T: CvType bound advertises \
-             support the operation does not have"
+            res.inliers.iter().all(|&v| v != 0),
+            "all exact correspondences should be inliers; inliers = {:?}",
+            res.inliers
         );
     }
 }

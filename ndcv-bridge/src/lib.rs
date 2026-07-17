@@ -79,13 +79,15 @@ pub use contours::{
 pub use conversions::NdCvConversion;
 
 #[cfg(feature = "opencv")]
-pub use affine::NdCvWarpAffine;
+pub use affine::{NdCvEstimateAffinePartial2D, NdCvInvertWarpAffine, NdCvWarpAffine};
 #[cfg(feature = "opencv")]
 pub use bounding_rect::BoundingRect;
 #[cfg(feature = "opencv")]
 pub use connected_components::{Connectivity, NdCvConnectedComponents};
 #[cfg(feature = "opencv")]
 pub use conversions::{MatAsNd, NdAsImage, NdAsImageMut, NdAsMat, NdAsMatMut};
+#[cfg(feature = "opencv")]
+pub use morphology::{MorphType, NdCvMorphologyEx};
 #[cfg(feature = "opencv")]
 pub use normalize::{NdCvNormalize, NormType};
 #[cfg(feature = "opencv")]

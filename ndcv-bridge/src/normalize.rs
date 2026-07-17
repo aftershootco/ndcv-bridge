@@ -21,13 +21,10 @@ pub enum NormType {
     Relative = opencv::core::NORM_RELATIVE,
 }
 
-pub trait NdCvNormalize<
-    T: bytemuck::Pod + num::Zero + crate::types::CvType,
-    U: bytemuck::Pod + num::Zero + crate::types::CvType,
-    D: ndarray::Dimension,
->: crate::image::NdImage + crate::conversions::NdAsImage<T, D>
+pub trait NdCvNormalize<T: bytemuck::Pod + num::Zero + crate::types::CvType, D: ndarray::Dimension>:
+    crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
-    fn normalize(
+    fn normalize<U: bytemuck::Pod + num::Zero + crate::types::CvType>(
         &self,
         alpha: f64,
         beta: f64,
@@ -35,18 +32,15 @@ pub trait NdCvNormalize<
         mask: Option<ndarray::ArrayView2<u8>>,
     ) -> Result<ndarray::Array<U, D>, NormalizeError>;
 
-    fn normalize_def(&self) -> Result<ndarray::Array<U, D>, NormalizeError> {
-        self.normalize(-1., 1., NormType::MinMax, None)
+    fn normalize_def(&self) -> Result<ndarray::Array<T, D>, NormalizeError> {
+        self.normalize::<T>(-1., 1., NormType::MinMax, None)
     }
 }
 
-impl<
-    T: bytemuck::Pod + num::Zero + crate::types::CvType,
-    U: bytemuck::Pod + num::Zero + crate::types::CvType,
-    S: ndarray::Data<Elem = T>,
-> NdCvNormalize<T, U, ndarray::Ix3> for ndarray::ArrayBase<S, ndarray::Ix3>
+impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem = T>>
+    NdCvNormalize<T, ndarray::Ix3> for ndarray::ArrayBase<S, ndarray::Ix3>
 {
-    fn normalize(
+    fn normalize<U: bytemuck::Pod + num::Zero + crate::types::CvType>(
         &self,
         alpha: f64,
         beta: f64,
@@ -96,13 +90,10 @@ impl<
     }
 }
 
-impl<
-    T: bytemuck::Pod + num::Zero + crate::types::CvType,
-    U: bytemuck::Pod + num::Zero + crate::types::CvType,
-    S: ndarray::Data<Elem = T>,
-> NdCvNormalize<T, U, ndarray::Ix2> for ndarray::ArrayBase<S, ndarray::Ix2>
+impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem = T>>
+    NdCvNormalize<T, ndarray::Ix2> for ndarray::ArrayBase<S, ndarray::Ix2>
 {
-    fn normalize(
+    fn normalize<U: bytemuck::Pod + num::Zero + crate::types::CvType>(
         &self,
         alpha: f64,
         beta: f64,

@@ -32,11 +32,11 @@ pub trait NdCvNormalize<
         alpha: f64,
         beta: f64,
         norm_type: NormType,
-        mask: &Option<ndarray::ArrayView2<u8>>,
+        mask: Option<ndarray::ArrayView2<u8>>,
     ) -> Result<ndarray::Array<U, D>, NormalizeError>;
 
     fn normalize_def(&self) -> Result<ndarray::Array<U, D>, NormalizeError> {
-        self.normalize(-1., 1., NormType::MinMax, &None)
+        self.normalize(-1., 1., NormType::MinMax, None)
     }
 }
 
@@ -51,7 +51,7 @@ impl<
         alpha: f64,
         beta: f64,
         norm_type: NormType,
-        mask: &Option<ndarray::ArrayView2<u8>>,
+        mask: Option<ndarray::ArrayView2<u8>>,
     ) -> Result<ndarray::Array<U, ndarray::Ix3>, NormalizeError> {
         let mat = self.as_image_mat()?;
         let mut dest = ndarray::Array3::zeros(self.dim());
@@ -107,7 +107,7 @@ impl<
         alpha: f64,
         beta: f64,
         norm_type: NormType,
-        mask: &Option<ndarray::ArrayView2<u8>>,
+        mask: Option<ndarray::ArrayView2<u8>>,
     ) -> Result<ndarray::Array<U, ndarray::Ix2>, NormalizeError> {
         let mat = self.as_image_mat()?;
         let mut dest = ndarray::Array2::zeros((self.shape()[0], self.shape()[1]));
@@ -163,7 +163,7 @@ mod tests {
         let mut arr = Array2::<u8>::from_elem((10, 10), 50);
         arr[[0, 0]] = 10;
         arr[[9, 9]] = 90;
-        let res: Array2<u8> = arr.normalize(0., 255., NormType::MinMax, &None).unwrap();
+        let res: Array2<u8> = arr.normalize(0., 255., NormType::MinMax, None).unwrap();
         assert_eq!(res[[0, 0]], 0);
         assert_eq!(res[[9, 9]], 255);
     }
@@ -171,7 +171,7 @@ mod tests {
     #[test]
     fn test_normalize_l2() {
         let arr = Array3::<f32>::ones((4, 4, 1));
-        let res: Array3<f32> = arr.normalize(1., 0., NormType::L2, &None).unwrap();
+        let res: Array3<f32> = arr.normalize(1., 0., NormType::L2, None).unwrap();
         // L2 norm of 16 ones is 4, so every element becomes 1/4
         assert!(res.iter().all(|&v| (v - 0.25).abs() < 1e-6));
     }
@@ -197,7 +197,7 @@ mod tests {
         let mut mask = Array2::<u8>::from_elem((10, 10), 255);
         mask[[5, 5]] = 0;
         let res: Array2<u8> = arr
-            .normalize(0., 255., NormType::MinMax, &Some(mask.view()))
+            .normalize(0., 255., NormType::MinMax, Some(mask.view()))
             .unwrap();
         assert_eq!(res[[0, 0]], 0);
         assert_eq!(res[[9, 9]], 255);
@@ -214,7 +214,7 @@ mod tests {
         let mut mask = Array2::<u8>::from_elem((10, 10), 255);
         mask[[5, 5]] = 0;
         let res: Array2<f32> = arr
-            .normalize(0., 1., NormType::MinMax, &Some(mask.view()))
+            .normalize(0., 1., NormType::MinMax, Some(mask.view()))
             .unwrap();
         assert!(res[[0, 0]].abs() < 1e-6);
         assert!((res[[9, 9]] - 1.).abs() < 1e-6);
@@ -230,7 +230,7 @@ mod tests {
         arr[[9, 9]] = 90;
         let mask = Array2::<u8>::ones((10, 10));
         let res: Array2<u16> = arr
-            .normalize(0., 255., NormType::MinMax, &Some(mask.view()))
+            .normalize(0., 255., NormType::MinMax, Some(mask.view()))
             .unwrap();
         assert_eq!(res[[0, 0]], 0);
         assert_eq!(res[[9, 9]], 255);
@@ -241,7 +241,7 @@ mod tests {
         let arr = Array2::<f32>::ones((4, 4));
         let mask = Array2::<u8>::ones((4, 4));
         let res: Array2<f32> = arr
-            .normalize(1., 0., NormType::L2, &Some(mask.view()))
+            .normalize(1., 0., NormType::L2, Some(mask.view()))
             .unwrap();
         // L2 norm of 16 ones is 4, so every element becomes 1/4
         assert!(res.iter().all(|&v| (v - 0.25).abs() < 1e-6));
@@ -252,7 +252,7 @@ mod tests {
         let mut arr = Array2::<u8>::from_elem((10, 10), 50);
         arr[[0, 0]] = 10;
         arr[[9, 9]] = 90;
-        let res: Array2<f32> = arr.normalize(0., 1., NormType::MinMax, &None).unwrap();
+        let res: Array2<f32> = arr.normalize(0., 1., NormType::MinMax, None).unwrap();
         assert!(res[[0, 0]].abs() < 1e-6);
         assert!((res[[9, 9]] - 1.).abs() < 1e-6);
         // 50 -> (50 - 10) / 80 = 0.5
@@ -282,7 +282,7 @@ mod tests {
     #[test]
     fn test_normalize_minmax_multichannel() {
         let arr = Array3::<u8>::from_elem((8, 8, 3), 50);
-        let res: Result<Array3<u8>, _> = arr.normalize(0., 255., NormType::MinMax, &None);
+        let res: Result<Array3<u8>, _> = arr.normalize(0., 255., NormType::MinMax, None);
         assert!(
             res.is_ok(),
             "min-max normalize on a 3-channel image should succeed, but errored: {:?}",

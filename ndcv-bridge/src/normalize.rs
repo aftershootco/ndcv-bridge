@@ -32,7 +32,10 @@ pub trait NdCvNormalize<T: bytemuck::Pod + num::Zero + crate::types::CvType, D: 
         mask: Option<ndarray::ArrayView2<u8>>,
     ) -> Result<ndarray::Array<U, D>, NormalizeError>;
 
-    fn normalize_def(&self) -> Result<ndarray::Array<T, D>, NormalizeError> {
+    fn normalize_def(&self) -> Result<ndarray::Array<T, D>, NormalizeError>
+    where
+        T: num::Float,
+    {
         self.normalize::<T>(-1., 1., NormType::MinMax, None)
     }
 }

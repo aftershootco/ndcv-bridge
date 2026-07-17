@@ -6,6 +6,8 @@ pub enum AffineError {
     ConversionError(#[from] crate::conversions::ConversionError),
     #[error("OpenCV error: {0}")]
     OpenCvError(#[from] opencv::Error),
+    #[error("could not estimate a transformation from the given correspondences")]
+    EstimationFailed,
 }
 
 pub trait NdCvWarpAffine<T: bytemuck::Pod + num::Zero + crate::types::CvType, D: ndarray::Dimension>:
@@ -171,9 +173,22 @@ impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem 
             refine_iters,
         )?;
 
+        // estimateAffinePartial2D signals "no model found" with an empty Mat, not an error;
+        // converting that default CV_8U Mat would surface as a misleading TypeMismatch
+        use opencv::prelude::MatTraitConst;
+        if transformation_mat.empty() {
+            return Err(AffineError::EstimationFailed);
+        }
+
         let inliers = inliers_mat.as_ndarray()?.to_owned();
 
-        let transformation = transformation_mat.as_ndarray()?.to_owned();
+        let transformation: ndarray::Array2<f64> = transformation_mat.as_ndarray()?.to_owned();
+
+        // the exact 2-point kernel divides by zero on coincident points and "succeeds"
+        // with an all-NaN matrix; never hand that to the caller as Ok
+        if !transformation.iter().all(|v| v.is_finite()) {
+            return Err(AffineError::EstimationFailed);
+        }
 
         Ok(EstimateAffineResult {
             inliers,
@@ -544,5 +559,38 @@ mod tests {
             "all exact correspondences should be inliers; inliers = {:?}",
             res.inliers
         );
+    }
+
+    // ---- Regression tests: degenerate inputs must fail loudly ----
+
+    // Exactly 2 coincident correspondences drive OpenCV's exact 2-point kernel into a
+    // division by zero; it used to "succeed" and return Ok with an all-NaN transformation.
+    #[test]
+    fn test_estimate_affine_partial_2d_two_coincident_points_fails() {
+        let src = array![[5.0f64, 5.], [5., 5.]];
+        let dst = src.clone();
+        match src.estimate_affine_partial_2d(dst, EstimateAffineMethod::Ransac, 3.0, 2000, 0.99, 10)
+        {
+            Err(AffineError::EstimationFailed) => {}
+            Err(other) => panic!("expected EstimationFailed, got: {other:?}"),
+            Ok(res) => panic!(
+                "degenerate 2-point input unexpectedly succeeded: {:?}",
+                res.transformation
+            ),
+        }
+    }
+
+    // With >= 3 degenerate points RANSAC finds no model and OpenCV returns an empty Mat;
+    // this used to surface as a misleading conversion TypeMismatch (u8 vs f64).
+    #[test]
+    fn test_estimate_affine_partial_2d_degenerate_points_estimation_failed() {
+        let src = array![[5.0f64, 5.], [5., 5.], [5., 5.]];
+        let dst = src.clone();
+        match src.estimate_affine_partial_2d(dst, EstimateAffineMethod::Ransac, 3.0, 2000, 0.99, 10)
+        {
+            Err(AffineError::EstimationFailed) => {}
+            Err(other) => panic!("expected EstimationFailed, got: {other:?}"),
+            Ok(_) => panic!("3 coincident points unexpectedly produced a transformation"),
+        }
     }
 }

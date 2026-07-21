@@ -71,3 +71,35 @@ impl core::ops::DerefMut for MatRefMut<'_> {
         &mut self.mat
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::conversions::{NdAsMat, NdAsMatMut};
+    use ndarray::Array2;
+    use opencv::core::MatTraitConst;
+
+    #[test]
+    fn test_clone_pointee_copies_matrix() {
+        // A mutated `Default::default()` would hand back an empty 0x0 Mat.
+        let arr = Array2::<u8>::from_elem((3, 5), 7u8);
+        let mref = arr.as_single_channel_mat().unwrap();
+        let cloned = mref.clone_pointee();
+        assert_eq!(cloned.rows(), 3);
+        assert_eq!(cloned.cols(), 5);
+        assert_eq!(*cloned.at_2d::<u8>(1, 1).unwrap(), 7);
+    }
+
+    #[test]
+    fn test_mat_ref_mut_as_ref_and_deref_expose_real_mat() {
+        // Both accessors must borrow the wrapped Mat, not a leaked empty one.
+        let mut arr = Array2::<u8>::from_elem((3, 5), 7u8);
+        let mref = arr.as_single_channel_mat_mut().unwrap();
+        let via_as_ref: &opencv::core::Mat = mref.as_ref();
+        assert_eq!(via_as_ref.rows(), 3);
+        assert_eq!(via_as_ref.cols(), 5);
+        // Deref path.
+        assert_eq!(mref.rows(), 3);
+        assert_eq!(mref.cols(), 5);
+        assert_eq!(*mref.at_2d::<u8>(1, 1).unwrap(), 7);
+    }
+}

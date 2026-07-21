@@ -236,6 +236,21 @@ where
 }
 
 #[test]
+#[allow(deprecated)]
+fn test_nd_cv_conversion_to_mat_from_mat_roundtrip() {
+    use opencv::core::MatTraitConst;
+    let arr = ndarray::Array2::<u8>::from_shape_fn((3, 5), |(r, c)| (r * 5 + c) as u8);
+    // to_mat must clone the real backing Mat, not an empty default.
+    let mat = arr.to_mat().unwrap();
+    assert_eq!(mat.rows(), 3);
+    assert_eq!(mat.cols(), 5);
+    // from_mat must reconstruct the array, not an empty default.
+    let back =
+        <ndarray::Array2<u8> as NdCvConversion<u8, ndarray::Ix2>>::from_mat(mat).unwrap();
+    assert_eq!(back, arr);
+}
+
+#[test]
 fn test_1d_mat_to_ndarray() {
     let mat = opencv::core::Mat::new_nd_with_default(
         &[10],

@@ -149,6 +149,7 @@ mod tests {
         let res = arr
             .morphology_ex_def(MorphType::Open, rect_kernel(3).view())
             .unwrap();
+        assert_eq!(res.dim(), (10, 10));
         assert!(res.iter().all(|&v| v == 0));
     }
 
@@ -159,7 +160,34 @@ mod tests {
         let res = arr
             .morphology_ex_def(MorphType::Close, rect_kernel(3).view())
             .unwrap();
+        assert_eq!(res.dim(), (10, 10));
         assert!(res.iter().all(|&v| v == 255));
+    }
+
+    #[test]
+    fn test_morphology_ex_def_centered_anchor() {
+        // def hard-codes the center anchor (-1,-1); for a symmetric structuring
+        // element an explicit center anchor must produce the identical result.
+        use ndarray::s;
+        let mut arr = Array2::<u8>::zeros((12, 12));
+        arr.slice_mut(s![4..8, 4..8]).fill(255);
+        let bv = opencv::imgproc::morphology_default_border_value()
+            .unwrap()
+            .0;
+        let def = arr
+            .morphology_ex_def(MorphType::Open, rect_kernel(5).view())
+            .unwrap();
+        let explicit = arr
+            .morphology_ex(
+                MorphType::Open,
+                rect_kernel(5).view(),
+                1,
+                glam::ISizeVec2::new(-1, -1),
+                BorderType::BorderConstant,
+                bv,
+            )
+            .unwrap();
+        assert_eq!(def, explicit);
     }
 
     #[test]

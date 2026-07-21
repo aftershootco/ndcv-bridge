@@ -363,6 +363,31 @@ mod tests {
     }
 
     #[test]
+    fn test_dilate_def_uses_centered_anchor() {
+        // With a 5x5 kernel the real default anchor (-1,-1) resolves to the
+        // center (2,2), lighting the full +/-2 cross around a lone pixel.
+        // Dropping either `-` shifts the anchor to (1,1) and starves one side.
+        let mut arr = Array3::<u8>::zeros((20, 20, 1));
+        arr[[10, 10, 0]] = 255;
+        let res = arr.dilate_def(rect_kernel(5).view(), 1).unwrap();
+        assert_eq!(res[[8, 10, 0]], 255, "top reach");
+        assert_eq!(res[[12, 10, 0]], 255, "bottom reach");
+        assert_eq!(res[[10, 8, 0]], 255, "left reach");
+        assert_eq!(res[[10, 12, 0]], 255, "right reach");
+    }
+
+    #[test]
+    fn test_dilate_def_inplace_uses_centered_anchor() {
+        let mut arr = Array3::<u8>::zeros((20, 20, 1));
+        arr[[10, 10, 0]] = 255;
+        arr.dilate_def_inplace(rect_kernel(5).view(), 1).unwrap();
+        assert_eq!(arr[[8, 10, 0]], 255, "top reach");
+        assert_eq!(arr[[12, 10, 0]], 255, "bottom reach");
+        assert_eq!(arr[[10, 8, 0]], 255, "left reach");
+        assert_eq!(arr[[10, 12, 0]], 255, "right reach");
+    }
+
+    #[test]
     fn test_dilate_inplace_invalid_anchor_returns_err() {
         let mut arr = Array3::<u8>::ones((10, 10, 3));
         let err = arr

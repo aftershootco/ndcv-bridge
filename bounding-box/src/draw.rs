@@ -43,6 +43,37 @@ impl Drawable<ArrayViewMut3<'_, u8>> for Aabb2<usize> {
     }
 }
 
+impl Drawable<Array3<u8>> for Aabb2<usize> {
+    fn draw(&self, canvas: &mut Array3<u8>, color: color::Rgba8, thickness: usize) {
+        let color = Array1::from_vec(vec![color.r, color.g, color.b, color.a]);
+        let pixel_size = canvas.dim().2;
+        let color = color.slice(ndarray::s![..pixel_size]);
+        let [x1y1, x2y1, x2y2, x1y2] = self.corners();
+        let top = Aabb2::from_x1y1x2y2(x1y1.x, x1y1.y, x2y1.x, x2y1.y + thickness);
+        let bottom = Aabb2::from_x1y1x2y2(x1y2.x, x1y2.y, x2y2.x, x2y2.y + thickness);
+        let left = Aabb2::from_x1y1x2y2(x1y1.x, x1y1.y, x1y2.x + thickness, x1y2.y);
+        let right = Aabb2::from_x1y1x2y2(x2y1.x, x2y1.y, x2y2.x + thickness, x2y2.y + thickness);
+        let canvas_bbox = Aabb2::from_x1y1x2y2(0, 0, canvas.dim().1 - 1, canvas.dim().0 - 1);
+        let lines = [top, bottom, left, right].map(|bbox| bbox.clamp(canvas_bbox));
+        lines.into_iter().flatten().for_each(|line| {
+            canvas
+                .roi_mut(line)
+                .map(|mut line| {
+                    line.lanes_mut(ndarray::Axis(2))
+                        .into_iter()
+                        .for_each(|mut pixel| {
+                            pixel.assign(&color);
+                        })
+                })
+                .inspect_err(|_e| {
+                    #[cfg(feature = "tracing")]
+                    tracing::error!("{_e}")
+                })
+                .ok();
+        });
+    }
+}
+
 #[cfg(test)]
 mod draw_tests {
     use super::*;
@@ -90,36 +121,5 @@ mod draw_tests {
             <Aabb2<usize> as Drawable<ArrayViewMut3<u8>>>::draw(&bbox, &mut view, red(), 4);
         }
         assert!(canvas.iter().any(|&v| v != 0));
-    }
-}
-
-impl Drawable<Array3<u8>> for Aabb2<usize> {
-    fn draw(&self, canvas: &mut Array3<u8>, color: color::Rgba8, thickness: usize) {
-        let color = Array1::from_vec(vec![color.r, color.g, color.b, color.a]);
-        let pixel_size = canvas.dim().2;
-        let color = color.slice(ndarray::s![..pixel_size]);
-        let [x1y1, x2y1, x2y2, x1y2] = self.corners();
-        let top = Aabb2::from_x1y1x2y2(x1y1.x, x1y1.y, x2y1.x, x2y1.y + thickness);
-        let bottom = Aabb2::from_x1y1x2y2(x1y2.x, x1y2.y, x2y2.x, x2y2.y + thickness);
-        let left = Aabb2::from_x1y1x2y2(x1y1.x, x1y1.y, x1y2.x + thickness, x1y2.y);
-        let right = Aabb2::from_x1y1x2y2(x2y1.x, x2y1.y, x2y2.x + thickness, x2y2.y + thickness);
-        let canvas_bbox = Aabb2::from_x1y1x2y2(0, 0, canvas.dim().1 - 1, canvas.dim().0 - 1);
-        let lines = [top, bottom, left, right].map(|bbox| bbox.clamp(canvas_bbox));
-        lines.into_iter().flatten().for_each(|line| {
-            canvas
-                .roi_mut(line)
-                .map(|mut line| {
-                    line.lanes_mut(ndarray::Axis(2))
-                        .into_iter()
-                        .for_each(|mut pixel| {
-                            pixel.assign(&color);
-                        })
-                })
-                .inspect_err(|_e| {
-                    #[cfg(feature = "tracing")]
-                    tracing::error!("{_e}")
-                })
-                .ok();
-        });
     }
 }

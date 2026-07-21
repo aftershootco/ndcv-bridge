@@ -79,10 +79,10 @@ mod tests {
     #[test]
     fn nms_keeps_best_of_overlaps_and_drops_low_scores() {
         let boxes = vec![
-            Aabb2::from_x1y1x2y2(0.0, 0.0, 2.0, 2.0),   // 0: best of the overlap group
-            Aabb2::from_x1y1x2y2(0.0, 0.0, 2.0, 2.0),   // 1: identical, IoU 1.0 -> suppressed
+            Aabb2::from_x1y1x2y2(0.0, 0.0, 2.0, 2.0), // 0: best of the overlap group
+            Aabb2::from_x1y1x2y2(0.0, 0.0, 2.0, 2.0), // 1: identical, IoU 1.0 -> suppressed
             Aabb2::from_x1y1x2y2(10.0, 10.0, 12.0, 12.0), // 2: disjoint -> kept
-            Aabb2::from_x1y1x2y2(0.0, 0.0, 2.0, 2.0),   // 3: below score threshold -> filtered
+            Aabb2::from_x1y1x2y2(0.0, 0.0, 2.0, 2.0), // 3: below score threshold -> filtered
         ];
         let scores = vec![0.9_f64, 0.8, 0.7, 0.1];
         let keep = nms(&boxes, &scores, 0.5, 0.5).unwrap();
@@ -98,7 +98,10 @@ mod tests {
         let err = nms(&boxes, &scores, 0.5, 0.5).unwrap_err();
         assert_eq!(
             err,
-            NmsError::BoxesAndScoresLengthMismatch { boxes: 1, scores: 2 }
+            NmsError::BoxesAndScoresLengthMismatch {
+                boxes: 1,
+                scores: 2
+            }
         );
     }
 

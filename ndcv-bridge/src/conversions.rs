@@ -245,8 +245,7 @@ fn test_nd_cv_conversion_to_mat_from_mat_roundtrip() {
     assert_eq!(mat.rows(), 3);
     assert_eq!(mat.cols(), 5);
     // from_mat must reconstruct the array, not an empty default.
-    let back =
-        <ndarray::Array2<u8> as NdCvConversion<u8, ndarray::Ix2>>::from_mat(mat).unwrap();
+    let back = <ndarray::Array2<u8> as NdCvConversion<u8, ndarray::Ix2>>::from_mat(mat).unwrap();
     assert_eq!(back, arr);
 }
 

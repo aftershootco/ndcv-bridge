@@ -174,8 +174,7 @@ mod blend_mutation_tests {
     // With mask=[1,0] and alpha=0.5 the first pixel is a 50/50 blend and the
     // second is untouched.
     fn fixture() -> (Array3<f32>, Array3<f32>, Array2<f32>) {
-        let this =
-            Array3::from_shape_vec((1, 2, 3), vec![10., 20., 30., 40., 50., 60.]).unwrap();
+        let this = Array3::from_shape_vec((1, 2, 3), vec![10., 20., 30., 40., 50., 60.]).unwrap();
         let other =
             Array3::from_shape_vec((1, 2, 3), vec![100., 200., 300., 400., 500., 600.]).unwrap();
         let mask = Array2::from_shape_vec((1, 2), vec![1.0, 0.0]).unwrap();

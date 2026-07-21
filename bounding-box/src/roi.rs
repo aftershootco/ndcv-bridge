@@ -419,10 +419,7 @@ mod roi_tests {
     fn roi_out_of_bounds_errors() {
         let arr = arr3();
         let oob = Aabb2::from_x1y1x2y2(1, 1, 10, 10);
-        assert!(matches!(
-            arr.roi(oob),
-            Err(RoiError::RoiOutOfBounds { .. })
-        ));
+        assert!(matches!(arr.roi(oob), Err(RoiError::RoiOutOfBounds { .. })));
     }
 
     // multi_roi is only implemented for u8 arrays.

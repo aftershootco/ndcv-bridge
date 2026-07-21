@@ -1,3 +1,6 @@
 /result
 /target
 .direnv
+
+# cargo-mutants output
+/mutants.out*/

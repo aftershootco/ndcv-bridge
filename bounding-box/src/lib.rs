@@ -795,4 +795,67 @@ mod boudning_box_tests {
 
         assert!(bb1.intersection(bb2).is_none());
     }
+
+    #[test]
+    fn test_from_vertices_finds_min_and_max_corner() {
+        // `from_vertices` reduces with the partial order on points, so it only
+        // resolves the true min/max when the points are mutually comparable.
+        // Use totally-ordered points (each dominates the previous) so the
+        // reduce actually has to swap — and put the extremes in the middle so a
+        // no-op reduce would give the wrong answer.
+        let points = [
+            Point2::new(2, 2),
+            Point2::new(4, 4),
+            Point2::new(1, 1),
+            Point2::new(3, 3),
+        ];
+        let bbox = Aabb2::from_vertices(points).unwrap();
+        assert_eq!(bbox.min_vertex(), Point2::new(1, 1));
+        assert_eq!(bbox.max_vertex(), Point2::new(4, 4));
+        assert_eq!(bbox.size(), Vector2::new(3, 3));
+    }
+
+    #[test]
+    fn test_translate_moves_point_keeps_size() {
+        let bbox = Aabb2::from_xywh(1, 2, 3, 4);
+        let moved = bbox.translate(Vector2::new(5, 6));
+        assert_eq!(moved.min_vertex(), Point2::new(6, 8));
+        assert_eq!(moved.size(), Vector2::new(3, 4));
+    }
+
+    #[test]
+    fn test_union_is_sum_minus_intersection() {
+        // Two 2x2 boxes overlapping in a 1x1 corner: 4 + 4 - 1 = 7.
+        let a = Aabb2::from_x1y1x2y2(0, 0, 2, 2);
+        let b = Aabb2::from_x1y1x2y2(1, 1, 3, 3);
+        assert_eq!(a.union(b), 7);
+        // Disjoint boxes: no intersection subtracted.
+        let c = Aabb2::from_x1y1x2y2(10, 10, 12, 12);
+        assert_eq!(a.union(c), 8);
+    }
+
+    #[test]
+    fn test_try_cast_between_float_types() {
+        let bbox = Aabb2::from_xywh(1.5f64, 2.5, 3.0, 4.0);
+        let casted: Aabb2<f32> = bbox.try_cast::<f32>().unwrap();
+        assert_eq!(casted.min_vertex(), Point2::new(1.5f32, 2.5));
+        assert_eq!(casted.size(), Vector2::new(3.0f32, 4.0));
+    }
+
+    #[test]
+    fn test_corner_accessors() {
+        let bbox = Aabb2::from_xywh(1, 2, 3, 4);
+        assert_eq!(bbox.x1y1(), Point2::new(1, 2));
+        assert_eq!(bbox.x2y2(), Point2::new(4, 6));
+        assert_eq!(bbox.x2y1(), Point2::new(4, 2));
+        assert_eq!(bbox.x1y2(), Point2::new(1, 6));
+    }
+
+    #[test]
+    fn test_display_formats_point_and_size() {
+        let bbox = Aabb2::from_xywh(1, 2, 3, 4);
+        let s = format!("{bbox}");
+        assert!(s.contains("Aabb(point:"), "got: {s}");
+        assert!(s.contains("size:"), "got: {s}");
+    }
 }

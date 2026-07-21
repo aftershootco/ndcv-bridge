@@ -43,6 +43,56 @@ impl Drawable<ArrayViewMut3<'_, u8>> for Aabb2<usize> {
     }
 }
 
+#[cfg(test)]
+mod draw_tests {
+    use super::*;
+    use ndarray::{Array3, ArrayViewMut3};
+
+    fn red() -> Rgba8 {
+        Rgba8 {
+            r: 255,
+            g: 10,
+            b: 20,
+            a: 255,
+        }
+    }
+
+    #[test]
+    fn draw_box_colors_borders_and_leaves_interior() {
+        let mut canvas = Array3::<u8>::zeros((10, 10, 4));
+        let bbox = Aabb2::from_x1y1x2y2(2usize, 2, 6, 6);
+        // Uses `Draw for Array3<u8>`, which delegates to `Drawable for Array3<u8>`.
+        canvas.draw(&bbox, red(), 1);
+
+        // Something was drawn.
+        assert!(canvas.iter().any(|&v| v != 0));
+        // Each of the four edges is coloured (channel 0 = red = 255).
+        assert_eq!(canvas[[2, 4, 0]], 255, "top edge");
+        assert_eq!(canvas[[6, 4, 0]], 255, "bottom edge");
+        assert_eq!(canvas[[4, 2, 0]], 255, "left edge");
+        assert_eq!(canvas[[4, 6, 0]], 255, "right edge");
+        // Bottom-right corner: only covered when the right edge extends the full
+        // height (y2 = x2y2.y + thickness), pinning that offset.
+        assert_eq!(canvas[[6, 6, 0]], 255, "right edge full height");
+        // A coloured pixel carries the whole colour, not just red.
+        assert_eq!(canvas[[2, 4, 1]], 10);
+        // The interior is untouched.
+        assert_eq!(canvas[[4, 4, 0]], 0, "interior");
+    }
+
+    #[test]
+    fn draw_on_view_mut_writes_pixels() {
+        let mut canvas = Array3::<u8>::zeros((20, 20, 4));
+        let bbox = Aabb2::from_x1y1x2y2(5usize, 5, 15, 15);
+        {
+            let mut view = canvas.view_mut();
+            // Exercise `Drawable for ArrayViewMut3<u8>` specifically.
+            <Aabb2<usize> as Drawable<ArrayViewMut3<u8>>>::draw(&bbox, &mut view, red(), 4);
+        }
+        assert!(canvas.iter().any(|&v| v != 0));
+    }
+}
+
 impl Drawable<Array3<u8>> for Aabb2<usize> {
     fn draw(&self, canvas: &mut Array3<u8>, color: color::Rgba8, thickness: usize) {
         let color = Array1::from_vec(vec![color.r, color.g, color.b, color.a]);

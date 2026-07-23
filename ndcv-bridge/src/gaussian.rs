@@ -320,6 +320,15 @@ mod tests {
     }
 
     #[test]
+    fn test_gaussian_blur_def() {
+        // Exercises the default helper directly; `Ok(Default::default())` would
+        // yield an empty (0,0,0) array here.
+        let arr = Array3::<u8>::ones((10, 10, 3));
+        let res = arr.gaussian_blur_def((3, 3), 1.0).unwrap();
+        assert_eq!(res.dim(), (10, 10, 3));
+    }
+
+    #[test]
     fn test_gaussian_invalid_kernel_size() {
         let arr = Array3::<u8>::ones((10, 10, 3));
         // Even kernel sizes should fail; OpenCV requires odd ksize

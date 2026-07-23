@@ -249,6 +249,16 @@ mod tests {
     }
 
     #[test]
+    fn test_rgb_u8_to_lab_i8_uses_rgb2lab_code() {
+        // The hand-written u8->i8 Lab impl must return the RGB2Lab code, not a
+        // stray 0/1 that would select an unrelated conversion.
+        assert_eq!(
+            <Rgb<u8> as ToColorSpace<u8, i8, Lab<i8>>>::cv_colorspace_code(),
+            opencv::imgproc::COLOR_RGB2Lab
+        );
+    }
+
+    #[test]
     fn test_rgb_to_bgr_conversion() {
         let rgb_data = Array3::<u8>::from_shape_fn((10, 10, 3), |(_y, _x, c)| match c {
             0 => 255, // Red

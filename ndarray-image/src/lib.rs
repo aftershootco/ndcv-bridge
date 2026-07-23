@@ -254,3 +254,115 @@ impl ImageToNdarray for image::DynamicImage {
         dynamic_image::image_into_ndarray(self)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
+    use ndarray::{Array2, Array3};
+
+    // Deterministic pixel data; every (y, x, channel) gets a distinct-ish value
+    // so a round trip is only correct if the layout is preserved exactly.
+    fn arr3(h: usize, w: usize, c: usize) -> Array3<u8> {
+        Array3::from_shape_fn((h, w, c), |(y, x, ch)| (y * 37 + x * 7 + ch * 2 + 1) as u8)
+    }
+
+    fn arr2(h: usize, w: usize) -> Array2<u8> {
+        Array2::from_shape_fn((h, w), |(y, x)| (y * 37 + x * 7 + 1) as u8)
+    }
+
+    #[test]
+    fn rgb8_round_trip_preserves_data_and_dims() {
+        let arr = arr3(2, 3, 3);
+        let img: RgbImage = arr.view().to_image().unwrap();
+        // image reports (width, height); ndarray shape is (height, width, _).
+        assert_eq!(img.dimensions(), (3, 2));
+        let back: Array3<u8> = img.into_ndarray().unwrap();
+        assert_eq!(back, arr);
+    }
+
+    #[test]
+    fn rgba8_round_trip_preserves_data_and_dims() {
+        let arr = arr3(2, 3, 4);
+        let img: RgbaImage = arr.view().to_image().unwrap();
+        assert_eq!(img.dimensions(), (3, 2));
+        // to_ndarray borrows and copies; into_ndarray consumes.
+        assert_eq!(img.to_ndarray().unwrap(), arr);
+        let back: Array3<u8> = img.into_ndarray().unwrap();
+        assert_eq!(back, arr);
+    }
+
+    #[test]
+    fn gray8_round_trip_preserves_data_and_dims() {
+        let arr = arr2(2, 3);
+        let img: GrayImage = arr.view().to_image().unwrap();
+        assert_eq!(img.dimensions(), (3, 2));
+        assert_eq!(img.to_ndarray().unwrap(), arr);
+        let back: Array2<u8> = img.into_ndarray().unwrap();
+        assert_eq!(back, arr);
+    }
+
+    #[test]
+    fn gray_alpha8_round_trip_preserves_data_and_dims() {
+        let arr = arr3(2, 3, 2);
+        let img: GrayAlphaImage = arr.view().to_image().unwrap();
+        assert_eq!(img.dimensions(), (3, 2));
+        assert_eq!(img.to_ndarray().unwrap(), arr);
+        let back: Array3<u8> = img.into_ndarray().unwrap();
+        assert_eq!(back, arr);
+    }
+
+    #[test]
+    fn to_ndarray_borrows_without_consuming() {
+        let arr = arr3(2, 3, 3);
+        let img: RgbImage = arr.view().to_image().unwrap();
+        let view = img.as_ndarray().unwrap();
+        assert_eq!(view.dim(), (2, 3, 3));
+        // to_ndarray copies; the source image is still usable afterwards.
+        let owned = img.to_ndarray().unwrap();
+        assert_eq!(owned, arr);
+        assert_eq!(img.dimensions(), (3, 2));
+    }
+
+    #[test]
+    fn ndarray_to_image_rejects_wrong_channel_count() {
+        // RGB expects 3 channels, RGBA 4, gray-alpha 2 — a mismatch must error,
+        // not silently produce an image.
+        let three = arr3(2, 3, 3);
+        let four = arr3(2, 3, 4);
+        let rgb: Result<RgbImage> = four.view().to_image();
+        assert!(rgb.is_err());
+        let rgba: Result<RgbaImage> = three.view().to_image();
+        assert!(rgba.is_err());
+        let gray_alpha: Result<GrayAlphaImage> = three.view().to_image();
+        assert!(gray_alpha.is_err());
+    }
+
+    #[test]
+    fn dynamic_image_dispatches_every_variant() {
+        let rgb = DynamicImage::ImageRgb8(arr3(2, 3, 3).view().to_image().unwrap());
+        let rgba = DynamicImage::ImageRgba8(arr3(2, 3, 4).view().to_image().unwrap());
+        let luma = DynamicImage::ImageLuma8(arr2(2, 3).view().to_image().unwrap());
+        let luma_a = DynamicImage::ImageLumaA8(arr3(2, 3, 2).view().to_image().unwrap());
+
+        // as_ndarray path (via to_ndarray)
+        assert_eq!(rgb.to_ndarray().unwrap().shape(), &[2, 3, 3]);
+        assert_eq!(rgba.to_ndarray().unwrap().shape(), &[2, 3, 4]);
+        assert_eq!(luma.to_ndarray().unwrap().shape(), &[2, 3]);
+        assert_eq!(luma_a.to_ndarray().unwrap().shape(), &[2, 3, 2]);
+
+        // into_ndarray path (consuming) must also cover every arm
+        assert_eq!(rgb.into_ndarray().unwrap().shape(), &[2, 3, 3]);
+        assert_eq!(rgba.into_ndarray().unwrap().shape(), &[2, 3, 4]);
+        assert_eq!(luma.into_ndarray().unwrap().shape(), &[2, 3]);
+        assert_eq!(luma_a.into_ndarray().unwrap().shape(), &[2, 3, 2]);
+    }
+
+    #[test]
+    fn dynamic_rgb8_round_trips_values() {
+        let arr = arr3(2, 3, 3);
+        let dynimg = DynamicImage::ImageRgb8(arr.view().to_image().unwrap());
+        let nd = dynimg.into_ndarray().unwrap();
+        assert_eq!(nd, arr.into_dyn());
+    }
+}

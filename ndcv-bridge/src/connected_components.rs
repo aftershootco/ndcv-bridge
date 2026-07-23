@@ -103,6 +103,45 @@ where
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ndarray::{Array2, s};
+
+    fn two_blobs() -> Array2<u8> {
+        let mut arr = Array2::<u8>::zeros((10, 10));
+        arr.slice_mut(s![2..4, 2..4]).fill(1);
+        arr.slice_mut(s![6..9, 6..9]).fill(1);
+        arr
+    }
+
+    #[test]
+    fn test_connected_components_labels_two_blobs() {
+        // `as_cv_type` must yield i32's real CV depth (CV_32S); a stray 0/1/-1
+        // is not a valid label type and OpenCV rejects it.
+        let labels = two_blobs()
+            .connected_components::<i32>(Connectivity::Four)
+            .unwrap();
+        assert_eq!(labels.dim(), (10, 10));
+        assert_eq!(labels[[0, 0]], 0, "background stays 0");
+        let a = labels[[2, 2]];
+        let b = labels[[6, 6]];
+        assert_ne!(a, 0);
+        assert_ne!(b, 0);
+        assert_ne!(a, b, "distinct blobs get distinct labels");
+    }
+
+    #[test]
+    fn test_connected_components_with_stats_counts_labels() {
+        let out = two_blobs()
+            .connected_components_with_stats::<i32>(Connectivity::Eight)
+            .unwrap();
+        // background + two components
+        assert_eq!(out.num_labels, 3);
+        assert_eq!(out.labels.dim(), (10, 10));
+    }
+}
+
 // #[test]
 // fn test_connected_components() {
 //     use opencv::core::MatTrait as _;

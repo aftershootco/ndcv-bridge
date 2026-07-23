@@ -118,3 +118,25 @@ pub const fn depth_type(depth: i32) -> &'static str {
         _ => panic!("Unsupported depth"),
     }
 }
+
+#[cfg(all(test, feature = "opencv"))]
+mod depth_type_tests {
+    use super::depth_type;
+
+    #[test]
+    fn each_depth_maps_to_its_rust_type_name() {
+        assert_eq!(depth_type(opencv::core::CV_8U), "u8");
+        assert_eq!(depth_type(opencv::core::CV_8S), "i8");
+        assert_eq!(depth_type(opencv::core::CV_16U), "u16");
+        assert_eq!(depth_type(opencv::core::CV_16S), "i16");
+        assert_eq!(depth_type(opencv::core::CV_32S), "i32");
+        assert_eq!(depth_type(opencv::core::CV_32F), "f32");
+        assert_eq!(depth_type(opencv::core::CV_64F), "f64");
+    }
+
+    #[test]
+    #[should_panic(expected = "Unsupported depth")]
+    fn unsupported_depth_panics() {
+        depth_type(999);
+    }
+}

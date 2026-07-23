@@ -166,8 +166,26 @@ mod tests {
     fn test_normalize_l2() {
         let arr = Array3::<f32>::ones((4, 4, 1));
         let res: Array3<f32> = arr.normalize(1., 0., NormType::L2, None).unwrap();
+        assert_eq!(res.dim(), (4, 4, 1));
         // L2 norm of 16 ones is 4, so every element becomes 1/4
+        assert!((res[[0, 0, 0]] - 0.25).abs() < 1e-6);
         assert!(res.iter().all(|&v| (v - 0.25).abs() < 1e-6));
+    }
+
+    #[test]
+    fn test_normalize_ix3_u8_to_f32_uses_output_depth() {
+        // Different in/out depth on the Ix3 path: `dtype` must be the *output*
+        // depth (CV_32F). Flipping the `==` guard to `!=` would pick -1 (src
+        // depth) here and mis-type the destination.
+        let mut arr = Array3::<u8>::from_elem((4, 4, 1), 50);
+        arr[[0, 0, 0]] = 10;
+        arr[[3, 3, 0]] = 90;
+        let res: Array3<f32> = arr.normalize(0., 1., NormType::MinMax, None).unwrap();
+        assert_eq!(res.dim(), (4, 4, 1));
+        assert!(res[[0, 0, 0]].abs() < 1e-6, "min -> 0");
+        assert!((res[[3, 3, 0]] - 1.).abs() < 1e-6, "max -> 1");
+        // 50 -> (50 - 10) / 80 = 0.5
+        assert!((res[[1, 1, 0]] - 0.5).abs() < 1e-6);
     }
 
     #[test]

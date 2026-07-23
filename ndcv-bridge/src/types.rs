@@ -184,3 +184,15 @@ fn test_cv_type() {
     assert_eq!(<u8 as CvType>::cv_type(), opencv::core::CV_8UC1);
     assert_eq!(<glam::Vec3 as CvType>::cv_type(), opencv::core::CV_32FC3);
 }
+
+#[cfg(feature = "nalgebra")]
+#[test]
+fn test_svector_channels_and_cv_type() {
+    use nalgebra::SVector;
+    // `channels()` returns N; a stray 0/1 would misreport the vector width.
+    assert_eq!(<SVector<f32, 3> as CvType>::channels(), 3);
+    assert_eq!(
+        <SVector<f32, 3> as CvType>::cv_type(),
+        opencv::core::CV_32FC3
+    );
+}

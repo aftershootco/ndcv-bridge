@@ -160,4 +160,17 @@ mod tests {
         let res = arr.blur_def((3, 3)).unwrap();
         assert_eq!(res.shape(), &[10, 10, 3]);
     }
+
+    #[test]
+    fn test_blur_def_uses_centered_anchor() {
+        // A centered 5x5 box filter smears a lone pixel symmetrically about its
+        // location. Dropping either `-` in the default anchor (-1,-1) -> (1,1)
+        // shifts the averaging window and breaks that symmetry.
+        let mut arr = Array3::<u8>::zeros((20, 20, 1));
+        arr[[10, 10, 0]] = 255;
+        let res = arr.blur_def((5, 5)).unwrap();
+        assert!(res[[10, 10, 0]] > 0);
+        assert_eq!(res[[8, 10, 0]], res[[12, 10, 0]], "vertical symmetry");
+        assert_eq!(res[[10, 8, 0]], res[[10, 12, 0]], "horizontal symmetry");
+    }
 }

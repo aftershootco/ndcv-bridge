@@ -446,3 +446,76 @@ fn test_serialize_safe_arrays() {
         &[8, 1, 9]
     );
 }
+
+#[test]
+fn test_stdtype_size_in_bytes() {
+    assert_eq!(<u8 as STDtype>::size(), 1);
+    assert_eq!(<i8 as STDtype>::size(), 1);
+    assert_eq!(<u16 as STDtype>::size(), 2);
+    assert_eq!(<half::f16 as STDtype>::size(), 2);
+    assert_eq!(<half::bf16 as STDtype>::size(), 2);
+    assert_eq!(<i32 as STDtype>::size(), 4);
+    assert_eq!(<f32 as STDtype>::size(), 4);
+    assert_eq!(<f64 as STDtype>::size(), 8);
+    assert_eq!(<i64 as STDtype>::size(), 8);
+}
+
+#[test]
+fn test_is_empty_reflects_tensor_count() {
+    use ndarray::Array2;
+
+    let empty = SafeArrays::new().serialize().unwrap();
+    let empty_view = SafeArrayView::from_bytes(&empty).unwrap();
+    assert!(empty_view.is_empty());
+    assert_eq!(empty_view.len(), 0);
+
+    let mut safe_arrays = SafeArrays::new();
+    let array = Array2::<f32>::zeros((2, 2));
+    safe_arrays.insert_ndarray("t", array.view()).unwrap();
+    let bytes = safe_arrays.serialize().unwrap();
+    let view = SafeArrayView::from_bytes(&bytes).unwrap();
+    assert!(!view.is_empty());
+    assert_eq!(view.len(), 1);
+}
+
+#[test]
+fn test_from_iter_collects_tensors() {
+    use ndarray::Array2;
+
+    let array = Array2::<f32>::zeros((2, 2));
+    let safe_array = SafeArray::from_ndarray(array.view()).unwrap();
+    let collected: SafeArrays = vec![("a", safe_array)].into_iter().collect();
+    assert!(collected.tensors.contains_key("a"));
+    assert_eq!(collected.tensors.len(), 1);
+}
+
+#[test]
+fn test_from_impl_collects_tensors() {
+    use ndarray::Array2;
+
+    let array = Array2::<f32>::zeros((2, 2));
+    let safe_array = SafeArray::from_ndarray(array.view()).unwrap();
+    let arrays = SafeArrays::from(vec![("b", safe_array)]);
+    assert!(arrays.tensors.contains_key("b"));
+    assert_eq!(arrays.tensors.len(), 1);
+}
+
+#[test]
+fn test_from_ndarrays_builds_map() {
+    use ndarray::Array2;
+
+    let array = Array2::<f32>::zeros((3, 4));
+    let arrays = SafeArrays::from_ndarrays(vec![("x", array.view()), ("y", array.view())]).unwrap();
+    assert_eq!(arrays.tensors.len(), 2);
+    assert!(arrays.tensors.contains_key("x"));
+    assert!(arrays.tensors.contains_key("y"));
+}
+
+#[test]
+fn test_insert_metadata_stores_pair() {
+    let mut safe_arrays = SafeArrays::new();
+    assert!(safe_arrays.metadata.is_none());
+    safe_arrays.insert_metadata("version", "1.0");
+    let metadata = safe_arrays.metadata.expect("metadata should be populated");
+    assert_eq!(metadata.get("version").map(String::as_str), Some("1.0"));
+}

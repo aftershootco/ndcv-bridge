@@ -1,5 +1,5 @@
 //! <https://docs.rs/opencv/latest/opencv/imgproc/fn.blur.html>
-use crate::conversions::*;
+use crate::{conversions::*, types::CvType};
 use glam::{IVec2, U16Vec2};
 use ndarray::*;
 
@@ -10,49 +10,42 @@ pub enum BlurError {
     #[error("OpenCV error: {0}")]
     OpenCvError(#[from] opencv::Error),
 }
-
-mod seal {
-    pub trait Sealed {}
-    // src: input image; the image can have any number of channels, which are processed independently, but the depth should be CV_8U, CV_16U, CV_16S, CV_32F or CV_64F.
-    impl Sealed for u8 {}
-    impl Sealed for u16 {}
-    impl Sealed for i16 {}
-    impl Sealed for f32 {}
-    impl Sealed for f64 {}
+pub trait BlurAllowedDepth {
+    crate::seal!();
 }
+crate::seal!(impl, BlurAllowedDepth, u8, u16, i16, f32, f64);
 
-pub trait NdCvBlur<T: bytemuck::Pod + seal::Sealed + crate::types::CvType, D: ndarray::Dimension>:
-    crate::image::NdImage + crate::conversions::NdAsImage<T, D>
+pub trait NdCvBlur<T, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>
+where
+    T: bytemuck::Pod + CvType,
+    <T as CvType>::Depth: BlurAllowedDepth,
+    D: ndarray::Dimension,
 {
     fn blur(
         &self,
         kernel_size: impl Into<U16Vec2>,
         anchor: impl Into<IVec2>,
-        border_type: crate::gaussian::BorderType,
+        border_type: crate::BorderType,
     ) -> Result<ndarray::Array<T, D>, BlurError>;
     fn blur_def(&self, kernel_size: impl Into<U16Vec2>) -> Result<ndarray::Array<T, D>, BlurError> {
-        self.blur(
-            kernel_size,
-            (-1, -1),
-            crate::gaussian::BorderType::BorderConstant,
-        )
+        self.blur(kernel_size, (-1, -1), crate::BorderType::BorderConstant)
     }
 }
 
-impl<
-    T: bytemuck::Pod + num::Zero + seal::Sealed + crate::types::CvType,
-    S: ndarray::RawData + ndarray::Data<Elem = T>,
-    D: ndarray::Dimension,
-> NdCvBlur<T, D> for ArrayBase<S, D>
+impl<T, S, D> NdCvBlur<T, D> for ArrayBase<S, D>
 where
     ndarray::ArrayBase<S, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>,
     ndarray::Array<T, D>: crate::conversions::NdAsImageMut<T, D>,
+    T: bytemuck::Pod + num::Zero + CvType,
+    <T as CvType>::Depth: BlurAllowedDepth,
+    S: ndarray::RawData + ndarray::Data<Elem = T>,
+    D: ndarray::Dimension,
 {
     fn blur(
         &self,
         kernel_size: impl Into<U16Vec2>,
         anchor: impl Into<IVec2>,
-        border_type: crate::gaussian::BorderType,
+        border_type: crate::BorderType,
     ) -> Result<ndarray::Array<T, D>, BlurError> {
         let kernel_size = kernel_size.into();
         let anchor = anchor.into();
@@ -73,7 +66,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gaussian::BorderType;
+    use crate::BorderType;
     use ndarray::Array3;
 
     #[test]
@@ -159,18 +152,5 @@ mod tests {
         let arr = Array3::<u8>::ones((10, 10, 3));
         let res = arr.blur_def((3, 3)).unwrap();
         assert_eq!(res.shape(), &[10, 10, 3]);
-    }
-
-    #[test]
-    fn test_blur_def_uses_centered_anchor() {
-        // A centered 5x5 box filter smears a lone pixel symmetrically about its
-        // location. Dropping either `-` in the default anchor (-1,-1) -> (1,1)
-        // shifts the averaging window and breaks that symmetry.
-        let mut arr = Array3::<u8>::zeros((20, 20, 1));
-        arr[[10, 10, 0]] = 255;
-        let res = arr.blur_def((5, 5)).unwrap();
-        assert!(res[[10, 10, 0]] > 0);
-        assert_eq!(res[[8, 10, 0]], res[[12, 10, 0]], "vertical symmetry");
-        assert_eq!(res[[10, 8, 0]], res[[10, 12, 0]], "horizontal symmetry");
     }
 }

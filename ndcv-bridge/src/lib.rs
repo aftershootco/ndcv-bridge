@@ -95,8 +95,6 @@ pub use resize::{Interpolation, NdCvResize};
 
 pub(crate) mod prelude_ {
     pub use crate::errors::NdCvError;
-    pub use error_stack::*;
-    pub type Result<T, C> = core::result::Result<T, Report<C>>;
 }
 
 #[cfg(feature = "opencv")]

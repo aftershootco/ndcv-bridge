@@ -168,6 +168,35 @@ impl<S: ndarray::Data<Elem = T>, T: seal::Sealed + bytemuck::Pod, D: ndarray::Di
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn to_pixel_type_maps_every_supported_combination() {
+        assert!(matches!(to_pixel_type::<u8>(1).unwrap(), PixelType::U8));
+        assert!(matches!(to_pixel_type::<u8>(2).unwrap(), PixelType::U8x2));
+        assert!(matches!(to_pixel_type::<u8>(3).unwrap(), PixelType::U8x3));
+        assert!(matches!(to_pixel_type::<u8>(4).unwrap(), PixelType::U8x4));
+        assert!(matches!(to_pixel_type::<u16>(1).unwrap(), PixelType::U16));
+        assert!(matches!(to_pixel_type::<i32>(1).unwrap(), PixelType::I32));
+        assert!(matches!(to_pixel_type::<f32>(1).unwrap(), PixelType::F32));
+        assert!(matches!(to_pixel_type::<f32>(2).unwrap(), PixelType::F32x2));
+        assert!(matches!(to_pixel_type::<f32>(3).unwrap(), PixelType::F32x3));
+        assert!(matches!(to_pixel_type::<f32>(4).unwrap(), PixelType::F32x4));
+    }
+
+    #[test]
+    fn to_pixel_type_rejects_unsupported_combinations() {
+        // Right type, wrong channel count.
+        assert!(to_pixel_type::<u8>(5).is_err());
+        assert!(to_pixel_type::<u16>(2).is_err());
+        assert!(to_pixel_type::<i32>(3).is_err());
+        assert!(to_pixel_type::<f32>(5).is_err());
+        assert!(to_pixel_type::<u8>(0).is_err());
+    }
+}
+
 impl<S: ndarray::DataMut<Elem = T>, T: seal::Sealed + bytemuck::Pod, D: ndarray::Dimension>
     NdAsImageMut<T, D> for ndarray::ArrayBase<S, D>
 {

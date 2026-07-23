@@ -107,8 +107,8 @@ impl ToColorSpace<u8, i8, Lab<i8>> for Rgb<u8> {
 
 pub trait ConvertColor<T, U, S>
 where
-    T: seal::Sealed,
-    U: seal::Sealed,
+    T: seal::Sealed + crate::types::CvType,
+    U: seal::Sealed + crate::types::CvType,
     S: ndarray::Data<Elem = T>,
 {
     fn try_cvt<Src, Dst>(
@@ -134,8 +134,8 @@ where
 
 impl<T, S, U> ConvertColor<T, U, S> for ArrayBase<S, ndarray::Ix3>
 where
-    T: seal::Sealed + num::Zero,
-    U: seal::Sealed + num::Zero,
+    T: seal::Sealed + num::Zero + crate::types::CvType,
+    U: seal::Sealed + num::Zero + crate::types::CvType,
     S: ndarray::Data<Elem = T>,
 {
     fn try_cvt<Src, Dst>(&self) -> Result<ArrayBase<CowRepr<'_, U>, Dst::Dim>, ColorConversionError>
@@ -189,8 +189,8 @@ where
 
 impl<T, S, U> ConvertColor<T, U, S> for ArrayBase<S, ndarray::Ix2>
 where
-    T: seal::Sealed + num::Zero,
-    U: seal::Sealed + num::Zero,
+    T: seal::Sealed + num::Zero + crate::types::CvType,
+    U: seal::Sealed + num::Zero + crate::types::CvType,
     S: ndarray::Data<Elem = T>,
 {
     fn try_cvt<Src, Dst>(&self) -> Result<ArrayBase<CowRepr<'_, U>, Dst::Dim>, ColorConversionError>
@@ -246,6 +246,16 @@ mod tests {
         let out: CowArray<i8, Ix3> = arr.cvt::<Rgb<u8>, Lab<i8>>();
         let expected = Array3::<i8>::zeros((100, 100, 3));
         assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn test_rgb_u8_to_lab_i8_uses_rgb2lab_code() {
+        // The hand-written u8->i8 Lab impl must return the RGB2Lab code, not a
+        // stray 0/1 that would select an unrelated conversion.
+        assert_eq!(
+            <Rgb<u8> as ToColorSpace<u8, i8, Lab<i8>>>::cv_colorspace_code(),
+            opencv::imgproc::COLOR_RGB2Lab
+        );
     }
 
     #[test]
@@ -587,8 +597,20 @@ mod tests {
         // Create an array with 3 channels but claim it's RGBA
         let rgb_data = Array3::<u8>::zeros((5, 5, 3));
 
-        let result = rgb_data.try_cvt::<Rgba<u8>, Rgb<u8>>();
-        assert!(result.is_err());
+        let err = rgb_data
+            .try_cvt::<Rgba<u8>, Rgb<u8>>()
+            .expect_err("3-channel array declared as Rgba should fail");
+        assert!(
+            matches!(
+                err,
+                ColorConversionError::ChannelMismatch {
+                    expected: 3,
+                    got: 4,
+                    ..
+                }
+            ),
+            "unexpected error: {err:?}"
+        );
     }
 
     #[test]

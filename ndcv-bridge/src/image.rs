@@ -40,3 +40,26 @@ impl<T, S: RawData<Elem = T>> NdImage for ArrayBase<S, Ix2> {
         1
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ix3_dims_map_to_hwc() {
+        // Array shape is (height, width, channels) = (4, 3, 2).
+        let arr = Array3::<u8>::zeros((4, 3, 2));
+        assert_eq!(arr.height(), 4);
+        assert_eq!(arr.width(), 3);
+        assert_eq!(arr.channels(), 2);
+    }
+
+    #[test]
+    fn ix2_dims_map_to_hw_single_channel() {
+        // Array shape is (height, width) = (5, 7).
+        let arr = Array2::<u8>::zeros((5, 7));
+        assert_eq!(arr.height(), 5);
+        assert_eq!(arr.width(), 7);
+        assert_eq!(arr.channels(), 1);
+    }
+}

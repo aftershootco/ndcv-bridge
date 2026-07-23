@@ -646,6 +646,65 @@ mod bbox_scale_tests {
     }
 }
 
+#[cfg(test)]
+mod bbox_mutation_tests {
+    use super::*;
+
+    #[test]
+    fn point_into_nalgebra_preserves_coords() {
+        let np: nalgebra::Point2<i32> = Point::new(3, 4).into();
+        assert_eq!(np, nalgebra::Point2::new(3, 4));
+    }
+
+    #[test]
+    fn contains_point_inside_and_outside() {
+        let bbox = BBox::<i32>::new(0, 0, 10, 10);
+        assert!(bbox.contains(nalgebra::Point2::new(5, 5)));
+        assert!(!bbox.contains(nalgebra::Point2::new(20, 20)));
+    }
+
+    #[test]
+    fn contains_bbox_inside_and_outside() {
+        let outer = BBox::<i32>::new(0, 0, 10, 10);
+        assert!(outer.contains_bbox(BBox::new(2, 2, 3, 3)));
+        assert!(!outer.contains_bbox(BBox::new(2, 2, 20, 20)));
+    }
+
+    #[test]
+    fn scalar_add_shifts_point_and_grows_size() {
+        let bbox = BBox::<i32>::new(2, 3, 4, 5) + 1;
+        assert_eq!(bbox, BBox::new(3, 4, 5, 6));
+    }
+
+    #[test]
+    fn scalar_sub_shifts_point_and_shrinks_size() {
+        let bbox = BBox::<i32>::new(5, 6, 4, 5) - 1;
+        assert_eq!(bbox, BBox::new(4, 5, 3, 4));
+    }
+
+    #[test]
+    fn scalar_mul_scales_point_and_size() {
+        let bbox = BBox::<i32>::new(2, 3, 4, 5) * 2;
+        assert_eq!(bbox, BBox::new(4, 6, 8, 10));
+    }
+
+    #[test]
+    fn scalar_div_scales_point_and_size() {
+        let bbox = BBox::<i32>::new(4, 6, 8, 10) / 2;
+        assert_eq!(bbox, BBox::new(2, 3, 4, 5));
+    }
+
+    #[test]
+    fn padding_uses_multiplicative_factor() {
+        // padding=3 so that padding*2 (=6) differs from padding+2 (=5); the
+        // earlier padding=2 test can't tell those apart.
+        let bbox = BBox::<i32>::new(0, 0, 10, 10);
+        assert_eq!(bbox.padding(3), BBox::new(-3, -3, 16, 16));
+        assert_eq!(bbox.padding_height(3), BBox::new(0, -3, 10, 16));
+        assert_eq!(bbox.padding_width(3), BBox::new(-3, 0, 16, 10));
+    }
+}
+
 pub mod traits {
     pub mod max {
         pub trait Max: Sized + Copy {

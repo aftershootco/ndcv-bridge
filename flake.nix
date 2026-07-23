@@ -48,8 +48,12 @@
         stableToolchainWithRustAnalyzer = stableToolchain.override {
           extensions = ["rust-src" "rust-analyzer"];
         };
-        craneLib = (crane.mkLib pkgs).overrideToolchain stableToolchain;
-        craneLibLLvmTools = (crane.mkLib pkgs).overrideToolchain stableToolchainWithLLvmTools;
+        craneLib = ((crane.mkLib pkgs).overrideToolchain stableToolchain).overrideScope (final: prev: {
+          stdenvSelector = p: p.clangStdenv;
+        });
+        craneLibLLvmTools = ((crane.mkLib pkgs).overrideToolchain stableToolchainWithLLvmTools).overrideScope (final: prev: {
+          stdenvSelector = p: p.clangStdenv;
+        });
 
         src = let
           filterBySuffix = path: exts: lib.any (ext: lib.hasSuffix ext path) exts;
@@ -63,7 +67,6 @@
           {
             inherit src;
             pname = name;
-            stdenv = p: p.clangStdenv;
             doCheck = false;
             LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
             nativeBuildInputs = with pkgs; [
@@ -144,6 +147,7 @@
                   stableToolchainWithRustAnalyzer
                   cargo-nextest
                   cargo-deny
+                  cargo-mutants
                   just
                   cargo-llvm-cov
                 ]

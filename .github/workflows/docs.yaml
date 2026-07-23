@@ -16,9 +16,9 @@ jobs:
       pages: "write"
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: DeterminateSystems/nix-installer-action@main
-    - uses: cachix/cachix-action@v15
+    - uses: cachix/cachix-action@v17
       with:
         name: toshokan
     - uses: DeterminateSystems/flake-checker-action@main
@@ -27,14 +27,14 @@ jobs:
       run: nix build .#checks.x86_64-linux.ndcv-bridge-docs
 
     - name: Setup Pages
-      uses: actions/configure-pages@v5
+      uses: actions/configure-pages@v6
 
     - name: Upload artifact
-      uses: actions/upload-pages-artifact@v3
+      uses: actions/upload-pages-artifact@v5
       with:
         path: result/share/doc
 
     - name: Deploy to gh-pages
       id: deployment
-      uses: actions/deploy-pages@v4
+      uses: actions/deploy-pages@v5
 

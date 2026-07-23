@@ -166,6 +166,67 @@ pub fn test_blend() {
     assert_eq!(out_u8, expected);
 }
 
+#[cfg(test)]
+mod blend_mutation_tests {
+    use super::*;
+
+    // this*(1 - mask*alpha) + other*(mask*alpha), computed per channel.
+    // With mask=[1,0] and alpha=0.5 the first pixel is a 50/50 blend and the
+    // second is untouched.
+    fn fixture() -> (Array3<f32>, Array3<f32>, Array2<f32>) {
+        let this = Array3::from_shape_vec((1, 2, 3), vec![10., 20., 30., 40., 50., 60.]).unwrap();
+        let other =
+            Array3::from_shape_vec((1, 2, 3), vec![100., 200., 300., 400., 500., 600.]).unwrap();
+        let mask = Array2::from_shape_vec((1, 2), vec![1.0, 0.0]).unwrap();
+        (this, other, mask)
+    }
+
+    fn assert_close(actual: &Array3<f32>, expected: &[f32]) {
+        for (a, e) in actual.iter().zip(expected) {
+            assert!((a - e).abs() < 1e-3, "got {a}, expected {e}");
+        }
+    }
+
+    #[test]
+    fn blend_half_alpha_interpolates() {
+        let (this, other, mask) = fixture();
+        let out = this.blend(mask.view(), other.view(), 0.5).unwrap();
+        // pixel0: 0.5 blend -> 55,110,165 ; pixel1: mask 0 -> unchanged
+        assert_close(&out, &[55., 110., 165., 40., 50., 60.]);
+    }
+
+    #[test]
+    fn blend_inplace_half_alpha_interpolates() {
+        let (mut this, other, mask) = fixture();
+        this.blend_inplace(mask.view(), other.view(), 0.5).unwrap();
+        assert_close(&this, &[55., 110., 165., 40., 50., 60.]);
+    }
+
+    #[test]
+    fn blend_rejects_mask_with_wrong_height() {
+        let this = Array3::<f32>::zeros((2, 2, 3));
+        let other = Array3::<f32>::zeros((2, 2, 3));
+        // Height differs (1 vs 2) but width matches: a single-axis mismatch that
+        // an `&&` (instead of `||`) check would wrongly accept.
+        let mask = Array2::<f32>::zeros((1, 2));
+        assert!(matches!(
+            this.blend(mask.view(), other.view(), 1.0),
+            Err(BlendError::ShapeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn blend_inplace_rejects_mask_with_wrong_height() {
+        let mut this = Array3::<f32>::zeros((2, 2, 3));
+        let other = Array3::<f32>::zeros((2, 2, 3));
+        let mask = Array2::<f32>::zeros((1, 2));
+        assert!(matches!(
+            this.blend_inplace(mask.view(), other.view(), 1.0),
+            Err(BlendError::ShapeMismatch { .. })
+        ));
+    }
+}
+
 // #[test]
 // pub fn test_blend_inplace() {
 //     let mut img = Array3::<f32>::from_shape_fn((10, 10, 3), |(i, j, k)| match (i, j, k) {

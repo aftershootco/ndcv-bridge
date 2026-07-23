@@ -1,6 +1,6 @@
 use ndarray::{Array, ArrayBase};
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Orientation {
     #[default]
     NoRotation,
@@ -184,6 +184,122 @@ impl<T: bytemuck::Pod + Copy, S: ndarray::Data<Elem = T>> Orient<T, ndarray::Ix2
             RotationFlag::Clock90 => self.t().flip(FlipFlag::Mirror).to_owned(),
             RotationFlag::Clock180 => self.flip(FlipFlag::Both).to_owned(),
             RotationFlag::Clock270 => self.t().flip(FlipFlag::Water).to_owned(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ndarray::{Array2, array};
+
+    #[test]
+    fn orientation_inverse_swaps_only_the_90s() {
+        assert_eq!(Orientation::Clock90.inverse(), Orientation::Clock270);
+        assert_eq!(Orientation::Clock270.inverse(), Orientation::Clock90);
+        // Every other orientation is its own inverse.
+        for o in [
+            Orientation::NoRotation,
+            Orientation::Mirror,
+            Orientation::Clock180,
+            Orientation::Water,
+            Orientation::MirrorClock270,
+            Orientation::MirrorClock90,
+            Orientation::Unknown,
+        ] {
+            assert_eq!(o.inverse(), o);
+        }
+    }
+
+    #[test]
+    fn orientation_from_raw_maps_each_exif_value() {
+        assert_eq!(Orientation::from_raw(1), Orientation::NoRotation);
+        assert_eq!(Orientation::from_raw(2), Orientation::Mirror);
+        assert_eq!(Orientation::from_raw(3), Orientation::Clock180);
+        assert_eq!(Orientation::from_raw(4), Orientation::Water);
+        assert_eq!(Orientation::from_raw(5), Orientation::MirrorClock270);
+        assert_eq!(Orientation::from_raw(6), Orientation::Clock90);
+        assert_eq!(Orientation::from_raw(7), Orientation::MirrorClock90);
+        assert_eq!(Orientation::from_raw(8), Orientation::Clock270);
+        // Anything outside 1..=8 is Unknown.
+        assert_eq!(Orientation::from_raw(0), Orientation::Unknown);
+        assert_eq!(Orientation::from_raw(9), Orientation::Unknown);
+        assert_eq!(Orientation::from_raw(255), Orientation::Unknown);
+    }
+
+    #[test]
+    fn rotation_flag_neg_reverses_direction() {
+        assert_eq!(RotationFlag::Clock90.neg(), RotationFlag::Clock270);
+        assert_eq!(RotationFlag::Clock180.neg(), RotationFlag::Clock180);
+        assert_eq!(RotationFlag::Clock270.neg(), RotationFlag::Clock90);
+    }
+
+    #[test]
+    fn rotation_flag_to_orientation() {
+        assert_eq!(RotationFlag::Clock90.to_orientation(), Orientation::Clock90);
+        assert_eq!(
+            RotationFlag::Clock180.to_orientation(),
+            Orientation::Clock180
+        );
+        assert_eq!(
+            RotationFlag::Clock270.to_orientation(),
+            Orientation::Clock270
+        );
+    }
+
+    // A 2x3 array whose values encode (row, col) as row*10 + col, so a rotation
+    // is only correct if every element lands in the right place.
+    fn grid() -> Array2<i32> {
+        array![[0, 1, 2], [10, 11, 12]]
+    }
+
+    #[test]
+    fn rotate_clock90_then_clock270_is_identity() {
+        let g = grid();
+        let there = g.rotate(RotationFlag::Clock90);
+        let back = there.rotate(RotationFlag::Clock270);
+        assert_eq!(back, g);
+    }
+
+    #[test]
+    fn rotate_clock90_places_bottom_left_at_top_left() {
+        // Clockwise 90: the bottom-left element (10) becomes the new top-left.
+        let g = grid();
+        let r = g.rotate(RotationFlag::Clock90);
+        assert_eq!(r.dim(), (3, 2));
+        assert_eq!(r[[0, 0]], 10);
+        assert_eq!(r[[0, 1]], 0);
+        assert_eq!(r[[2, 1]], 2);
+    }
+
+    #[test]
+    fn flip_mirror_reverses_columns() {
+        let g = grid();
+        let m = g.flip(FlipFlag::Mirror);
+        assert_eq!(m, array![[2, 1, 0], [12, 11, 10]]);
+    }
+
+    #[test]
+    fn flip_water_reverses_rows() {
+        let g = grid();
+        let w = g.flip(FlipFlag::Water);
+        assert_eq!(w, array![[10, 11, 12], [0, 1, 2]]);
+    }
+
+    #[test]
+    fn orient_unorient_round_trips() {
+        let g = grid();
+        for o in [
+            Orientation::NoRotation,
+            Orientation::Mirror,
+            Orientation::Clock180,
+            Orientation::Water,
+            Orientation::Clock90,
+            Orientation::Clock270,
+        ] {
+            let oriented = g.orient(o);
+            let restored = oriented.unorient(o);
+            assert_eq!(restored, g, "round trip failed for {o:?}");
         }
     }
 }

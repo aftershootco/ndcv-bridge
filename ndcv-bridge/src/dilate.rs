@@ -23,7 +23,7 @@ mod seal {
     impl Sealed for f64 {}
 }
 
-pub trait NdCvDilate<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
+pub trait NdCvDilate<T: bytemuck::Pod + seal::Sealed + crate::types::CvType, D: ndarray::Dimension>:
     crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
     /// Dilates an image using a structuring element with all parameters exposed.
@@ -62,7 +62,7 @@ pub trait NdCvDilate<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
 }
 
 impl<
-    T: bytemuck::Pod + num::Zero + seal::Sealed,
+    T: bytemuck::Pod + num::Zero + seal::Sealed + crate::types::CvType,
     S: ndarray::RawData + ndarray::Data<Elem = T>,
     D: ndarray::Dimension,
 > NdCvDilate<T, D> for ArrayBase<S, D>
@@ -101,8 +101,10 @@ where
 }
 
 /// In-place variant of dilation.
-pub trait NdCvDilateInPlace<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
-    crate::image::NdImage + crate::conversions::NdAsImageMut<T, D>
+pub trait NdCvDilateInPlace<
+    T: bytemuck::Pod + seal::Sealed + crate::types::CvType,
+    D: ndarray::Dimension,
+>: crate::image::NdImage + crate::conversions::NdAsImageMut<T, D>
 {
     fn dilate_inplace(
         &mut self,
@@ -131,7 +133,7 @@ pub trait NdCvDilateInPlace<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimensi
 }
 
 impl<
-    T: bytemuck::Pod + num::Zero + seal::Sealed,
+    T: bytemuck::Pod + num::Zero + seal::Sealed + crate::types::CvType,
     S: ndarray::RawData + ndarray::DataMut<Elem = T>,
     D: ndarray::Dimension,
 > NdCvDilateInPlace<T, D> for ArrayBase<S, D>
@@ -345,26 +347,61 @@ mod tests {
     #[test]
     fn test_dilate_invalid_anchor_returns_err() {
         let arr = Array3::<u8>::ones((10, 10, 3));
-        let res = arr.dilate(
-            rect_kernel(3).view(),
-            Point2::new(10, 10),
-            1,
-            BorderType::BorderConstant,
-            Vector4::zeros(),
+        let err = arr
+            .dilate(
+                rect_kernel(3).view(),
+                Point2::new(10, 10),
+                1,
+                BorderType::BorderConstant,
+                Vector4::zeros(),
+            )
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("anchor"),
+            "expected the anchor bounds assertion, got: {err}"
         );
-        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_dilate_def_uses_centered_anchor() {
+        // With a 5x5 kernel the real default anchor (-1,-1) resolves to the
+        // center (2,2), lighting the full +/-2 cross around a lone pixel.
+        // Dropping either `-` shifts the anchor to (1,1) and starves one side.
+        let mut arr = Array3::<u8>::zeros((20, 20, 1));
+        arr[[10, 10, 0]] = 255;
+        let res = arr.dilate_def(rect_kernel(5).view(), 1).unwrap();
+        assert_eq!(res[[8, 10, 0]], 255, "top reach");
+        assert_eq!(res[[12, 10, 0]], 255, "bottom reach");
+        assert_eq!(res[[10, 8, 0]], 255, "left reach");
+        assert_eq!(res[[10, 12, 0]], 255, "right reach");
+    }
+
+    #[test]
+    fn test_dilate_def_inplace_uses_centered_anchor() {
+        let mut arr = Array3::<u8>::zeros((20, 20, 1));
+        arr[[10, 10, 0]] = 255;
+        arr.dilate_def_inplace(rect_kernel(5).view(), 1).unwrap();
+        assert_eq!(arr[[8, 10, 0]], 255, "top reach");
+        assert_eq!(arr[[12, 10, 0]], 255, "bottom reach");
+        assert_eq!(arr[[10, 8, 0]], 255, "left reach");
+        assert_eq!(arr[[10, 12, 0]], 255, "right reach");
     }
 
     #[test]
     fn test_dilate_inplace_invalid_anchor_returns_err() {
         let mut arr = Array3::<u8>::ones((10, 10, 3));
-        let res = arr.dilate_inplace(
-            rect_kernel(3).view(),
-            Point2::new(10, 10),
-            1,
-            BorderType::BorderConstant,
-            Vector4::zeros(),
+        let err = arr
+            .dilate_inplace(
+                rect_kernel(3).view(),
+                Point2::new(10, 10),
+                1,
+                BorderType::BorderConstant,
+                Vector4::zeros(),
+            )
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("anchor"),
+            "expected the anchor bounds assertion, got: {err}"
         );
-        assert!(res.is_err());
     }
 }

@@ -1,6 +1,10 @@
 /result
 /target
 .direnv
+.env
+justfile
+*.jpg
+*.png
 
 # cargo-mutants output
 /mutants.out*/

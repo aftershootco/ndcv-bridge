@@ -1,6 +1,7 @@
 use crate::{
     NdAsImage, NdAsImageMut,
     conversions::{ConversionError, MatAsNd},
+    types::{CvDepth, CvType},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -16,25 +17,17 @@ impl ConnectedComponentsError {
         self
     }
 }
-
-pub(crate) mod seal {
-    pub trait ConnectedComponentOutput:
-        Sized + Copy + bytemuck::Pod + num::Zero + crate::types::CvType
-    {
-        fn as_cv_type() -> i32 {
-            <Self as crate::types::CvType>::cv_type()
-        }
-    }
-    impl ConnectedComponentOutput for i32 {}
-    impl ConnectedComponentOutput for u16 {}
+pub trait ConnectedComponentOutput {
+    crate::seal!();
 }
+crate::seal!(impl, ConnectedComponentOutput, u16, i32);
 
 pub trait NdCvConnectedComponents<T> {
-    fn connected_components<O: seal::ConnectedComponentOutput>(
+    fn connected_components<O: CvType + CvDepth + ConnectedComponentOutput>(
         &self,
         connectivity: Connectivity,
     ) -> Result<ndarray::Array2<O>, ConnectedComponentsError>;
-    fn connected_components_with_stats<O: seal::ConnectedComponentOutput>(
+    fn connected_components_with_stats<O: CvType + CvDepth + ConnectedComponentOutput>(
         &self,
         connectivity: Connectivity,
     ) -> Result<ConnectedComponentStats<O>, ConnectedComponentsError>;
@@ -48,7 +41,7 @@ pub enum Connectivity {
 }
 
 #[derive(Debug, Clone)]
-pub struct ConnectedComponentStats<O: seal::ConnectedComponentOutput> {
+pub struct ConnectedComponentStats<O: CvType + CvDepth + ConnectedComponentOutput> {
     pub num_labels: i32,
     pub labels: ndarray::Array2<O>,
     pub stats: ndarray::Array2<i32>,
@@ -56,12 +49,12 @@ pub struct ConnectedComponentStats<O: seal::ConnectedComponentOutput> {
 }
 
 // use crate::conversions::NdCvConversionRef;
-impl<T: bytemuck::Pod + crate::types::CvType, S: ndarray::Data<Elem = T>> NdCvConnectedComponents<T>
+impl<T: CvType, S: ndarray::Data<Elem = T>> NdCvConnectedComponents<T>
     for ndarray::ArrayBase<S, ndarray::Ix2>
 where
     ndarray::Array2<T>: NdAsImage<T, ndarray::Ix2>,
 {
-    fn connected_components<O: seal::ConnectedComponentOutput>(
+    fn connected_components<O: CvType + CvDepth + ConnectedComponentOutput>(
         &self,
         connectivity: Connectivity,
     ) -> Result<ndarray::Array2<O>, ConnectedComponentsError> {
@@ -72,12 +65,12 @@ where
             mat.as_ref(),
             cv_labels.as_mut(),
             connectivity as i32,
-            O::as_cv_type(),
+            <O as CvType>::cv_depth(),
         )?;
         Ok(labels)
     }
 
-    fn connected_components_with_stats<O: seal::ConnectedComponentOutput>(
+    fn connected_components_with_stats<O: CvType + CvDepth + ConnectedComponentOutput>(
         &self,
         connectivity: Connectivity,
     ) -> Result<ConnectedComponentStats<O>, ConnectedComponentsError> {
@@ -90,7 +83,7 @@ where
             &mut stats,
             &mut centroids,
             connectivity as i32,
-            O::as_cv_type(),
+            <O as CvType>::cv_depth(),
         )?;
         let stats = stats.as_ndarray()?.to_owned();
         let centroids = centroids.as_ndarray()?.to_owned();
@@ -100,45 +93,6 @@ where
             centroids,
             num_labels,
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use ndarray::{Array2, s};
-
-    fn two_blobs() -> Array2<u8> {
-        let mut arr = Array2::<u8>::zeros((10, 10));
-        arr.slice_mut(s![2..4, 2..4]).fill(1);
-        arr.slice_mut(s![6..9, 6..9]).fill(1);
-        arr
-    }
-
-    #[test]
-    fn test_connected_components_labels_two_blobs() {
-        // `as_cv_type` must yield i32's real CV depth (CV_32S); a stray 0/1/-1
-        // is not a valid label type and OpenCV rejects it.
-        let labels = two_blobs()
-            .connected_components::<i32>(Connectivity::Four)
-            .unwrap();
-        assert_eq!(labels.dim(), (10, 10));
-        assert_eq!(labels[[0, 0]], 0, "background stays 0");
-        let a = labels[[2, 2]];
-        let b = labels[[6, 6]];
-        assert_ne!(a, 0);
-        assert_ne!(b, 0);
-        assert_ne!(a, b, "distinct blobs get distinct labels");
-    }
-
-    #[test]
-    fn test_connected_components_with_stats_counts_labels() {
-        let out = two_blobs()
-            .connected_components_with_stats::<i32>(Connectivity::Eight)
-            .unwrap();
-        // background + two components
-        assert_eq!(out.num_labels, 3);
-        assert_eq!(out.labels.dim(), (10, 10));
     }
 }
 

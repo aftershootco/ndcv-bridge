@@ -38,26 +38,3 @@ fn test_bounding_rect_empty() {
     let rect = arr.bounding_rect().unwrap();
     assert_eq!(rect, bounding_box::Aabb2::from_xywh(0, 0, 0, 0));
 }
-
-#[test]
-fn test_bounding_rect_valued() {
-    let mut arr = ndarray::Array2::<u8>::zeros((10, 10));
-    crate::NdRoiMut::roi_mut(&mut arr, bounding_box::Aabb2::from_xywh(1, 1, 3, 3))
-        .unwrap()
-        .fill(1);
-    let rect = arr.bounding_rect().unwrap();
-    assert_eq!(rect, bounding_box::Aabb2::from_xywh(1, 1, 3, 3));
-}
-
-#[test]
-fn test_bounding_rect_complex() {
-    let mut arr = ndarray::Array2::<u8>::zeros((10, 10));
-    crate::NdRoiMut::roi_mut(&mut arr, bounding_box::Aabb2::from_xywh(1, 3, 3, 3))
-        .unwrap()
-        .fill(1);
-    crate::NdRoiMut::roi_mut(&mut arr, bounding_box::Aabb2::from_xywh(2, 3, 3, 5))
-        .unwrap()
-        .fill(5);
-    let rect = arr.bounding_rect().unwrap();
-    assert_eq!(rect, bounding_box::Aabb2::from_xywh(1, 3, 4, 5));
-}

@@ -11,12 +11,11 @@ impl<T: std::cmp::Ord + Clone + AsPrimitive<f64>, S: ndarray::Data<Elem = T>> Pe
 {
     fn percentile(&self, qth_percentile: f64) -> Result<f64, NdCvError> {
         if self.is_empty() {
-            return Err(error_stack::Report::new(NdCvError).attach("Empty Input"));
+            return Err(NdCvError::EmptyInput);
         }
 
         if !(0_f64..1_f64).contains(&qth_percentile) {
-            return Err(error_stack::Report::new(NdCvError)
-                .attach("Qth percentile must be between 0 and 1"));
+            return Err(NdCvError::InvalidQuantile(qth_percentile));
         }
 
         let mut standard_array = self.as_standard_layout();

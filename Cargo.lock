@@ -935,7 +935,6 @@ dependencies = [
  "bounding-box",
  "bytemuck",
  "divan",
- "error-stack",
  "fast_image_resize",
  "glam 0.32.1",
  "img-parts",

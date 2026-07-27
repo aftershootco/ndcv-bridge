@@ -1,7 +1,7 @@
 //! <https://docs.rs/opencv/latest/opencv/imgproc/fn.erode.html>
 //! <https://docs.opencv.org/4.13.0/d4/d86/group__imgproc__filter.html#gaeb1e0c1033e3f6b891a25d0511362aeb>
 use crate::conversions::*;
-use nalgebra::{Point2, Vector4};
+use nalgebra::Vector4;
 use ndarray::*;
 
 #[derive(Debug, thiserror::Error)]
@@ -12,18 +12,7 @@ pub enum ErodeError {
     OpenCvError(#[from] opencv::Error),
 }
 
-mod seal {
-    pub trait Sealed {}
-    // src: input image; the number of channels can be arbitrary, but the depth should be
-    // CV_8U, CV_16U, CV_16S, CV_32F or CV_64F.
-    impl Sealed for u8 {}
-    impl Sealed for u16 {}
-    impl Sealed for i16 {}
-    impl Sealed for f32 {}
-    impl Sealed for f64 {}
-}
-
-pub trait NdCvErode<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
+pub trait NdCvErode<T: bytemuck::Pod + crate::types::CvType, D: ndarray::Dimension>:
     crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
     /// Erodes an image using a structuring element with all parameters exposed.
@@ -36,7 +25,7 @@ pub trait NdCvErode<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
     fn erode(
         &self,
         kernel: ndarray::ArrayView2<u8>,
-        anchor: Point2<i32>,
+        anchor: impl Into<glam::IVec2>,
         iterations: u16,
         border_type: crate::gaussian::BorderType,
         border_value: Vector4<f64>,
@@ -53,7 +42,7 @@ pub trait NdCvErode<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
         let border_value = bytemuck::cast::<[f64; 4], Vector4<f64>>(bv);
         self.erode(
             kernel,
-            Point2::new(-1, -1),
+            (-1, -1),
             iterations,
             crate::gaussian::BorderType::BorderConstant,
             border_value,
@@ -62,7 +51,7 @@ pub trait NdCvErode<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
 }
 
 impl<
-    T: bytemuck::Pod + num::Zero + seal::Sealed,
+    T: bytemuck::Pod + num::Zero + crate::types::CvType,
     S: ndarray::RawData + ndarray::Data<Elem = T>,
     D: ndarray::Dimension,
 > NdCvErode<T, D> for ArrayBase<S, D>
@@ -73,7 +62,7 @@ where
     fn erode(
         &self,
         kernel: ndarray::ArrayView2<u8>,
-        anchor: Point2<i32>,
+        anchor: impl Into<glam::IVec2>,
         iterations: u16,
         border_type: crate::gaussian::BorderType,
         border_value: Vector4<f64>,
@@ -82,6 +71,7 @@ where
         let cv_self = self.as_image_mat()?;
         let mut cv_dst = dst.as_image_mat_mut()?;
         let cv_kernel = kernel.as_image_mat()?;
+        let anchor = anchor.into();
         opencv::imgproc::erode(
             &*cv_self,
             &mut *cv_dst,
@@ -101,13 +91,13 @@ where
 }
 
 /// In-place variant of erosion.
-pub trait NdCvErodeInPlace<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimension>:
+pub trait NdCvErodeInPlace<T: bytemuck::Pod + crate::types::CvType, D: ndarray::Dimension>:
     crate::image::NdImage + crate::conversions::NdAsImageMut<T, D>
 {
     fn erode_inplace(
         &mut self,
         kernel: ndarray::ArrayView2<u8>,
-        anchor: Point2<i32>,
+        anchor: impl Into<glam::IVec2>,
         iterations: u16,
         border_type: crate::gaussian::BorderType,
         border_value: Vector4<f64>,
@@ -122,7 +112,7 @@ pub trait NdCvErodeInPlace<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimensio
         let border_value = bytemuck::cast::<[f64; 4], Vector4<f64>>(bv);
         self.erode_inplace(
             kernel,
-            Point2::new(-1, -1),
+            (-1, -1),
             iterations,
             crate::gaussian::BorderType::BorderConstant,
             border_value,
@@ -131,7 +121,7 @@ pub trait NdCvErodeInPlace<T: bytemuck::Pod + seal::Sealed, D: ndarray::Dimensio
 }
 
 impl<
-    T: bytemuck::Pod + num::Zero + seal::Sealed,
+    T: bytemuck::Pod + num::Zero + crate::types::CvType,
     S: ndarray::RawData + ndarray::DataMut<Elem = T>,
     D: ndarray::Dimension,
 > NdCvErodeInPlace<T, D> for ArrayBase<S, D>
@@ -141,13 +131,14 @@ where
     fn erode_inplace(
         &mut self,
         kernel: ndarray::ArrayView2<u8>,
-        anchor: Point2<i32>,
+        anchor: impl Into<glam::IVec2>,
         iterations: u16,
         border_type: crate::gaussian::BorderType,
         border_value: Vector4<f64>,
     ) -> Result<&mut Self, ErodeError> {
         let cv_kernel = kernel.as_image_mat()?;
         let mut cv_self = self.as_image_mat_mut()?;
+        let anchor = anchor.into();
         unsafe {
             crate::inplace::op_inplace(&mut cv_self, |this, out| {
                 opencv::imgproc::erode(
@@ -197,7 +188,7 @@ mod tests {
         let res = arr
             .erode(
                 rect_kernel(3).view(),
-                Point2::new(-1, -1),
+                (-1, -1),
                 1,
                 BorderType::BorderConstant,
                 border_value,
@@ -212,7 +203,7 @@ mod tests {
         let res = arr
             .erode(
                 rect_kernel(3).view(),
-                Point2::new(-1, -1),
+                (-1, -1),
                 1,
                 BorderType::BorderConstant,
                 Vector4::zeros(),
@@ -230,7 +221,7 @@ mod tests {
         let res = arr
             .erode(
                 rect_kernel(3).view(),
-                Point2::new(-1, -1),
+                (-1, -1),
                 1,
                 BorderType::BorderConstant,
                 Vector4::repeat(255.0),
@@ -246,7 +237,7 @@ mod tests {
         let res = arr
             .erode(
                 rect_kernel(3).view(),
-                Point2::new(-1, -1),
+                (-1, -1),
                 1,
                 BorderType::BorderConstant,
                 Vector4::zeros(),
@@ -263,7 +254,7 @@ mod tests {
         let res = arr
             .erode(
                 rect_kernel(3).view(),
-                Point2::new(-1, -1),
+                (-1, -1),
                 1,
                 BorderType::BorderConstant,
                 Vector4::new(128.0, 64.0, 32.0, 0.0),
@@ -291,7 +282,7 @@ mod tests {
         let res1 = arr
             .erode(
                 rect_kernel(3).view(),
-                Point2::new(-1, -1),
+                (-1, -1),
                 1,
                 BorderType::BorderConstant,
                 Vector4::zeros(),
@@ -300,7 +291,7 @@ mod tests {
         let res2 = arr
             .erode(
                 rect_kernel(3).view(),
-                Point2::new(-1, -1),
+                (-1, -1),
                 2,
                 BorderType::BorderConstant,
                 Vector4::zeros(),
@@ -327,7 +318,7 @@ mod tests {
             let res = arr
                 .erode(
                     rect_kernel(3).view(),
-                    Point2::new(-1, -1),
+                    (-1, -1),
                     1,
                     border_type,
                     border_value,
@@ -357,7 +348,7 @@ mod tests {
         let arr = Array3::<u8>::ones((10, 10, 3));
         let res = arr.erode(
             rect_kernel(3).view(),
-            Point2::new(10, 10),
+            (10, 10),
             1,
             BorderType::BorderConstant,
             Vector4::zeros(),
@@ -370,7 +361,7 @@ mod tests {
         let mut arr = Array3::<u8>::ones((10, 10, 3));
         let res = arr.erode_inplace(
             rect_kernel(3).view(),
-            Point2::new(10, 10),
+            (10, 10),
             1,
             BorderType::BorderConstant,
             Vector4::zeros(),

@@ -602,6 +602,102 @@ pub fn test_mat_with_misaligned_data_errors_for_simd_pixel() {
     );
 }
 
+// --- Issue #16: non-contiguous / negative-stride views ---------------------
+//
+// `ndarray_to_mat_regular` drops the innermost stride (assuming it is 1) and
+// maps the remaining strides through `as usize`, which wraps negative strides
+// into astronomically large Mat steps. Views produced by `.slice(...)` reach
+// this path unchecked. Each test below asserts the only two acceptable
+// outcomes: a `NonContiguousData` error, or a Mat that reads the same elements
+// the view does.
+
+#[test]
+pub fn test_column_strided_view_regular_is_not_silently_wrong() {
+    // Failure mode 1: the skipped inner stride (2) makes OpenCV read
+    // consecutive elements, so row 0 reads [0, 1, 2, 3, 4] instead of the
+    // view's [0, 2, 4, 6, 8]. No error is raised; the pixels are just wrong.
+    let base = ndarray::Array2::<f32>::from_shape_fn((10, 10), |(r, c)| (r * 10 + c) as f32);
+    let view = base.slice(ndarray::s![.., ..;2]);
+    assert_eq!(view.shape(), &[10, 5]);
+
+    match unsafe { impls::ndarray_to_mat_regular(&view) } {
+        Err(err) => assert!(
+            matches!(err.kind, ConversionErrorKind::NonContiguousData),
+            "unexpected error kind: {:?}",
+            err.kind
+        ),
+        Ok(mat) => {
+            // Reading is in-bounds here (the view spans the whole allocation),
+            // so the corruption can be observed directly.
+            let roundtrip = unsafe { impls::mat_to_ndarray::<f32, Ix2>(&mat) }.unwrap();
+            assert_eq!(
+                roundtrip,
+                view,
+                "column-strided view built a Mat over the wrong elements"
+            );
+        }
+    }
+}
+
+#[test]
+pub fn test_inner_reversed_view_regular_is_rejected() {
+    // Failure mode 2: strides (10, -1). The dropped -1 makes the Mat read rows
+    // forward from the view's base pointer, which sits at the *end* of each
+    // logical row, so the last row runs past the allocation. The resulting Mat
+    // is deliberately never read here.
+    let base = ndarray::Array2::<f32>::from_shape_fn((10, 10), |(r, c)| (r * 10 + c) as f32);
+    let view = base.slice(ndarray::s![.., ..;-1]);
+    assert_eq!(view.strides(), &[10, -1]);
+
+    let err = unsafe { impls::ndarray_to_mat_regular(&view) }
+        .map(|_| ())
+        .expect_err("inner-reversed view must not build a Mat that reads out of bounds");
+    assert!(
+        matches!(err.kind, ConversionErrorKind::NonContiguousData),
+        "unexpected error kind: {:?}",
+        err.kind
+    );
+}
+
+#[test]
+pub fn test_outer_reversed_view_regular_is_rejected() {
+    // Failure mode 3: stride -10 becomes `(-10i64 as usize) * 4` (~2^64) as a
+    // Mat step, handed straight to OpenCV pointer arithmetic. The resulting Mat
+    // is deliberately never read here.
+    let base = ndarray::Array2::<f32>::from_shape_fn((10, 10), |(r, c)| (r * 10 + c) as f32);
+    let view = base.slice(ndarray::s![..;-1, ..]);
+    assert_eq!(view.strides(), &[-10, 1]);
+
+    let err = unsafe { impls::ndarray_to_mat_regular(&view) }
+        .map(|_| ())
+        .expect_err("outer-reversed view must not build a Mat with a wrapped step");
+    assert!(
+        matches!(err.kind, ConversionErrorKind::NonContiguousData),
+        "unexpected error kind: {:?}",
+        err.kind
+    );
+}
+
+#[test]
+pub fn test_outer_reversed_view_consolidated_is_rejected() {
+    // The consolidated path's middle-stride check does not catch a negative
+    // outer stride: shape.last() == 4 still matches strides[len-2] == 4.
+    let base = ndarray::Array3::<f32>::from_shape_fn((10, 10, 4), |(i, j, k)| {
+        ((i * 40) + (j * 4) + k) as f32
+    });
+    let view = base.slice(ndarray::s![..;-1, .., ..]);
+    assert_eq!(view.strides(), &[-40, 4, 1]);
+
+    let err = unsafe { impls::ndarray_to_mat_consolidated(&view) }
+        .map(|_| ())
+        .expect_err("outer-reversed view must not build a Mat with a wrapped step");
+    assert!(
+        matches!(err.kind, ConversionErrorKind::NonContiguousData),
+        "unexpected error kind: {:?}",
+        err.kind
+    );
+}
+
 #[test]
 #[allow(deprecated)]
 pub fn test_ndcv_1024_1024_to_mat() {

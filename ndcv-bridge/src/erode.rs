@@ -1,7 +1,6 @@
 //! <https://docs.rs/opencv/latest/opencv/imgproc/fn.erode.html>
 //! <https://docs.opencv.org/4.13.0/d4/d86/group__imgproc__filter.html#gaeb1e0c1033e3f6b891a25d0511362aeb>
 use crate::conversions::*;
-use nalgebra::Vector4;
 use ndarray::*;
 
 #[derive(Debug, thiserror::Error)]
@@ -28,7 +27,7 @@ pub trait NdCvErode<T: bytemuck::Pod + crate::types::CvType, D: ndarray::Dimensi
         anchor: impl Into<glam::IVec2>,
         iterations: u16,
         border_type: crate::gaussian::BorderType,
-        border_value: Vector4<f64>,
+        border_value: impl Into<glam::DVec4>,
     ) -> Result<ndarray::Array<T, D>, ErodeError>;
 
     /// Erodes an image with default parameters: anchor at center, `BORDER_CONSTANT` border,
@@ -38,8 +37,7 @@ pub trait NdCvErode<T: bytemuck::Pod + crate::types::CvType, D: ndarray::Dimensi
         kernel: ndarray::ArrayView2<u8>,
         iterations: u16,
     ) -> Result<ndarray::Array<T, D>, ErodeError> {
-        let bv = opencv::imgproc::morphology_default_border_value()?.0;
-        let border_value = bytemuck::cast::<[f64; 4], Vector4<f64>>(bv);
+        let border_value = opencv::imgproc::morphology_default_border_value()?.0;
         self.erode(
             kernel,
             (-1, -1),
@@ -65,13 +63,14 @@ where
         anchor: impl Into<glam::IVec2>,
         iterations: u16,
         border_type: crate::gaussian::BorderType,
-        border_value: Vector4<f64>,
+        border_value: impl Into<glam::DVec4>,
     ) -> Result<ndarray::Array<T, D>, ErodeError> {
         let mut dst = ndarray::Array::zeros(self.dim());
         let cv_self = self.as_image_mat()?;
         let mut cv_dst = dst.as_image_mat_mut()?;
         let cv_kernel = kernel.as_image_mat()?;
         let anchor = anchor.into();
+        let border_value = border_value.into();
         opencv::imgproc::erode(
             &*cv_self,
             &mut *cv_dst,
@@ -100,7 +99,7 @@ pub trait NdCvErodeInPlace<T: bytemuck::Pod + crate::types::CvType, D: ndarray::
         anchor: impl Into<glam::IVec2>,
         iterations: u16,
         border_type: crate::gaussian::BorderType,
-        border_value: Vector4<f64>,
+        border_value: impl Into<glam::DVec4>,
     ) -> Result<&mut Self, ErodeError>;
 
     fn erode_def_inplace(
@@ -108,8 +107,7 @@ pub trait NdCvErodeInPlace<T: bytemuck::Pod + crate::types::CvType, D: ndarray::
         kernel: ndarray::ArrayView2<u8>,
         iterations: u16,
     ) -> Result<&mut Self, ErodeError> {
-        let bv = opencv::imgproc::morphology_default_border_value()?.0;
-        let border_value = bytemuck::cast::<[f64; 4], Vector4<f64>>(bv);
+        let border_value = opencv::imgproc::morphology_default_border_value()?.0;
         self.erode_inplace(
             kernel,
             (-1, -1),
@@ -134,11 +132,12 @@ where
         anchor: impl Into<glam::IVec2>,
         iterations: u16,
         border_type: crate::gaussian::BorderType,
-        border_value: Vector4<f64>,
+        border_value: impl Into<glam::DVec4>,
     ) -> Result<&mut Self, ErodeError> {
         let cv_kernel = kernel.as_image_mat()?;
         let mut cv_self = self.as_image_mat_mut()?;
         let anchor = anchor.into();
+        let border_value = border_value.into();
         unsafe {
             crate::inplace::op_inplace(&mut cv_self, |this, out| {
                 opencv::imgproc::erode(
@@ -184,7 +183,7 @@ mod tests {
         let bv = opencv::imgproc::morphology_default_border_value()
             .unwrap()
             .0;
-        let border_value = bytemuck::cast::<[f64; 4], Vector4<f64>>(bv);
+        let border_value = glam::DVec4::from(bv);
         let res = arr
             .erode(
                 rect_kernel(3).view(),
@@ -206,7 +205,7 @@ mod tests {
                 (-1, -1),
                 1,
                 BorderType::BorderConstant,
-                Vector4::zeros(),
+                glam::DVec4::ZERO,
             )
             .unwrap();
         assert_eq!(res[[0, 0, 0]], 0);
@@ -224,7 +223,7 @@ mod tests {
                 (-1, -1),
                 1,
                 BorderType::BorderConstant,
-                Vector4::repeat(255.0),
+                glam::DVec4::splat(255.0),
             )
             .unwrap();
         assert!(res.iter().all(|&v| v == 0));
@@ -240,7 +239,7 @@ mod tests {
                 (-1, -1),
                 1,
                 BorderType::BorderConstant,
-                Vector4::zeros(),
+                glam::DVec4::ZERO,
             )
             .unwrap();
         assert_eq!(res[[0, 0, 0]], 0.0);
@@ -257,7 +256,7 @@ mod tests {
                 (-1, -1),
                 1,
                 BorderType::BorderConstant,
-                Vector4::new(128.0, 64.0, 32.0, 0.0),
+                glam::DVec4::new(128.0, 64.0, 32.0, 0.0),
             )
             .unwrap();
         assert_eq!(res[[0, 0, 0]], 128);
@@ -285,7 +284,7 @@ mod tests {
                 (-1, -1),
                 1,
                 BorderType::BorderConstant,
-                Vector4::zeros(),
+                glam::DVec4::ZERO,
             )
             .unwrap();
         let res2 = arr
@@ -294,7 +293,7 @@ mod tests {
                 (-1, -1),
                 2,
                 BorderType::BorderConstant,
-                Vector4::zeros(),
+                glam::DVec4::ZERO,
             )
             .unwrap();
         let count1 = res1.iter().filter(|&&v| v > 0).count();
@@ -308,7 +307,7 @@ mod tests {
         let bv = opencv::imgproc::morphology_default_border_value()
             .unwrap()
             .0;
-        let border_value = bytemuck::cast::<[f64; 4], Vector4<f64>>(bv);
+        let border_value = glam::DVec4::from(bv);
         for border_type in [
             BorderType::BorderConstant,
             BorderType::BorderReplicate,
@@ -351,7 +350,7 @@ mod tests {
             (10, 10),
             1,
             BorderType::BorderConstant,
-            Vector4::zeros(),
+            glam::DVec4::ZERO,
         );
         assert!(res.is_err());
     }
@@ -364,7 +363,7 @@ mod tests {
             (10, 10),
             1,
             BorderType::BorderConstant,
-            Vector4::zeros(),
+            glam::DVec4::ZERO,
         );
         assert!(res.is_err());
     }

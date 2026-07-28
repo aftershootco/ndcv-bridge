@@ -12,22 +12,30 @@ use opencv::core::prelude::*;
 /// past the allocation, or (for a negative stride) receive a wrapped step near
 /// `usize::MAX`. Reject such views instead.
 ///
-/// Outer strides larger than the corresponding row length are fine — those are
-/// ordinary ROI views and the step carries them faithfully.
+/// A zero stride (a broadcast axis) is rejected too: it would alias every step
+/// along that axis onto the same memory, which OpenCV's own step invariant
+/// forbids and which the `_mut` paths would turn into aliased writes.
+///
+/// Degenerate axes are exempt: an axis of length 1 (or 0) is never stepped
+/// along, so its stride is unused -- and ndarray normalizes such strides to 0
+/// anyway. Outer strides larger than the corresponding row length are fine too;
+/// those are ordinary ROI views and the step carries them faithfully.
 fn check_strides(shape: &[usize], strides: &[isize]) -> Result<(), ConversionError> {
     if shape.is_empty() {
         Err(ConversionErrorKind::UnsupportedNdarrayShape)?;
     }
 
-    if strides.iter().any(|&stride| stride < 0) {
-        Err(ConversionErrorKind::NonContiguousData)?;
-    }
-
-    // The dropped innermost stride must be 1, unless its axis is degenerate --
-    // a length-1 axis never advances the pointer, so its stride is unused.
     let inner = strides.len() - 1;
-    if shape[inner] > 1 && strides[inner] != 1 {
-        Err(ConversionErrorKind::NonContiguousData)?;
+    for (axis, (&len, &stride)) in shape.iter().zip(strides).enumerate() {
+        if len <= 1 {
+            continue;
+        }
+        if stride <= 0 {
+            Err(ConversionErrorKind::NonContiguousData)?;
+        }
+        if axis == inner && stride != 1 {
+            Err(ConversionErrorKind::NonContiguousData)?;
+        }
     }
 
     Ok(())

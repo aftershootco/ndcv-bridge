@@ -699,6 +699,42 @@ pub fn test_outer_reversed_view_consolidated_is_rejected() {
 }
 
 #[test]
+pub fn test_broadcast_view_is_rejected() {
+    // A broadcast axis has stride 0: every step along it aliases the same row.
+    // OpenCV's step invariant forbids that, and the `_mut` paths would turn it
+    // into aliased writes.
+    let base = ndarray::Array2::<f32>::from_shape_fn((10, 10), |(r, c)| (r * 10 + c) as f32);
+    let view = base.broadcast((3, 10, 10)).unwrap();
+    assert_eq!(view.strides(), &[0, 10, 1]);
+
+    let err = unsafe { impls::ndarray_to_mat_regular(&view) }
+        .map(|_| ())
+        .expect_err("broadcast view must not build a Mat with a zero step");
+    assert!(
+        matches!(err.kind, ConversionErrorKind::NonContiguousData),
+        "unexpected error kind: {:?}",
+        err.kind
+    );
+}
+
+#[test]
+pub fn test_degenerate_innermost_axis_with_odd_stride_is_accepted() {
+    // The innermost stride is only dropped, never used, when its axis has
+    // length 1 -- the Mat never advances along it, and ndarray normalizes the
+    // stride to 0. Such a view is exact, so it must be accepted rather than
+    // swept up by the contiguity guard.
+    let base = ndarray::Array2::<f32>::from_shape_fn((10, 10), |(r, c)| (r * 10 + c) as f32);
+    let view = base.slice(ndarray::s![.., ..1;2]);
+    assert_eq!(view.shape(), &[10, 1]);
+    assert_eq!(view.strides(), &[10, 0]);
+
+    let mat = unsafe { impls::ndarray_to_mat_regular(&view) }
+        .expect("a length-1 innermost axis is exact regardless of its stride");
+    let roundtrip = unsafe { impls::mat_to_ndarray::<f32, Ix2>(&mat) }.unwrap();
+    assert_eq!(roundtrip, view);
+}
+
+#[test]
 #[allow(deprecated)]
 pub fn test_ndcv_1024_1024_to_mat() {
     let array = ndarray::Array2::<f32>::ones((1024, 1024));

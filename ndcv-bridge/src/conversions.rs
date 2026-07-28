@@ -631,8 +631,7 @@ pub fn test_column_strided_view_regular_is_not_silently_wrong() {
             // so the corruption can be observed directly.
             let roundtrip = unsafe { impls::mat_to_ndarray::<f32, Ix2>(&mat) }.unwrap();
             assert_eq!(
-                roundtrip,
-                view,
+                roundtrip, view,
                 "column-strided view built a Mat over the wrong elements"
             );
         }

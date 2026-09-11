@@ -99,11 +99,22 @@ impl ToColorSpace<u8, i8, Lab<i8>> for Rgb<u8> {
     }
 }
 
-// impl ToColorSpace<u8, u8, Rgb<u8>> for Lab<u8> {
-//     fn cv_colorspace_code() -> opencv::imgproc::ColorConversionCodes {
-//         opencv::imgproc::ColorConversionCodes::COLOR_Lab2RGB
-//     }
-// }
+// `Lab<u8>` (as opposed to `Lab<i8>`) so both legs stay in `CV_8U`. `Lab<i8>`
+// only exists as a destination: cvtColor's Lab2RGB path validates its *source*
+// depth against a small whitelist (CV_8U/CV_16U/CV_32F) and rejects CV_8S, so
+// a `Lab<i8> -> Rgb<u8>` conversion would fail at the OpenCV call, not before.
+// Going `u8 -> u8` on both legs never hits that restriction.
+impl ToColorSpace<u8, u8, Lab<u8>> for Rgb<u8> {
+    fn cv_colorspace_code() -> i32 {
+        opencv::imgproc::COLOR_RGB2Lab
+    }
+}
+
+impl ToColorSpace<u8, u8, Rgb<u8>> for Lab<u8> {
+    fn cv_colorspace_code() -> i32 {
+        opencv::imgproc::COLOR_Lab2RGB
+    }
+}
 
 pub trait ConvertColor<T, U, S>
 where
@@ -548,6 +559,36 @@ mod tests {
         assert!((rgb_back[[4, 4, 0]] - rgb_data[[4, 4, 0]]).abs() < 0.01);
         assert!((rgb_back[[4, 4, 1]] - rgb_data[[4, 4, 1]]).abs() < 0.01);
         assert!((rgb_back[[4, 4, 2]] - rgb_data[[4, 4, 2]]).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_rgb_u8_to_lab_u8_round_trip() {
+        // Byte-exact u8 Lab (needed by callers that build 256-bin histograms
+        // or LUTs over literal Lab bytes) must survive a full RGB->Lab->RGB
+        // round trip through CV_8U on both legs.
+        let rgb_data = Array3::<u8>::from_shape_fn((8, 8, 3), |(_, _, c)| match c {
+            0 => 200,
+            1 => 90,
+            2 => 40,
+            _ => 0,
+        });
+
+        let lab_result: CowArray<u8, Ix3> = rgb_data.cvt::<Rgb<u8>, Lab<u8>>();
+        assert_eq!(lab_result.shape(), [8, 8, 3]);
+
+        let rgb_back: CowArray<u8, Ix3> = lab_result.cvt::<Lab<u8>, Rgb<u8>>();
+        assert_eq!(rgb_back.shape(), [8, 8, 3]);
+
+        // cv2's 8-bit Lab round trip is lossy by a couple of levels; assert
+        // it lands close rather than requiring bit-exact equality.
+        for c in 0..3 {
+            let orig = rgb_data[[4, 4, c]] as i32;
+            let back = rgb_back[[4, 4, c]] as i32;
+            assert!(
+                (orig - back).abs() <= 4,
+                "channel {c}: expected {orig}, got {back}"
+            );
+        }
     }
 
     #[test]

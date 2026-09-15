@@ -29,6 +29,16 @@ pub enum ColorConversionError {
         got: usize,
         size: Vec<usize>,
     },
+    #[error(
+        "Depth width mismatch: cannot present a {from_bytes}-byte buffer as depth {to_depth} ({to_bytes} bytes per element)"
+    )]
+    DepthWidthMismatch {
+        to_depth: i32,
+        from_bytes: usize,
+        to_bytes: usize,
+    },
+    #[error("Unsupported Mat layout: {dims} dimensions, but OpenCV only tracks {tracked} steps")]
+    UnsupportedMatLayout { dims: usize, tracked: usize },
 }
 
 pub trait ColorSpace<Elem>: seal::SealedColorSpace {
@@ -83,27 +93,123 @@ where
     }
 }
 
-// This changes the mat depth and is very unsafe
+/// Builds a second `Mat` header over `mat`'s existing pixels, tagged with a
+/// different depth.
+///
+/// `cvtColor` accepts only `CV_8U`, `CV_16U` and `CV_32F`, so a buffer whose
+/// Rust element type maps to any other depth cannot be handed to it directly.
+/// Retagging the header is the only way to pass such a buffer through without
+/// copying: the alternative, converting into a scratch `Mat` of an accepted
+/// depth and copying back, doubles the allocation and walks every pixel twice
+/// for what is a no-op at the byte level.
+///
+/// The returned `Mat` aliases `mat`'s pixels, so writes through one are visible
+/// through the other and neither owns the allocation.
+///
+/// The sizes and steps are reused verbatim, which is only a valid description
+/// of the buffer when the new depth has the same element width as the old one.
+/// A wider depth would advertise a longer buffer than exists and let OpenCV run
+/// off the end of the allocation, so this returns
+/// [`ColorConversionError::DepthWidthMismatch`] rather than leaving that to the
+/// caller. The header is inspected but never dereferenced before the check.
+///
+/// # Safety
+///
+/// The caller must guarantee that `mat`'s pixels outlive the returned `Mat`,
+/// and that nothing else writes to them while it is alive.
 unsafe fn retyped_mat(
     mat: &opencv::core::Mat,
     depth: i32,
 ) -> Result<opencv::core::Mat, ColorConversionError> {
     use opencv::core::MatTraitConst;
 
-    let dims = mat.dims() as usize;
-    let sizes = (0..dims).map(|i| mat.mat_size()[i]).collect::<Vec<_>>();
-    let steps = (0..dims).map(|i| mat.mat_step()[i]).collect::<Vec<_>>();
+    // `mat_size()` derefs to a `dims`-long slice, `mat_step()` to a fixed-size
+    // buffer, so a Mat with more dimensions than OpenCV tracks steps for would
+    // read past the latter. Unreachable for the two-dimensional image Mats this
+    // module builds, but the slice is bounded rather than trusted.
+    let sizes = mat.mat_size().to_vec();
+    let steps = *mat.mat_step();
+    let steps = steps
+        .get(..sizes.len())
+        .ok_or(ColorConversionError::UnsupportedMatLayout {
+            dims: sizes.len(),
+            tracked: steps.len(),
+        })?;
     let typ = opencv::core::CV_MAKETYPE(depth, mat.channels());
     let data = mat.data().cast::<core::ffi::c_void>().cast_mut();
 
-    Ok(unsafe {
-        opencv::core::Mat::new_nd_with_data_unsafe(
-            sizes.as_slice(),
-            typ,
-            data,
-            Some(steps.as_slice()),
-        )
-    }?)
+    let retyped = unsafe {
+        opencv::core::Mat::new_nd_with_data_unsafe(sizes.as_slice(), typ, data, Some(steps))
+    }?;
+
+    if retyped.elem_size1() != mat.elem_size1() {
+        return Err(ColorConversionError::DepthWidthMismatch {
+            to_depth: depth,
+            from_bytes: mat.elem_size1(),
+            to_bytes: retyped.elem_size1(),
+        });
+    }
+
+    Ok(retyped)
+}
+
+/// The three OpenCV parameters a [`ToColorSpace`] impl contributes to one
+/// `cvtColor` call.
+///
+/// Named fields keep the two depths from being swapped at a call site, which
+/// three positional `i32` arguments would invite.
+struct CvtSpec {
+    code: i32,
+    src_depth: i32,
+    dst_depth: i32,
+}
+
+impl CvtSpec {
+    fn of<Src, T, U, Dst>() -> Self
+    where
+        T: seal::Sealed + crate::types::CvType,
+        U: crate::types::CvType,
+        Src: ToColorSpace<T, U, Dst>,
+        Dst: ColorSpace<U>,
+    {
+        Self {
+            code: <Src as ToColorSpace<T, U, Dst>>::cv_colorspace_code(),
+            src_depth: <Src as ToColorSpace<T, U, Dst>>::src_mat_depth(),
+            dst_depth: <Src as ToColorSpace<T, U, Dst>>::dst_mat_depth(),
+        }
+    }
+
+    /// Runs `cvtColor`, retagging either buffer's depth first where the
+    /// conversion asks for a depth its element type does not map to.
+    ///
+    /// # Safety
+    ///
+    /// `src` and `dst` must not alias each other, and both must outlive the
+    /// call. See [`retyped_mat`].
+    unsafe fn apply(
+        &self,
+        src: &opencv::core::Mat,
+        dst: &mut opencv::core::Mat,
+    ) -> Result<(), ColorConversionError> {
+        use opencv::core::MatTraitConst;
+
+        let src_retyped = (self.src_depth != src.depth())
+            .then(|| unsafe { retyped_mat(src, self.src_depth) })
+            .transpose()?;
+        let mut dst_retyped = (self.dst_depth != dst.depth())
+            .then(|| unsafe { retyped_mat(dst, self.dst_depth) })
+            .transpose()?;
+
+        opencv::imgproc::cvt_color(
+            src_retyped.as_ref().unwrap_or(src),
+            dst_retyped.as_mut().unwrap_or(dst),
+            self.code,
+            0,
+            opencv::core::AlgorithmHint::ALGO_HINT_DEFAULT,
+        )?;
+
+        Ok(())
+    }
 }
 
 macro_rules! impl_color_converter {
@@ -222,27 +328,11 @@ where
         let mut dst_ndarray = ArrayBase::<ndarray::OwnedRepr<U>, Dst::Dim>::zeros(new_size);
 
         let mat = self.as_image_mat()?;
-        let src_depth = <Src as ToColorSpace<T, U, Dst>>::src_mat_depth();
-        let src_retyped = (src_depth != <T as crate::types::CvType>::cv_depth())
-            .then(|| unsafe { retyped_mat(&mat, src_depth) })
-            .transpose()?;
-
         let mut dst_mat = dst_ndarray.as_image_mat_mut()?;
-        let dst_depth = <Src as ToColorSpace<T, U, Dst>>::dst_mat_depth();
-        let mut dst_retyped = (dst_depth != <U as crate::types::CvType>::cv_depth())
-            .then(|| unsafe { retyped_mat(&dst_mat, dst_depth) })
-            .transpose()?;
-
-        opencv::imgproc::cvt_color(
-            src_retyped.as_ref().unwrap_or(&mat),
-            match dst_retyped.as_mut() {
-                Some(mat) => mat,
-                None => &mut dst_mat,
-            },
-            <Src as ToColorSpace<T, U, Dst>>::cv_colorspace_code(),
-            0,
-            opencv::core::AlgorithmHint::ALGO_HINT_DEFAULT,
-        )?;
+        // SAFETY: `mat` borrows `self` and `dst_mat` borrows `dst_ndarray`, two
+        // distinct arrays that both outlive the call.
+        unsafe { CvtSpec::of::<Src, T, U, Dst>().apply(&mat, &mut dst_mat) }?;
+        drop(dst_mat);
         Ok(dst_ndarray.into())
     }
 }
@@ -284,27 +374,11 @@ where
         let mut dst_ndarray = ArrayBase::<ndarray::OwnedRepr<U>, Dst::Dim>::zeros(new_size);
 
         let mat = self.as_image_mat()?;
-        let src_depth = <Src as ToColorSpace<T, U, Dst>>::src_mat_depth();
-        let src_retyped = (src_depth != <T as crate::types::CvType>::cv_depth())
-            .then(|| unsafe { retyped_mat(&mat, src_depth) })
-            .transpose()?;
-
         let mut dst_mat = dst_ndarray.as_image_mat_mut()?;
-        let dst_depth = <Src as ToColorSpace<T, U, Dst>>::dst_mat_depth();
-        let mut dst_retyped = (dst_depth != <U as crate::types::CvType>::cv_depth())
-            .then(|| unsafe { retyped_mat(&dst_mat, dst_depth) })
-            .transpose()?;
-
-        opencv::imgproc::cvt_color(
-            src_retyped.as_ref().unwrap_or(&mat),
-            match dst_retyped.as_mut() {
-                Some(mat) => mat,
-                None => &mut dst_mat,
-            },
-            <Src as ToColorSpace<T, U, Dst>>::cv_colorspace_code(),
-            0,
-            opencv::core::AlgorithmHint::ALGO_HINT_DEFAULT,
-        )?;
+        // SAFETY: `mat` borrows `self` and `dst_mat` borrows `dst_ndarray`, two
+        // distinct arrays that both outlive the call.
+        unsafe { CvtSpec::of::<Src, T, U, Dst>().apply(&mat, &mut dst_mat) }?;
+        drop(dst_mat);
         Ok(dst_ndarray.into())
     }
 }
@@ -438,18 +512,70 @@ mod tests {
     }
 
     #[test]
+    fn test_retyped_mat_accepts_same_width_depth() {
+        // i8 and u8 are both one byte, so the retag describes the same bytes.
+        let arr = Array3::<u8>::zeros((4, 4, 3));
+        let mat = arr.as_image_mat().expect("mat");
+        let retyped = unsafe { retyped_mat(&mat, opencv::core::CV_8S) }.expect("same-width retag");
+
+        use opencv::core::MatTraitConst;
+        assert_eq!(retyped.depth(), opencv::core::CV_8S);
+        assert_eq!(retyped.elem_size1(), mat.elem_size1());
+    }
+
+    #[test]
+    fn test_retyped_mat_rejects_wider_depth() {
+        // A CV_16U header over a u8 buffer would advertise twice the bytes that
+        // exist and let OpenCV write past the allocation.
+        let arr = Array3::<u8>::zeros((4, 4, 3));
+        let mat = arr.as_image_mat().expect("mat");
+        let err = unsafe { retyped_mat(&mat, opencv::core::CV_16U) }
+            .expect_err("widening the depth must be rejected");
+
+        assert!(
+            matches!(
+                err,
+                ColorConversionError::DepthWidthMismatch {
+                    from_bytes: 1,
+                    to_bytes: 2,
+                    ..
+                }
+            ),
+            "unexpected error: {err:?}"
+        );
+    }
+
+    #[test]
     fn test_lab_i8_to_rgb_u8_conversion() {
-        let lab_data = Array3::<i8>::from_shape_fn((8, 8, 3), |(_, _, c)| match c {
-            0 => 100,
-            1 => 20,
-            2 => -30,
-            _ => 0,
-        });
+        // Reference triples derived from the CIE Lab definition, not from this
+        // implementation, then put through OpenCV's 8-bit encoding
+        // (L' = L* * 255 / 100, a' = a* + 128, b' = b* + 128) and bit-cast to
+        // i8. Shape-only assertions would pass on the all-zeros output this PR
+        // exists to fix, so each case pins the pixel values.
+        //
+        //   white  L*=100  a*=b*=0  -> (255, 128, 128) -> (-1, -128, -128)
+        //   black  L*=0    a*=b*=0  -> (  0, 128, 128) -> ( 0, -128, -128)
+        //   red    L*=53.2 a*=80.1 b*=67.2
+        //                           -> (136, 208, 195) -> (-120, -48, -61)
+        let cases = [
+            ([-1i8, -128, -128], [255u8, 255, 255]),
+            ([0, -128, -128], [0, 0, 0]),
+            ([-120, -48, -61], [255, 0, 0]),
+        ];
 
-        let rgb_result: CowArray<u8, Ix3> = lab_data.cvt::<Lab<i8>, Rgb<u8>>();
+        for (lab, expected) in cases {
+            let lab_data = Array3::<i8>::from_shape_fn((8, 8, 3), |(_, _, c)| lab[c]);
+            let rgb: CowArray<u8, Ix3> = lab_data.cvt::<Lab<i8>, Rgb<u8>>();
 
-        assert_eq!(rgb_result.shape(), [8, 8, 3]);
-        assert_eq!(rgb_result.ndim(), 3);
+            assert_eq!(rgb.shape(), [8, 8, 3]);
+            for c in 0..3 {
+                let (got, want) = (i32::from(rgb[[4, 4, c]]), i32::from(expected[c]));
+                assert!(
+                    (got - want).abs() <= 3,
+                    "Lab {lab:?} channel {c}: got {got}, want {want}"
+                );
+            }
+        }
     }
 
     #[test]

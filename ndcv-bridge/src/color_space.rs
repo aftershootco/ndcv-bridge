@@ -66,10 +66,44 @@ define_color_space!(Gray, 1, Ix2);
 
 pub trait ToColorSpace<T, U, Dst>: ColorSpace<T>
 where
-    T: seal::Sealed,
+    T: seal::Sealed + crate::types::CvType,
+    U: crate::types::CvType,
     Dst: ColorSpace<U>,
 {
     fn cv_colorspace_code() -> i32;
+
+    /// Mat depth the source buffer is handed to OpenCV as.
+    fn src_mat_depth() -> i32 {
+        <T as crate::types::CvType>::cv_depth()
+    }
+
+    /// Mat depth the destination buffer is handed to OpenCV as.
+    fn dst_mat_depth() -> i32 {
+        <U as crate::types::CvType>::cv_depth()
+    }
+}
+
+// This changes the mat depth and is very unsafe
+unsafe fn retyped_mat(
+    mat: &opencv::core::Mat,
+    depth: i32,
+) -> Result<opencv::core::Mat, ColorConversionError> {
+    use opencv::core::MatTraitConst;
+
+    let dims = mat.dims() as usize;
+    let sizes = (0..dims).map(|i| mat.mat_size()[i]).collect::<Vec<_>>();
+    let steps = (0..dims).map(|i| mat.mat_step()[i]).collect::<Vec<_>>();
+    let typ = opencv::core::CV_MAKETYPE(depth, mat.channels());
+    let data = mat.data().cast::<core::ffi::c_void>().cast_mut();
+
+    Ok(unsafe {
+        opencv::core::Mat::new_nd_with_data_unsafe(
+            sizes.as_slice(),
+            typ,
+            data,
+            Some(steps.as_slice()),
+        )
+    }?)
 }
 
 macro_rules! impl_color_converter {
@@ -93,17 +127,29 @@ impl_color_converter!(Gray, Rgb, opencv::imgproc::COLOR_GRAY2RGB => u8,  u16, f3
 impl_color_converter!(Rgb, Lab, opencv::imgproc::COLOR_RGB2Lab => f32,);
 impl_color_converter!(Lab, Rgb, opencv::imgproc::COLOR_Lab2RGB => f32,);
 
+/// `Lab<i8>` holds OpenCV's 8-bit Lab bytes bit-cast to signed: `L` keeps the
+/// `0..=255` scaling (so it wraps into the negative half above 127) while `a*`
+/// and `b*` land on their natural signed range, OpenCV storing them offset by
+/// 128. The cast is lossless and exactly reversible in both directions.
 impl ToColorSpace<u8, i8, Lab<i8>> for Rgb<u8> {
     fn cv_colorspace_code() -> i32 {
         opencv::imgproc::COLOR_RGB2Lab
     }
+
+    fn dst_mat_depth() -> i32 {
+        opencv::core::CV_8U
+    }
 }
 
-// impl ToColorSpace<u8, u8, Rgb<u8>> for Lab<u8> {
-//     fn cv_colorspace_code() -> opencv::imgproc::ColorConversionCodes {
-//         opencv::imgproc::ColorConversionCodes::COLOR_Lab2RGB
-//     }
-// }
+impl ToColorSpace<i8, u8, Rgb<u8>> for Lab<i8> {
+    fn cv_colorspace_code() -> i32 {
+        opencv::imgproc::COLOR_Lab2RGB
+    }
+
+    fn src_mat_depth() -> i32 {
+        opencv::core::CV_8U
+    }
+}
 
 pub trait ConvertColor<T, U, S>
 where
@@ -174,11 +220,25 @@ where
                 new_size[idx] = val;
             });
         let mut dst_ndarray = ArrayBase::<ndarray::OwnedRepr<U>, Dst::Dim>::zeros(new_size);
+
         let mat = self.as_image_mat()?;
+        let src_depth = <Src as ToColorSpace<T, U, Dst>>::src_mat_depth();
+        let src_retyped = (src_depth != <T as crate::types::CvType>::cv_depth())
+            .then(|| unsafe { retyped_mat(&mat, src_depth) })
+            .transpose()?;
+
         let mut dst_mat = dst_ndarray.as_image_mat_mut()?;
+        let dst_depth = <Src as ToColorSpace<T, U, Dst>>::dst_mat_depth();
+        let mut dst_retyped = (dst_depth != <U as crate::types::CvType>::cv_depth())
+            .then(|| unsafe { retyped_mat(&dst_mat, dst_depth) })
+            .transpose()?;
+
         opencv::imgproc::cvt_color(
-            &*mat,
-            &mut *dst_mat,
+            src_retyped.as_ref().unwrap_or(&mat),
+            match dst_retyped.as_mut() {
+                Some(mat) => mat,
+                None => &mut dst_mat,
+            },
             <Src as ToColorSpace<T, U, Dst>>::cv_colorspace_code(),
             0,
             opencv::core::AlgorithmHint::ALGO_HINT_DEFAULT,
@@ -222,11 +282,25 @@ where
                 new_size[idx] = val;
             });
         let mut dst_ndarray = ArrayBase::<ndarray::OwnedRepr<U>, Dst::Dim>::zeros(new_size);
+
         let mat = self.as_image_mat()?;
+        let src_depth = <Src as ToColorSpace<T, U, Dst>>::src_mat_depth();
+        let src_retyped = (src_depth != <T as crate::types::CvType>::cv_depth())
+            .then(|| unsafe { retyped_mat(&mat, src_depth) })
+            .transpose()?;
+
         let mut dst_mat = dst_ndarray.as_image_mat_mut()?;
+        let dst_depth = <Src as ToColorSpace<T, U, Dst>>::dst_mat_depth();
+        let mut dst_retyped = (dst_depth != <U as crate::types::CvType>::cv_depth())
+            .then(|| unsafe { retyped_mat(&dst_mat, dst_depth) })
+            .transpose()?;
+
         opencv::imgproc::cvt_color(
-            &*mat,
-            &mut *dst_mat,
+            src_retyped.as_ref().unwrap_or(&mat),
+            match dst_retyped.as_mut() {
+                Some(mat) => mat,
+                None => &mut dst_mat,
+            },
             <Src as ToColorSpace<T, U, Dst>>::cv_colorspace_code(),
             0,
             opencv::core::AlgorithmHint::ALGO_HINT_DEFAULT,
@@ -244,8 +318,12 @@ mod tests {
     fn test_usage() {
         let arr = Array3::<u8>::ones((100, 100, 3));
         let out: CowArray<i8, Ix3> = arr.cvt::<Rgb<u8>, Lab<i8>>();
-        let expected = Array3::<i8>::zeros((100, 100, 3));
-        assert_eq!(out, expected);
+        assert_eq!(out.shape(), [100, 100, 3]);
+        // Near-black neutral gray: a*/b* sit on the 8-bit Lab origin (128),
+        // which bit-casts to -128, and L* is still in the low single digits.
+        assert!((0..=2).contains(&out[[0, 0, 0]]), "L* = {}", out[[0, 0, 0]]);
+        assert_eq!(out[[0, 0, 1]], -128);
+        assert_eq!(out[[0, 0, 2]], -128);
     }
 
     #[test]
@@ -346,15 +424,55 @@ mod tests {
         assert_eq!(lab_result.ndim(), 3);
     }
 
-    // #[test]
-    // fn test_lab_color_space_definition() {
-    //     // Test that Lab color space is properly defined
-    //     assert_eq!(Lab::<i8>::CHANNELS, 3);
-    //
-    //     // Verify Lab to RGB conversion is available (but we can't test the full conversion
-    //     // due to OpenCV limitations with i8 depth)
-    //     let _code = <Lab<i8> as ToColorSpace<i8, u8, Rgb<u8>>>::cv_colorspace_code();
-    // }
+    #[test]
+    fn test_lab_color_space_definition() {
+        // Test that Lab color space is properly defined
+        assert_eq!(Lab::<i8>::CHANNELS, 3);
+
+        // Lab<i8> -> Rgb<u8> must return the Lab2RGB code, not a stray 0/1 that
+        // would select an unrelated conversion.
+        assert_eq!(
+            <Lab<i8> as ToColorSpace<i8, u8, Rgb<u8>>>::cv_colorspace_code(),
+            opencv::imgproc::COLOR_Lab2RGB
+        );
+    }
+
+    #[test]
+    fn test_lab_i8_to_rgb_u8_conversion() {
+        let lab_data = Array3::<i8>::from_shape_fn((8, 8, 3), |(_, _, c)| match c {
+            0 => 100,
+            1 => 20,
+            2 => -30,
+            _ => 0,
+        });
+
+        let rgb_result: CowArray<u8, Ix3> = lab_data.cvt::<Lab<i8>, Rgb<u8>>();
+
+        assert_eq!(rgb_result.shape(), [8, 8, 3]);
+        assert_eq!(rgb_result.ndim(), 3);
+    }
+
+    #[test]
+    fn test_rgb_u8_lab_i8_round_trip() {
+        let original = Array3::<u8>::from_shape_fn((8, 8, 3), |(_, _, c)| match c {
+            0 => 200,
+            1 => 120,
+            2 => 40,
+            _ => 0,
+        });
+
+        let lab: CowArray<i8, Ix3> = original.cvt::<Rgb<u8>, Lab<i8>>();
+        let back: CowArray<u8, Ix3> = lab.cvt::<Lab<i8>, Rgb<u8>>();
+
+        assert_eq!(back.shape(), original.shape());
+        for c in 0..3 {
+            let (got, want) = (back[[4, 4, c]] as i32, original[[4, 4, c]] as i32);
+            assert!(
+                (got - want).abs() <= 4,
+                "channel {c}: got {got}, want {want}"
+            );
+        }
+    }
 
     #[test]
     fn test_different_data_types() {

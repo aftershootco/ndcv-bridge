@@ -20,6 +20,8 @@
 //! ```
 //! use ndcv_bridge::{NdCvNormalize, NdCvWarpAffine, NormType};
 //! ```
+#[cfg(feature = "opencv")]
+pub mod bilateral;
 mod blend;
 #[cfg(feature = "opencv")]
 pub mod dilate;
@@ -62,6 +64,8 @@ pub mod types;
 
 // pub mod codec;
 pub mod orient;
+#[cfg(feature = "opencv")]
+pub use bilateral::{BilateralFilterError, NdCvBilateralFilter};
 pub use blend::NdBlend;
 pub use blur::NdCvBlur;
 pub use dilate::{DilateError, NdCvDilate, NdCvDilateInPlace};

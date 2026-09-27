@@ -230,8 +230,12 @@ impl_color_converter!(Rgba, Rgb, opencv::imgproc::COLOR_RGBA2RGB => u8,  u16, f3
 impl_color_converter!(Rgb, Rgba, opencv::imgproc::COLOR_RGB2RGBA => u8,  u16, f32,);
 impl_color_converter!(Rgb, Gray, opencv::imgproc::COLOR_RGB2GRAY => u8,  u16, f32,);
 impl_color_converter!(Gray, Rgb, opencv::imgproc::COLOR_GRAY2RGB => u8,  u16, f32,);
-impl_color_converter!(Rgb, Lab, opencv::imgproc::COLOR_RGB2Lab => f32,);
-impl_color_converter!(Lab, Rgb, opencv::imgproc::COLOR_Lab2RGB => f32,);
+// `Lab<f32>` is CIE Lab as written: `L` in `0..=100`, `a*`/`b*` roughly
+// `-127..=127`. `Lab<u8>` is OpenCV's 8-bit packing of the same values, with
+// `L` scaled by `255/100` and `a*`/`b*` offset by `+128`, so neutral sits at
+// 128 on both chroma channels.
+impl_color_converter!(Rgb, Lab, opencv::imgproc::COLOR_RGB2Lab => u8, f32,);
+impl_color_converter!(Lab, Rgb, opencv::imgproc::COLOR_Lab2RGB => u8, f32,);
 
 /// `Lab<i8>` holds OpenCV's 8-bit Lab bytes bit-cast to signed: `L` keeps the
 /// `0..=255` scaling (so it wraps into the negative half above 127) while `a*`
@@ -589,6 +593,35 @@ mod tests {
 
         let lab: CowArray<i8, Ix3> = original.cvt::<Rgb<u8>, Lab<i8>>();
         let back: CowArray<u8, Ix3> = lab.cvt::<Lab<i8>, Rgb<u8>>();
+
+        assert_eq!(back.shape(), original.shape());
+        for c in 0..3 {
+            let (got, want) = (back[[4, 4, c]] as i32, original[[4, 4, c]] as i32);
+            assert!(
+                (got - want).abs() <= 4,
+                "channel {c}: got {got}, want {want}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_rgb_u8_lab_u8_round_trip() {
+        // The 8-bit packing OpenCV hands back from `COLOR_RGB2Lab` on a u8
+        // image: neutral chroma at 128, and the same bytes `Lab<i8>` exposes
+        // signed. A mid grey must land on 128 for both a* and b*.
+        let grey = Array3::<u8>::from_elem((8, 8, 3), 128);
+        let lab: CowArray<u8, Ix3> = grey.cvt::<Rgb<u8>, Lab<u8>>();
+        assert_eq!(lab[[4, 4, 1]], 128, "a* of a neutral grey");
+        assert_eq!(lab[[4, 4, 2]], 128, "b* of a neutral grey");
+
+        let original = Array3::<u8>::from_shape_fn((8, 8, 3), |(_, _, c)| match c {
+            0 => 200,
+            1 => 120,
+            2 => 40,
+            _ => 0,
+        });
+        let lab: CowArray<u8, Ix3> = original.cvt::<Rgb<u8>, Lab<u8>>();
+        let back: CowArray<u8, Ix3> = lab.cvt::<Lab<u8>, Rgb<u8>>();
 
         assert_eq!(back.shape(), original.shape());
         for c in 0..3 {

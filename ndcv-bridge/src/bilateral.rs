@@ -142,6 +142,49 @@ mod tests {
     }
 
     #[test]
+    fn test_bilateral_couples_the_channels() {
+        // The one failure mode unique to this filter: it measures colour
+        // distance across all channels at once, so a wrong HWC -> Mat
+        // interleave, or a per-channel stand-in, changes the output rather
+        // than erroring. Channel 0 steps by 10, well inside sigma_color, but
+        // the other two step by 230 at the same row -- so a coupled filter
+        // refuses to mix across it and channel 0 keeps its small step, where
+        // a per-channel one would smooth it into a ramp.
+        let mut arr = Array3::<u8>::zeros((20, 20, 3));
+        arr.slice_mut(s![..10, .., 0]).fill(100);
+        arr.slice_mut(s![..10, .., 1..]).fill(10);
+        arr.slice_mut(s![10.., .., 0]).fill(110);
+        arr.slice_mut(s![10.., .., 1..]).fill(240);
+
+        let res = arr
+            .bilateral_filter(9, 30.0, 20.0, BorderType::BorderReflect101)
+            .unwrap();
+
+        // cv2 gives [100, 100, 110, 110] here; filtering channel 0 on its own
+        // gives [103, 104, 106, 107].
+        assert_eq!(
+            res.slice(s![8..12, 10, 0]).to_vec(),
+            vec![100, 100, 110, 110]
+        );
+    }
+
+    #[test]
+    fn test_bilateral_accepts_every_border_type() {
+        let mut arr = Array3::<u8>::zeros((10, 10, 3));
+        arr.slice_mut(s![4..7, 4..7, ..]).fill(255);
+
+        for border_type in [
+            BorderType::BorderConstant,
+            BorderType::BorderReplicate,
+            BorderType::BorderReflect,
+            BorderType::BorderReflect101,
+        ] {
+            let res = arr.bilateral_filter(5, 25.0, 10.0, border_type).unwrap();
+            assert_eq!(res.shape(), &[10, 10, 3]);
+        }
+    }
+
+    #[test]
     fn test_bilateral_leaves_a_flat_image_flat() {
         let arr = Array3::<u8>::from_elem((16, 16, 3), 77);
         let res = arr

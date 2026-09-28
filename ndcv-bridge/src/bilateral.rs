@@ -33,10 +33,23 @@ pub trait NdCvBilateralFilter<
     D: ndarray::Dimension,
 >: crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
-    /// `diameter` is the neighbourhood width in pixels; a value <= 0 makes
-    /// OpenCV derive it from `sigma_space`. A 1- or 3-channel image of `u8` or
-    /// `f32` is the whole of what OpenCV supports here — anything else comes
-    /// back as a [`BilateralFilterError::OpenCvError`] rather than panicking.
+    /// The two sigmas are different quantities and are not interchangeable:
+    ///
+    /// - `diameter`: neighbourhood width in pixels. A value <= 0 makes OpenCV
+    ///   derive it from `sigma_space` instead.
+    /// - `sigma_color`: how far apart two colours may be and still be mixed,
+    ///   in the image's own units. Larger means more colours count as the
+    ///   same, until the filter is just a blur.
+    /// - `sigma_space`: how far apart two pixels may be and still be mixed,
+    ///   in pixels. Ignored for the window size when `diameter > 0`, but it
+    ///   still sets the spatial falloff inside that window. Set it to twice
+    ///   the diameter or more to flatten the spatial term, leaving colour
+    ///   similarity alone to decide what gets averaged.
+    /// - `border_type`: how the neighbourhood is filled past the edge.
+    ///
+    /// A 1- or 3-channel image of `u8` or `f32` is the whole of what OpenCV
+    /// supports here — anything else comes back as a
+    /// [`BilateralFilterError::OpenCvError`] rather than panicking.
     fn bilateral_filter(
         &self,
         diameter: i32,

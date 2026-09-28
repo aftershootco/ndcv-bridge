@@ -25,6 +25,18 @@ pub enum BorderType {
     BorderIsolated = 16,
 }
 
+impl BorderType {
+    /// cv2's `BORDER_DEFAULT`, which is an alias for `BORDER_REFLECT_101` and
+    /// the border every cv2 filter uses unless told otherwise -- except the
+    /// morphology ones, which default to `BorderConstant`.
+    ///
+    /// Spelled like the variants rather than in the Rust constant convention,
+    /// so `BorderType::BorderDefault` reads alongside
+    /// `BorderType::BorderConstant` at a call site.
+    #[allow(non_upper_case_globals)]
+    pub const BorderDefault: Self = Self::BorderReflect101;
+}
+
 #[repr(C)]
 #[derive(Default, Debug, Copy, Clone)]
 pub enum AlgorithmHint {
@@ -65,12 +77,15 @@ pub trait NdCvGaussianBlur<
         sigma: impl Into<DVec2>,
         border_type: BorderType,
     ) -> Result<ndarray::Array<T, D>, GaussianBlurError>;
+    /// `cv2.GaussianBlur` defaults, whose `borderType` is
+    /// [`BorderType::BorderDefault`] -- not the constant border the morphology
+    /// `_def` helpers pass, which is what cv2 defaults to for *those*.
     fn gaussian_blur_def(
         &self,
         kernel: impl Into<U16Vec2>,
         sigma: f64,
     ) -> Result<ndarray::Array<T, D>, GaussianBlurError> {
-        self.gaussian_blur(kernel, (sigma, sigma), BorderType::BorderConstant)
+        self.gaussian_blur(kernel, (sigma, sigma), BorderType::BorderDefault)
     }
 }
 
@@ -187,12 +202,13 @@ pub trait NdCvGaussianBlurInPlace<
         sigma: impl Into<DVec2>,
         border_type: BorderType,
     ) -> Result<&mut Self, GaussianBlurError>;
+    /// See [`NdCvGaussianBlur::gaussian_blur_def`].
     fn gaussian_blur_def_inplace(
         &mut self,
         kernel: impl Into<U16Vec2>,
         sigma: f64,
     ) -> Result<&mut Self, GaussianBlurError> {
-        self.gaussian_blur_inplace(kernel, (sigma, sigma), BorderType::BorderConstant)
+        self.gaussian_blur_inplace(kernel, (sigma, sigma), BorderType::BorderDefault)
     }
 }
 
@@ -237,7 +253,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ndarray::Array3;
+    use ndarray::{Array2, Array3};
 
     #[test]
     fn test_gaussian_basic() {
@@ -326,6 +342,52 @@ mod tests {
         let arr = Array3::<u8>::ones((10, 10, 3));
         let res = arr.gaussian_blur_def((3, 3), 1.0).unwrap();
         assert_eq!(res.dim(), (10, 10, 3));
+    }
+
+    #[test]
+    fn test_border_default_is_reflect_101() {
+        // cv2.BORDER_DEFAULT == cv2.BORDER_REFLECT_101 == 4. The alias exists
+        // so a `_def` helper can say which cv2 default it means; if it ever
+        // stopped resolving to 4 every one of them would silently change.
+        assert_eq!(BorderType::BorderDefault as i32, 4);
+        assert_eq!(
+            BorderType::BorderDefault as i32,
+            BorderType::BorderReflect101 as i32
+        );
+    }
+
+    #[test]
+    fn test_gaussian_blur_def_uses_the_cv2_default_border() {
+        // `_def` means the cv2 call, and cv2's borderType default is
+        // BORDER_DEFAULT == BORDER_REFLECT_101. Reflecting a flat image keeps
+        // it flat; a constant border is a black neighbour that drags the
+        // corner down by well over half. Every Python slider this crate is
+        // ported against calls GaussianBlur without a borderType, so the
+        // difference is a parity bug, not a preference.
+        let arr = Array2::<u8>::from_elem((40, 40), 255);
+
+        let def = arr.gaussian_blur_def((9, 9), 0.0).unwrap();
+        let reflect = arr
+            .gaussian_blur((9, 9), (0.0, 0.0), BorderType::BorderReflect101)
+            .unwrap();
+        let constant = arr
+            .gaussian_blur((9, 9), (0.0, 0.0), BorderType::BorderConstant)
+            .unwrap();
+
+        assert_eq!(def, reflect);
+        // cv2 gives 255 and 97 for these two corners.
+        assert_eq!(def[[0, 0]], 255);
+        assert_eq!(constant[[0, 0]], 97);
+        // Away from the border the two agree, which is why this went unnoticed.
+        assert_eq!(def[[20, 20]], constant[[20, 20]]);
+    }
+
+    #[test]
+    fn test_gaussian_blur_def_inplace_matches_gaussian_blur_def() {
+        let arr = Array2::<u8>::from_elem((40, 40), 255);
+        let mut inplace = arr.clone();
+        inplace.gaussian_blur_def_inplace((9, 9), 0.0).unwrap();
+        assert_eq!(inplace, arr.gaussian_blur_def((9, 9), 0.0).unwrap());
     }
 
     #[test]

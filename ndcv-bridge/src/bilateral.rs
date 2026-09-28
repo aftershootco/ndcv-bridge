@@ -36,7 +36,7 @@ pub trait NdCvBilateralFilter<
     /// `diameter` is the neighbourhood width in pixels; a value <= 0 makes
     /// OpenCV derive it from `sigma_space`. A 1- or 3-channel image of `u8` or
     /// `f32` is the whole of what OpenCV supports here — anything else comes
-    /// back as an [`BilateralFilterError::OpenCvError`] rather than panicking.
+    /// back as a [`BilateralFilterError::OpenCvError`] rather than panicking.
     fn bilateral_filter(
         &self,
         diameter: i32,
@@ -45,8 +45,8 @@ pub trait NdCvBilateralFilter<
         border_type: BorderType,
     ) -> Result<ndarray::Array<T, D>, BilateralFilterError>;
 
-    /// `cv2.bilateralFilter` defaults, whose `borderType` is `BORDER_DEFAULT`,
-    /// i.e. reflect-101.
+    /// `cv2.bilateralFilter` defaults, whose `borderType` is
+    /// [`BorderType::BorderDefault`].
     fn bilateral_filter_def(
         &self,
         diameter: i32,
@@ -57,7 +57,7 @@ pub trait NdCvBilateralFilter<
             diameter,
             sigma_color,
             sigma_space,
-            BorderType::BorderReflect101,
+            BorderType::BorderDefault,
         )
     }
 }
@@ -207,9 +207,8 @@ mod tests {
 
     #[test]
     fn test_bilateral_def_reflects_the_border() {
-        // `_def` has to mean cv2's own default (reflect-101), not this crate's
-        // BorderConstant convention: a constant border is a black neighbour
-        // that drags the edge of a flat mid-grey image down by half.
+        // `_def` has to mean cv2's own default: a constant border is a black
+        // neighbour that drags the edge of a flat mid-grey image down by half.
         let arr = Array2::<u8>::from_elem((12, 12), 200);
 
         let def = arr.bilateral_filter_def(7, 200.0, 14.0).unwrap();

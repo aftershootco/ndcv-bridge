@@ -30,11 +30,13 @@ pub trait NdCvBlur<T: bytemuck::Pod + seal::Sealed + crate::types::CvType, D: nd
         anchor: impl Into<IVec2>,
         border_type: crate::gaussian::BorderType,
     ) -> Result<ndarray::Array<T, D>, BlurError>;
+    /// `cv2.blur` defaults: a centred anchor, and a `borderType` of
+    /// [`crate::gaussian::BorderType::BorderDefault`].
     fn blur_def(&self, kernel_size: impl Into<U16Vec2>) -> Result<ndarray::Array<T, D>, BlurError> {
         self.blur(
             kernel_size,
             (-1, -1),
-            crate::gaussian::BorderType::BorderConstant,
+            crate::gaussian::BorderType::BorderDefault,
         )
     }
 }
@@ -74,7 +76,7 @@ where
 mod tests {
     use super::*;
     use crate::gaussian::BorderType;
-    use ndarray::Array3;
+    use ndarray::{Array2, Array3};
 
     #[test]
     fn test_blur_basic() {
@@ -159,6 +161,27 @@ mod tests {
         let arr = Array3::<u8>::ones((10, 10, 3));
         let res = arr.blur_def((3, 3)).unwrap();
         assert_eq!(res.shape(), &[10, 10, 3]);
+    }
+
+    #[test]
+    fn test_blur_def_uses_the_cv2_default_border() {
+        // As in gaussian.rs: cv2's `blur` defaults to BORDER_DEFAULT, i.e.
+        // reflect-101, not a constant border.
+        let arr = Array2::<u8>::from_elem((40, 40), 200);
+
+        let def = arr.blur_def((9, 9)).unwrap();
+        let reflect = arr
+            .blur((9, 9), (-1, -1), BorderType::BorderReflect101)
+            .unwrap();
+        let constant = arr
+            .blur((9, 9), (-1, -1), BorderType::BorderConstant)
+            .unwrap();
+
+        assert_eq!(def, reflect);
+        // cv2 gives 200 and 62 for these two corners.
+        assert_eq!(def[[0, 0]], 200);
+        assert_eq!(constant[[0, 0]], 62);
+        assert_eq!(def[[20, 20]], constant[[20, 20]]);
     }
 
     #[test]

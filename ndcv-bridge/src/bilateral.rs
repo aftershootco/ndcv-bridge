@@ -35,24 +35,30 @@ pub trait NdCvBilateralFilter<
 {
     /// The two sigmas are different quantities and are not interchangeable:
     ///
-    /// - `diameter`: neighbourhood width in pixels. A value <= 0 makes OpenCV
-    ///   derive it from `sigma_space` instead.
+    /// - `diameter`: neighbourhood width in pixels, or [`None`] to derive it
+    ///   from `sigma_space` as `2 * round(sigma_space * 1.5) + 1`. OpenCV
+    ///   spells that second case as any non-positive `int`, so the whole
+    ///   negative half of its parameter is one value; this takes an `Option`
+    ///   rather than carry the magic number across.
     /// - `sigma_color`: how far apart two colours may be and still be mixed,
     ///   in the image's own units. Larger means more colours count as the
     ///   same, until the filter is just a blur.
     /// - `sigma_space`: how far apart two pixels may be and still be mixed,
-    ///   in pixels. Ignored for the window size when `diameter > 0`, but it
-    ///   still sets the spatial falloff inside that window. Set it to twice
-    ///   the diameter or more to flatten the spatial term, leaving colour
-    ///   similarity alone to decide what gets averaged.
+    ///   in pixels. With an explicit `diameter` it does not set the window
+    ///   size, only the spatial falloff inside it. Set it to twice the
+    ///   diameter or more to flatten that term, leaving colour similarity
+    ///   alone to decide what gets averaged.
     /// - `border_type`: how the neighbourhood is filled past the edge.
+    ///
+    /// Either sigma at or below zero is silently taken as `1.0` by OpenCV,
+    /// so neither is a way to switch its term off.
     ///
     /// A 1- or 3-channel image of `u8` or `f32` is the whole of what OpenCV
     /// supports here — anything else comes back as a
     /// [`BilateralFilterError::OpenCvError`] rather than panicking.
     fn bilateral_filter(
         &self,
-        diameter: i32,
+        diameter: impl Into<Option<u16>>,
         sigma_color: f64,
         sigma_space: f64,
         border_type: BorderType,
@@ -62,7 +68,7 @@ pub trait NdCvBilateralFilter<
     /// [`BorderType::BorderDefault`].
     fn bilateral_filter_def(
         &self,
-        diameter: i32,
+        diameter: impl Into<Option<u16>>,
         sigma_color: f64,
         sigma_space: f64,
     ) -> Result<ndarray::Array<T, D>, BilateralFilterError> {
@@ -86,11 +92,15 @@ where
 {
     fn bilateral_filter(
         &self,
-        diameter: i32,
+        diameter: impl Into<Option<u16>>,
         sigma_color: f64,
         sigma_space: f64,
         border_type: BorderType,
     ) -> Result<ndarray::Array<T, D>, BilateralFilterError> {
+        // OpenCV reads any non-positive diameter as "derive it from
+        // sigma_space", which is what `None` means here. Zero rather than a
+        // negative so the two spellings of `Some(0)` and `None` agree.
+        let diameter = diameter.into().map_or(0, i32::from);
         let mut dst = ndarray::Array::zeros(self.dim());
         let cv_self = self.as_image_mat()?;
         let mut cv_dst = dst.as_image_mat_mut()?;
@@ -238,6 +248,37 @@ mod tests {
             constant[[0, 0]] < 150,
             "a constant border should pull the corner well down, got {}",
             constant[[0, 0]]
+        );
+    }
+
+    #[test]
+    fn test_bilateral_none_diameter_derives_from_sigma_space() {
+        // OpenCV's contract for a non-positive diameter: radius =
+        // round(sigma_space * 1.5), so the window is 2 * radius + 1. `None`
+        // has to mean exactly that and nothing of its own.
+        let arr = ndarray::Array3::<u8>::from_shape_fn((30, 30, 3), |(y, x, c)| {
+            ((y * 31 + x * 17 + c * 53) % 256) as u8
+        });
+
+        let sigma_space: f64 = 6.0;
+        let derived: u16 = 19;
+        assert_eq!(
+            f64::from(derived),
+            2.0 * (sigma_space * 1.5).round() + 1.0,
+            "OpenCV's derived window for this sigma_space"
+        );
+
+        let auto = arr.bilateral_filter_def(None, 30.0, sigma_space).unwrap();
+        let explicit = arr
+            .bilateral_filter_def(derived, 30.0, sigma_space)
+            .unwrap();
+        assert_eq!(auto, explicit);
+
+        // Some(0) is the same request written the other way, not a zero-width
+        // window, because OpenCV reads every non-positive diameter alike.
+        assert_eq!(
+            auto,
+            arr.bilateral_filter_def(0, 30.0, sigma_space).unwrap()
         );
     }
 

@@ -52,6 +52,8 @@ pub mod contours;
 #[cfg(feature = "opencv")]
 pub mod conversions;
 #[cfg(feature = "opencv")]
+pub mod distance_transform;
+#[cfg(feature = "opencv")]
 pub mod gaussian;
 #[cfg(feature = "opencv")]
 pub mod morphology;
@@ -92,6 +94,10 @@ pub use bounding_rect::BoundingRect;
 pub use connected_components::{Connectivity, NdCvConnectedComponents};
 #[cfg(feature = "opencv")]
 pub use conversions::{MatAsNd, NdAsImage, NdAsImageMut, NdAsMat, NdAsMatMut};
+#[cfg(feature = "opencv")]
+pub use distance_transform::{
+    DistanceTransformError, DistanceTransformMask, DistanceType, NdCvDistanceTransform,
+};
 #[cfg(feature = "opencv")]
 pub use morphology::{MorphType, NdCvMorphologyEx};
 #[cfg(feature = "opencv")]

@@ -4,6 +4,43 @@ use super::ConversionError;
 use super::ConversionErrorKind;
 use core::ffi::*;
 use opencv::core::prelude::*;
+
+/// A Mat header built over an ndarray buffer keeps only `ndims - 1` steps: the
+/// innermost stride is dropped and assumed to be `1`, and every remaining
+/// stride is reinterpreted as an unsigned byte step. A view whose strides break
+/// either assumption would make OpenCV read elements the view excludes, read
+/// past the allocation, or (for a negative stride) receive a wrapped step near
+/// `usize::MAX`. Reject such views instead.
+///
+/// A zero stride (a broadcast axis) is rejected too: it would alias every step
+/// along that axis onto the same memory, which OpenCV's own step invariant
+/// forbids and which the `_mut` paths would turn into aliased writes.
+///
+/// Degenerate axes are exempt: an axis of length 1 (or 0) is never stepped
+/// along, so its stride is unused -- and ndarray normalizes such strides to 0
+/// anyway. Outer strides larger than the corresponding row length are fine too;
+/// those are ordinary ROI views and the step carries them faithfully.
+fn check_strides(shape: &[usize], strides: &[isize]) -> Result<(), ConversionError> {
+    if shape.is_empty() {
+        Err(ConversionErrorKind::UnsupportedNdarrayShape)?;
+    }
+
+    let inner = strides.len() - 1;
+    for (axis, (&len, &stride)) in shape.iter().zip(strides).enumerate() {
+        if len <= 1 {
+            continue;
+        }
+        if stride <= 0 {
+            Err(ConversionErrorKind::NonContiguousData)?;
+        }
+        if axis == inner && stride != 1 {
+            Err(ConversionErrorKind::NonContiguousData)?;
+        }
+    }
+
+    Ok(())
+}
+
 pub(crate) unsafe fn ndarray_to_mat_regular<
     T: CvType,
     S: ndarray::Data<Elem = T>,
@@ -13,6 +50,8 @@ pub(crate) unsafe fn ndarray_to_mat_regular<
 ) -> Result<opencv::core::Mat, ConversionError> {
     let shape = input.shape();
     let strides = input.strides();
+
+    check_strides(shape, strides)?;
 
     // let channels = shape.last().copied().unwrap_or(1);
     // if channels > opencv::core::CV_CN_MAX as usize {
@@ -85,6 +124,10 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
     } else if shape.len() == 1 {
         Err(ConversionErrorKind::UnsupportedNdarrayShape)?;
     }
+
+    // Here the innermost axis is the channel axis, so the same rule applies:
+    // channels of a pixel must be adjacent, and no stride may be negative.
+    check_strides(shape, strides)?;
 
     // Since this is the consolidated version we should always only have ndims - 1 sizes and
     // ndims - 2 strides

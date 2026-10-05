@@ -1,0 +1,45 @@
+id: no-blocking-in-async
+message: "Blocking call inside an async fn — wrap it in `tokio::task::spawn_blocking`"
+severity: error
+language: Rust
+# Guideline 11. A blocking call on a runtime worker stalls every other task
+# scheduled on that thread, so the symptom surfaces in unrelated futures. Only
+# the std entry points that have a real async equivalent are matched;
+# `std::process::Command` and friends stay out to keep this free of false
+# positives.
+#
+# Rayon counts too: `par_iter()` and `join`/`scope` run the work on the caller's
+# thread as well as the rayon pool, so an await point never comes and the whole
+# parallel section is charged to one async worker. The anchor is the `par_*`
+# call rather than the terminal `collect`/`sum`, because that is the token that
+# names the hazard - a rayon chain reached from an async fn belongs behind
+# `spawn_blocking`, which this rule already exempts.
+rule:
+  any:
+    - pattern: std::thread::sleep($$$ARGS)
+    - pattern: thread::sleep($$$ARGS)
+    - pattern: std::fs::$METHOD($$$ARGS)
+    - pattern: std::io::stdin().$METHOD($$$ARGS)
+    - pattern: reqwest::blocking::$METHOD($$$ARGS)
+    - pattern: rayon::join($$$ARGS)
+    - pattern: rayon::scope($$$ARGS)
+    - pattern: rayon::scope_fifo($$$ARGS)
+    - pattern: rayon::in_place_scope($$$ARGS)
+    - kind: call_expression
+      has:
+        field: function
+        kind: field_expression
+        has:
+          field: field
+          kind: field_identifier
+          regex: '^(par_iter|par_iter_mut|into_par_iter|par_bridge|par_chunks|par_chunks_mut|par_chunks_exact|par_windows|par_split|par_lines|par_bytes|par_extend|par_drain|par_sort|par_sort_by|par_sort_by_key|par_sort_by_cached_key|par_sort_unstable|par_sort_unstable_by|par_sort_unstable_by_key)$'
+  inside:
+    stopBy: end
+    kind: function_item
+    has:
+      kind: function_modifiers
+      regex: 'async'
+  not:
+    inside:
+      stopBy: end
+      matches: in-spawn-blocking

@@ -1,0 +1,23 @@
+id: no-lazy-global
+message: "Lazily initialised global — pass the value in as a constructor argument instead"
+severity: error
+language: Rust
+# Guideline 7. `LazyLock`/`OnceLock`/`once_cell` globals read as constants but
+# capture whatever the environment looked like at first touch, which makes the
+# first caller decide the value for every later one and hides it from tests.
+# `const` and plain immutable `static` are fine and are not matched here.
+rule:
+  kind: static_item
+  has:
+    stopBy: end
+    kind: type_identifier
+    regex: '^(LazyLock|OnceLock|OnceCell|Lazy)$'
+  not:
+    inside:
+      stopBy: end
+      any:
+        - matches: is-test
+        - matches: in-test-module
+ignores:
+  - '**/tests/**'
+  - '**/benches/**'

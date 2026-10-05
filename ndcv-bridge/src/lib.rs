@@ -58,6 +58,8 @@ pub mod normalize;
 #[cfg(feature = "opencv")]
 pub mod resize;
 #[cfg(feature = "opencv")]
+pub mod sobel;
+#[cfg(feature = "opencv")]
 pub mod types;
 
 // pub mod codec;
@@ -94,6 +96,8 @@ pub use morphology::{MorphType, NdCvMorphologyEx};
 pub use normalize::{NdCvNormalize, NormType};
 #[cfg(feature = "opencv")]
 pub use resize::{Interpolation, NdCvResize};
+#[cfg(feature = "opencv")]
+pub use sobel::NdCvSobel;
 
 pub(crate) mod prelude_ {
     pub use crate::errors::NdCvError;

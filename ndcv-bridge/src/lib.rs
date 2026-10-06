@@ -42,6 +42,8 @@ pub mod blur;
 #[cfg(feature = "opencv")]
 pub mod bounding_rect;
 #[cfg(feature = "opencv")]
+pub mod canny;
+#[cfg(feature = "opencv")]
 pub mod color_space;
 #[cfg(feature = "opencv")]
 pub mod connected_components;
@@ -51,6 +53,8 @@ pub mod contours;
 pub mod conversions;
 #[cfg(feature = "opencv")]
 pub mod gaussian;
+#[cfg(feature = "opencv")]
+pub mod hough;
 #[cfg(feature = "opencv")]
 pub mod morphology;
 #[cfg(feature = "opencv")]
@@ -87,9 +91,13 @@ pub use affine::{NdCvEstimateAffinePartial2D, NdCvInvertWarpAffine, NdCvWarpAffi
 #[cfg(feature = "opencv")]
 pub use bounding_rect::BoundingRect;
 #[cfg(feature = "opencv")]
+pub use canny::NdCvCanny;
+#[cfg(feature = "opencv")]
 pub use connected_components::{Connectivity, NdCvConnectedComponents};
 #[cfg(feature = "opencv")]
 pub use conversions::{MatAsNd, NdAsImage, NdAsImageMut, NdAsMat, NdAsMatMut};
+#[cfg(feature = "opencv")]
+pub use hough::NdCvHoughLinesP;
 #[cfg(feature = "opencv")]
 pub use morphology::{MorphType, NdCvMorphologyEx};
 #[cfg(feature = "opencv")]

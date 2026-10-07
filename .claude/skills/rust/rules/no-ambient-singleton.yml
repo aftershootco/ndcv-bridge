@@ -1,0 +1,23 @@
+id: no-ambient-singleton
+message: "Interior-mutable global — inject this instead of reaching for an ambient singleton"
+severity: warning
+language: Rust
+# Guideline 7. A `static` holding `Mutex`/`RwLock`/`AtomicX` is shared mutable
+# state with the lock as its only guard: still untestable, still order-dependent.
+# Warning rather than error because process-wide counters and metrics registries
+# are a real exception — justify them in a comment and silence the rule there.
+rule:
+  kind: static_item
+  has:
+    stopBy: end
+    kind: type_identifier
+    regex: '^(Mutex|RwLock|RefCell|Cell|UnsafeCell|Atomic(Bool|I8|I16|I32|I64|Isize|U8|U16|U32|U64|Usize|Ptr))$'
+  not:
+    inside:
+      stopBy: end
+      any:
+        - matches: is-test
+        - matches: in-test-module
+ignores:
+  - '**/tests/**'
+  - '**/benches/**'

@@ -33,6 +33,10 @@ pub enum DistanceType {
 /// Only matters for [`DistanceType::L2`]: for `L1` and `C` OpenCV forces it to
 /// 3, which is already exact for those metrics. No `Default`, since cv2 makes
 /// `maskSize` a required argument.
+///
+/// Ignored by [`NdCvDistanceTransform::distance_transform_with_labels`]:
+/// OpenCV runs every mask there as [`DistanceTransformMask::Mask5`], for every
+/// metric.
 #[repr(i32)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum DistanceTransformMask {
@@ -40,9 +44,7 @@ pub enum DistanceTransformMask {
     Mask3 = opencv::imgproc::DIST_MASK_3,
     /// Closer `L2`, adding knight's moves.
     Mask5 = opencv::imgproc::DIST_MASK_5,
-    /// Exact `L2`. Not available to
-    /// [`NdCvDistanceTransform::distance_transform_with_labels`], which
-    /// silently runs [`DistanceTransformMask::Mask5`] instead.
+    /// Exact `L2`.
     Precise = opencv::imgproc::DIST_MASK_PRECISE,
 }
 
@@ -101,9 +103,10 @@ pub trait NdCvDistanceTransform<T: crate::types::CvType>:
         mask: DistanceTransformMask,
     ) -> Result<ndarray::Array2<O>, DistanceTransformError>;
 
-    /// OpenCV has no precise algorithm here: [`DistanceTransformMask::Precise`]
-    /// is silently run as [`DistanceTransformMask::Mask5`], so the distances
-    /// are the approximate ones.
+    /// `mask` is ignored: OpenCV forces [`DistanceTransformMask::Mask5`]
+    /// whenever labels are requested, whatever the metric. So `Mask3` and
+    /// `Precise` silently give the same result as `Mask5`, and `L2` distances
+    /// are the 5x5 approximation, never exact.
     fn distance_transform_with_labels(
         &self,
         distance_type: DistanceType,
@@ -149,7 +152,15 @@ where
             return Err(DistanceTransformError::U8OutputRequiresL1(distance_type));
         }
         let mut dst = ndarray::Array2::<O>::zeros(self.dim());
-        let cv_self = self.as_image_mat()?;
+        // OpenCV writes the first pixel unconditionally, through ndarray's
+        // dangling pointer for an empty array.
+        if self.is_empty() {
+            return Ok(dst);
+        }
+        // The Mat conversion keeps only the outer stride, so anything not in
+        // standard layout would be read as if it were.
+        let src = self.as_standard_layout();
+        let cv_self = src.as_image_mat()?;
         let mut cv_dst = dst.as_image_mat_mut()?;
         opencv::imgproc::distance_transform(
             &*cv_self,
@@ -169,7 +180,11 @@ where
     ) -> Result<DistanceTransformWithLabels, DistanceTransformError> {
         let mut distances = ndarray::Array2::<f32>::zeros(self.dim());
         let mut labels = ndarray::Array2::<i32>::zeros(self.dim());
-        let cv_self = self.as_image_mat()?;
+        if self.is_empty() {
+            return Ok(DistanceTransformWithLabels { distances, labels });
+        }
+        let src = self.as_standard_layout();
+        let cv_self = src.as_image_mat()?;
         let mut cv_distances = distances.as_image_mat_mut()?;
         let mut cv_labels = labels.as_image_mat_mut()?;
         opencv::imgproc::distance_transform_with_labels(
@@ -379,23 +394,124 @@ mod tests {
     }
 
     #[test]
-    fn test_distance_transform_with_labels_precise_falls_back_to_mask5() {
-        // OpenCV does not error on Precise here; it runs the 5x5 mask. Pin
-        // that, since a caller asking for exact L2 gets approximate L2.
-        let arr = single_seed(5, 5, 2, 2);
-        let run = |mask| {
-            arr.distance_transform_with_labels_def(DistanceType::L2, mask)
-                .unwrap()
-                .distances
+    fn test_distance_transform_with_labels_ignores_the_mask() {
+        // OpenCV forces the 5x5 mask whenever labels are requested, for every
+        // metric. Pin that, since a caller asking for exact or 3x3 L2 gets the
+        // 5x5 approximation.
+        let arr = single_seed(9, 9, 4, 4);
+        for distance_type in [DistanceType::L1, DistanceType::L2, DistanceType::C] {
+            let run = |mask| {
+                arr.distance_transform_with_labels_def(distance_type, mask)
+                    .unwrap()
+                    .distances
+            };
+            let mask5 = run(DistanceTransformMask::Mask5);
+            assert_eq!(
+                run(DistanceTransformMask::Mask3),
+                mask5,
+                "{distance_type:?}"
+            );
+            assert_eq!(
+                run(DistanceTransformMask::Precise),
+                mask5,
+                "{distance_type:?}"
+            );
+        }
+        let l2 = arr
+            .distance_transform_with_labels_def(DistanceType::L2, DistanceTransformMask::Mask3)
+            .unwrap()
+            .distances;
+        // The 5x5 costs: 1 along the axis (3x3 would give 0.955) and 1.4 on the
+        // diagonal (exact would give sqrt(2)).
+        assert_eq!(l2[[4, 5]], 1.0);
+        assert!((l2[[3, 3]] - 1.4).abs() < 1e-3, "got {}", l2[[3, 3]]);
+    }
+
+    #[test]
+    fn test_distance_transform_empty_input() {
+        for dim in [(0, 5), (5, 0), (0, 0)] {
+            let arr = Array2::<u8>::zeros(dim);
+            for mask in [DistanceTransformMask::Mask3, DistanceTransformMask::Precise] {
+                for distance_type in [DistanceType::L1, DistanceType::L2] {
+                    let res = arr.distance_transform_def(distance_type, mask).unwrap();
+                    assert_eq!(res.dim(), dim);
+                }
+            }
+            let res = arr
+                .distance_transform::<u8>(DistanceType::L1, DistanceTransformMask::Mask3)
+                .unwrap();
+            assert_eq!(res.dim(), dim);
+            for label_type in [
+                DistanceTransformLabelType::ConnectedComponent,
+                DistanceTransformLabelType::Pixel,
+            ] {
+                let res = arr
+                    .distance_transform_with_labels(
+                        DistanceType::L2,
+                        DistanceTransformMask::Mask5,
+                        label_type,
+                    )
+                    .unwrap();
+                assert_eq!(res.distances.dim(), dim);
+                assert_eq!(res.labels.dim(), dim);
+            }
+        }
+    }
+
+    #[test]
+    fn test_distance_transform_non_standard_layouts_match_a_copy() {
+        // Asymmetric seeds, so any transposition or flip shows up.
+        let mut hwc = Array3::<u8>::from_elem((6, 9, 3), 255);
+        hwc[[0, 7, 0]] = 0;
+        hwc[[4, 1, 0]] = 0;
+        let base = hwc.slice(s![.., .., 0]).to_owned();
+        let f_order = {
+            let mut a = Array2::<u8>::zeros(ShapeBuilder::f(base.dim()));
+            a.assign(&base);
+            a
         };
-        let precise = run(DistanceTransformMask::Precise);
-        let mask5 = run(DistanceTransformMask::Mask5);
-        assert_eq!(precise, mask5);
-        // The diagonal neighbour is 1.4 (the 5x5 cost), not sqrt(2).
+        let views = [
+            ("channel slice", hwc.slice(s![.., .., 0])),
+            ("transposed", base.t()),
+            ("f-order", f_order.view()),
+            ("columns reversed", base.slice(s![.., ..;-1])),
+            ("rows reversed", base.slice(s![..;-1, ..])),
+            ("every other column", base.slice(s![.., ..;2])),
+        ];
+        for (name, view) in views {
+            let copy = view.to_owned();
+            for (distance_type, mask) in [
+                (DistanceType::L1, DistanceTransformMask::Mask3),
+                (DistanceType::L2, DistanceTransformMask::Precise),
+            ] {
+                assert_eq!(
+                    view.distance_transform_def(distance_type, mask).unwrap(),
+                    copy.distance_transform_def(distance_type, mask).unwrap(),
+                    "{name} {distance_type:?}"
+                );
+            }
+            let labeled = view
+                .distance_transform_with_labels_def(DistanceType::L2, DistanceTransformMask::Mask5)
+                .unwrap();
+            let expected = copy
+                .distance_transform_with_labels_def(DistanceType::L2, DistanceTransformMask::Mask5)
+                .unwrap();
+            assert_eq!(labeled.distances, expected.distances, "{name}");
+            assert_eq!(labeled.labels, expected.labels, "{name}");
+        }
+    }
+
+    #[test]
+    fn test_distance_transform_rejects_non_u8_negative_stride_view() {
+        // Used to overflow `as usize` in the conversion and panic in debug.
+        let arr = Array2::<f32>::ones((4, 4));
+        let err = arr
+            .slice(s![..;-1, ..])
+            .distance_transform_def(DistanceType::L2, DistanceTransformMask::Mask3)
+            .unwrap_err();
         assert!(
-            (precise[[1, 1]] - 1.4).abs() < 1e-3,
-            "got {}",
-            precise[[1, 1]]
+            matches!(err, DistanceTransformError::OpenCvError(_)),
+            "{err}"
         );
     }
 

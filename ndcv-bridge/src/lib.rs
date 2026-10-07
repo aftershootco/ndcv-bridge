@@ -80,7 +80,7 @@ pub use roi::{NdRoiZeroPadded, Roi as NdRoi, RoiMut as NdRoiMut};
 #[cfg(feature = "opencv")]
 pub use contours::{
     ContourApproximationMethod, ContourHierarchy, ContourResult, ContourRetrievalMode,
-    NdCvContourArea, NdCvFindContours,
+    NdCvContourArea, NdCvDrawContours, NdCvFindContours,
 };
 
 #[allow(deprecated)]

@@ -85,6 +85,16 @@ pub trait NdCvFindContours<T: crate::types::CvType + seal::Sealed>:
     }
 }
 
+pub trait NdCvDrawContours: crate::image::NdImage + NdAsImageMut<u8, Ix2> {
+    fn draw_contours(
+        &mut self,
+        contours: &[Vec<Point2<i32>>],
+        contour_index: i32,
+        color: u8,
+        thickness: i32,
+    ) -> Result<(), ContoursError>;
+}
+
 pub trait NdCvContourArea<T: bytemuck::Pod> {
     fn contours_area(&self, oriented: bool) -> Result<f64, ContoursError>;
 
@@ -183,6 +193,40 @@ where
         });
 
         Ok(opencv::imgproc::contour_area(&cv_contour, oriented)?)
+    }
+}
+
+impl<S: DataMut<Elem = u8>> NdCvDrawContours for ArrayBase<S, Ix2> {
+    fn draw_contours(
+        &mut self,
+        contours: &[Vec<Point2<i32>>],
+        contour_index: i32,
+        color: u8,
+        thickness: i32,
+    ) -> Result<(), ContoursError> {
+        let mut cv_image = self.as_image_mat_mut()?;
+        let mut cv_contours =
+            opencv::core::Vector::<opencv::core::Vector<opencv::core::Point>>::new();
+        for contour in contours {
+            let points = contour
+                .iter()
+                .map(|point| opencv::core::Point::new(point.x, point.y))
+                .collect::<opencv::core::Vector<opencv::core::Point>>();
+            cv_contours.push(points);
+        }
+
+        opencv::imgproc::draw_contours(
+            &mut *cv_image,
+            &cv_contours,
+            contour_index,
+            opencv::core::Scalar::all(color as f64),
+            thickness,
+            opencv::imgproc::LINE_8,
+            &opencv::core::no_array(),
+            i32::MAX,
+            opencv::core::Point::new(0, 0),
+        )?;
+        Ok(())
     }
 }
 

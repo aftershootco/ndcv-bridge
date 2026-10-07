@@ -44,6 +44,8 @@ pub mod blur;
 #[cfg(feature = "opencv")]
 pub mod bounding_rect;
 #[cfg(feature = "opencv")]
+pub mod canny;
+#[cfg(feature = "opencv")]
 pub mod color_space;
 #[cfg(feature = "opencv")]
 pub mod connected_components;
@@ -54,11 +56,15 @@ pub mod conversions;
 #[cfg(feature = "opencv")]
 pub mod gaussian;
 #[cfg(feature = "opencv")]
+pub mod hough;
+#[cfg(feature = "opencv")]
 pub mod morphology;
 #[cfg(feature = "opencv")]
 pub mod normalize;
 #[cfg(feature = "opencv")]
 pub mod resize;
+#[cfg(feature = "opencv")]
+pub mod sobel;
 #[cfg(feature = "opencv")]
 pub mod types;
 
@@ -78,26 +84,34 @@ pub use roi::{NdRoiZeroPadded, Roi as NdRoi, RoiMut as NdRoiMut};
 #[cfg(feature = "opencv")]
 pub use contours::{
     ContourApproximationMethod, ContourHierarchy, ContourResult, ContourRetrievalMode,
-    NdCvContourArea, NdCvFindContours,
+    NdCvContourArea, NdCvDrawContours, NdCvFindContours,
 };
 
 #[allow(deprecated)]
 pub use conversions::NdCvConversion;
 
 #[cfg(feature = "opencv")]
-pub use affine::{NdCvEstimateAffinePartial2D, NdCvInvertWarpAffine, NdCvWarpAffine};
+pub use affine::{
+    NdCvEstimateAffinePartial2D, NdCvInvertWarpAffine, NdCvWarpAffine, get_rotation_matrix_2d,
+};
 #[cfg(feature = "opencv")]
 pub use bounding_rect::BoundingRect;
+#[cfg(feature = "opencv")]
+pub use canny::NdCvCanny;
 #[cfg(feature = "opencv")]
 pub use connected_components::{Connectivity, NdCvConnectedComponents};
 #[cfg(feature = "opencv")]
 pub use conversions::{MatAsNd, NdAsImage, NdAsImageMut, NdAsMat, NdAsMatMut};
+#[cfg(feature = "opencv")]
+pub use hough::NdCvHoughLinesP;
 #[cfg(feature = "opencv")]
 pub use morphology::{MorphType, NdCvMorphologyEx};
 #[cfg(feature = "opencv")]
 pub use normalize::{NdCvNormalize, NormType};
 #[cfg(feature = "opencv")]
 pub use resize::{Interpolation, NdCvResize};
+#[cfg(feature = "opencv")]
+pub use sobel::NdCvSobel;
 
 pub(crate) mod prelude_ {
     pub use crate::errors::NdCvError;

@@ -26,6 +26,8 @@ mod blend;
 #[cfg(feature = "opencv")]
 pub mod dilate;
 #[cfg(feature = "opencv")]
+pub mod distance_transform;
+#[cfg(feature = "opencv")]
 pub mod erode;
 mod errors;
 pub mod fir;
@@ -69,6 +71,11 @@ pub use bilateral::{BilateralFilterError, NdCvBilateralFilter};
 pub use blend::NdBlend;
 pub use blur::NdCvBlur;
 pub use dilate::{DilateError, NdCvDilate, NdCvDilateInPlace};
+#[cfg(feature = "opencv")]
+pub use distance_transform::{
+    DistanceTransformError, DistanceTransformLabelType, DistanceTransformMask,
+    DistanceTransformWithLabels, DistanceType, NdCvDistanceTransform,
+};
 pub use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 pub use fir::NdFir;
 pub use gaussian::{BorderType, NdCvGaussianBlur, NdCvGaussianBlurInPlace};

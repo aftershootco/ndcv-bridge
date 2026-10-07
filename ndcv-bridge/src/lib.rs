@@ -87,7 +87,9 @@ pub use contours::{
 pub use conversions::NdCvConversion;
 
 #[cfg(feature = "opencv")]
-pub use affine::{NdCvEstimateAffinePartial2D, NdCvInvertWarpAffine, NdCvWarpAffine};
+pub use affine::{
+    NdCvEstimateAffinePartial2D, NdCvInvertWarpAffine, NdCvWarpAffine, get_rotation_matrix_2d,
+};
 #[cfg(feature = "opencv")]
 pub use bounding_rect::BoundingRect;
 #[cfg(feature = "opencv")]

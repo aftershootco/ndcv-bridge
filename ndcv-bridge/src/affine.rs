@@ -10,12 +10,27 @@ pub enum AffineError {
     EstimationFailed,
 }
 
+pub fn get_rotation_matrix_2d(
+    center: impl Into<glam::Vec2>,
+    angle: f64,
+    scale: f64,
+) -> Result<ndarray::Array2<f64>, AffineError> {
+    let center = center.into();
+    let matrix = opencv::imgproc::get_rotation_matrix_2d(
+        opencv::core::Point2f::new(center.x, center.y),
+        angle,
+        scale,
+    )?;
+    let transformation: ndarray::Array2<f64> = matrix.as_ndarray()?.to_owned();
+    Ok(transformation)
+}
+
 pub trait NdCvWarpAffine<T: bytemuck::Pod + num::Zero + crate::types::CvType, D: ndarray::Dimension>:
     crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
-    fn warp_affine(
+    fn warp_affine<U: crate::types::CvType + num::Float>(
         &self,
-        transformation: ndarray::ArrayView2<f32>,
+        transformation: ndarray::ArrayView2<U>,
         output_size: impl Into<glam::USizeVec2>,
         interpolation: Interpolation,
         border_type: BorderType,
@@ -47,9 +62,9 @@ impl<T: bytemuck::Pod + crate::types::CvType + num::Float, S: ndarray::Data<Elem
 impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem = T>>
     NdCvWarpAffine<T, ndarray::Ix2> for ndarray::ArrayBase<S, ndarray::Ix2>
 {
-    fn warp_affine(
+    fn warp_affine<U: crate::types::CvType + num::Float>(
         &self,
-        transformation: ndarray::ArrayView2<f32>,
+        transformation: ndarray::ArrayView2<U>,
         output_size: impl Into<glam::USizeVec2>,
         interpolation: Interpolation,
         border_type: BorderType,
@@ -84,9 +99,9 @@ impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem 
 impl<T: bytemuck::Pod + num::Zero + crate::types::CvType, S: ndarray::Data<Elem = T>>
     NdCvWarpAffine<T, ndarray::Ix3> for ndarray::ArrayBase<S, ndarray::Ix3>
 {
-    fn warp_affine(
+    fn warp_affine<U: crate::types::CvType + num::Float>(
         &self,
-        transformation: ndarray::ArrayView2<f32>,
+        transformation: ndarray::ArrayView2<U>,
         output_size: impl Into<glam::USizeVec2>,
         interpolation: Interpolation,
         border_type: BorderType,

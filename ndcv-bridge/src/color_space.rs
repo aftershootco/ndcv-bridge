@@ -229,6 +229,7 @@ impl_color_converter!(Bgr, Rgb, opencv::imgproc::COLOR_BGR2RGB => u8,  u16, f32,
 impl_color_converter!(Rgba, Rgb, opencv::imgproc::COLOR_RGBA2RGB => u8,  u16, f32,);
 impl_color_converter!(Rgb, Rgba, opencv::imgproc::COLOR_RGB2RGBA => u8,  u16, f32,);
 impl_color_converter!(Rgb, Gray, opencv::imgproc::COLOR_RGB2GRAY => u8,  u16, f32,);
+impl_color_converter!(Bgr, Gray, opencv::imgproc::COLOR_BGR2GRAY => u8,  u16, f32,);
 impl_color_converter!(Gray, Rgb, opencv::imgproc::COLOR_GRAY2RGB => u8,  u16, f32,);
 // `Lab<f32>` is CIE Lab as written: `L` in `0..=100`, `a*`/`b*` roughly
 // `-127..=127`. `Lab<u8>` is OpenCV's 8-bit packing of the same values, with
@@ -774,6 +775,18 @@ mod tests {
             "Expected gray value between 140-141, got {}",
             gray_value
         );
+    }
+
+    #[test]
+    fn test_bgr_to_gray_conversion() {
+        let bgr_data =
+            Array3::<u8>::from_shape_fn((2, 2, 3), |(_, _, c)| if c == 0 { 100 } else { 0 });
+        let gray_result: CowArray<u8, Ix2> = bgr_data.cvt::<Bgr<u8>, Gray<u8>>();
+        let rgb_result: CowArray<u8, Ix2> = bgr_data.cvt::<Rgb<u8>, Gray<u8>>();
+
+        assert_eq!(gray_result.shape(), [2, 2]);
+        assert_eq!(gray_result[[0, 0]], 11);
+        assert_eq!(rgb_result[[0, 0]], 30);
     }
 
     #[test]

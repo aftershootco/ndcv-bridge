@@ -2,6 +2,7 @@
 use crate::conversions::*;
 use glam::U16Vec2;
 use ndarray::*;
+use opencv::core::MatTraitConst;
 
 #[derive(Debug, thiserror::Error)]
 pub enum StackBlurError {
@@ -9,15 +10,30 @@ pub enum StackBlurError {
     ConversionError(#[from] crate::conversions::ConversionError),
     #[error("OpenCV error: {0}")]
     OpenCvError(#[from] opencv::Error),
+    #[error(
+        "kernel {width}x{height} is wider than {max}, where OpenCV's sums overflow for this type"
+    )]
+    KernelTooLarge { width: u16, height: u16, max: u16 },
+    #[error("OpenCV wrote to a buffer of its own instead of the output array")]
+    OutputReallocated,
 }
 
 mod seal {
-    pub trait Sealed {}
-    // src: any number of channels, depth CV_8U, CV_16U, CV_16S or CV_32F.
-    impl Sealed for u8 {}
-    impl Sealed for u16 {}
-    impl Sealed for i16 {}
-    impl Sealed for f32 {}
+    pub trait Sealed {
+        /// The widest kernel whose sums fit OpenCV's accumulator for this type.
+        const MAX_KERNEL: u16;
+    }
+    // OpenCV also accepts CV_16U and CV_16S, but its integer sums overflow for
+    // them at any kernel past 3: a flat 65535 `u16` image blurs to 43775 at
+    // size 5, and a flat 30000 `i16` one to 20963. They are left out.
+    impl Sealed for u8 {
+        // OpenCV sums `255 * (r + 1)^2` in an `int`, which overflows past
+        // radius 2900: a flat 255 image comes back black from size 5803 up.
+        const MAX_KERNEL: u16 = 5801;
+    }
+    impl Sealed for f32 {
+        const MAX_KERNEL: u16 = u16::MAX;
+    }
 }
 
 /// A Gaussian-like blur whose cost does not grow with the kernel: a separable
@@ -25,12 +41,21 @@ mod seal {
 /// along rows and then columns. Channels are filtered independently.
 ///
 /// OpenCV supports only a replicate border here, so there is no `border_type`.
-/// For `f32` the result matches the triangular kernel with a replicate border
-/// to float precision, with one exception measured on OpenCV 4.12 and 5.0:
-/// for kernels wider than 9, the row pass clamps its last few columns
-/// differently, by up to about 0.03 on data in `[0, 1]` (3 columns at width 21,
-/// 8 at width 41). `u8`, `u16` and `i16` use a fixed-point approximation that
-/// can be a level or two from the exact filter.
+/// Measured against that filter, written out, on OpenCV 4.12 and 5.0:
+///
+/// - `f32` matches it to the precision of OpenCV's running sums (within about
+///   5e-4 on data in `[0, 1]` at photo sizes), except at the right edge
+///   whenever the row pass takes its running-sum path, which it does for
+///   kernels wider than 9 or rows no wider than the kernel. There the last
+///   columns are clamped differently: 1 column at width 13, 3 at 21, 8 at 41,
+///   23 at 101, off by up to about 0.07.
+/// - `u8` uses truncating fixed-point sums: within 2 levels of the rounded
+///   filter and biased low by up to about 0.8 of a level, but up to 4 levels
+///   in those right-edge columns and up to 7 once the kernel is wider than the
+///   image.
+/// - When a dimension is smaller than the kernel, OpenCV 4.12 and 5.0 disagree
+///   with each other (by up to about 0.45 on data in `[0, 1]`); 4.12 is the one
+///   that matches the written-out filter.
 pub trait NdCvStackBlur<
     T: bytemuck::Pod + seal::Sealed + crate::types::CvType,
     D: ndarray::Dimension,
@@ -38,7 +63,8 @@ pub trait NdCvStackBlur<
 {
     /// `kernel_size` is `(width, height)`, as in [`crate::NdCvBlur::blur`].
     /// Both must be odd and positive; anything else comes back as a
-    /// [`StackBlurError::OpenCvError`] rather than panicking. A size of 1 on an
+    /// [`StackBlurError::OpenCvError`] rather than panicking. For `u8` a size
+    /// above 5801 is a [`StackBlurError::KernelTooLarge`]. A size of 1 on an
     /// axis leaves that axis unfiltered.
     fn stack_blur(
         &self,
@@ -53,7 +79,7 @@ impl<
 > NdCvStackBlur<T, D> for ArrayBase<S, D>
 where
     ndarray::ArrayBase<S, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>,
-    for<'a> ndarray::CowArray<'a, T, D>: crate::conversions::NdAsImage<T, D>,
+    for<'a> ndarray::ArrayView<'a, T, D>: crate::conversions::NdAsImage<T, D>,
     ndarray::Array<T, D>: crate::conversions::NdAsImageMut<T, D>,
 {
     fn stack_blur(
@@ -61,22 +87,44 @@ where
         kernel_size: impl Into<U16Vec2>,
     ) -> Result<ndarray::Array<T, D>, StackBlurError> {
         let kernel_size = kernel_size.into();
+        if kernel_size.max_element() > T::MAX_KERNEL {
+            return Err(StackBlurError::KernelTooLarge {
+                width: kernel_size.x,
+                height: kernel_size.y,
+                max: T::MAX_KERNEL,
+            });
+        }
         let mut dst = ndarray::Array::zeros(self.raw_dim());
         // OpenCV asserts on empty input; an empty image blurs to itself.
         if self.is_empty() {
             return Ok(dst);
         }
-        // The Mat conversion keeps only the outer stride, so a view that is not
-        // in standard layout would be read as if it were. A no-op borrow when
-        // the input already is.
+        // The Mat conversion keeps only the outer stride, so input that is not
+        // in standard layout is copied first. Contiguous input is borrowed, but
+        // ndarray leaves the stride of a length-1 axis arbitrary (0 for a
+        // one-row slice), which OpenCV can reject; a view over the same slice
+        // has the default strides, without a copy.
         let src = self.as_standard_layout();
+        let src = match src.as_slice() {
+            Some(data) => {
+                ArrayView::from_shape(self.raw_dim(), data).map_err(ConversionError::from)?
+            }
+            None => src.view(),
+        };
         let cv_src = src.as_image_mat()?;
+        let dst_data = dst.as_ptr().cast::<u8>();
         let mut cv_dst = dst.as_image_mat_mut()?;
         opencv::imgproc::stack_blur(
             &*cv_src,
             &mut *cv_dst,
             opencv::core::Size::new(kernel_size.x.into(), kernel_size.y.into()),
         )?;
+        // Had OpenCV wanted a different size or type it would have written into
+        // a new buffer and left `dst` all zeros. Not expected, but an error is
+        // better than a black result.
+        if cv_dst.data() != dst_data {
+            return Err(StackBlurError::OutputReallocated);
+        }
         Ok(dst)
     }
 }
@@ -224,6 +272,71 @@ mod tests {
         assert_eq!(
             transposed.stack_blur((5, 3)).unwrap(),
             transposed.to_owned().stack_blur((5, 3)).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_stack_blur_u8_kernel_limit() {
+        // The widest u8 kernel still sums without overflow, and one size wider
+        // is an error rather than a black image.
+        let flat = Array2::<u8>::from_elem((40, 40), 255);
+        assert!(
+            flat.stack_blur((5801, 5801))
+                .unwrap()
+                .iter()
+                .all(|&v| v == 255)
+        );
+        for size in [(5803, 3), (3, 5803)] {
+            let err = flat.stack_blur(size).unwrap_err();
+            assert!(
+                matches!(err, StackBlurError::KernelTooLarge { max: 5801, .. }),
+                "{size:?}: {err}"
+            );
+        }
+        // f32 has no such limit: the widest kernel stays flat to within float
+        // precision of a sum over a 32768^2 window (4e-5 measured on 4.12).
+        let flat = Array2::<f32>::from_elem((40, 40), 0.5);
+        let res = flat.stack_blur((u16::MAX, u16::MAX)).unwrap();
+        assert!(res.iter().all(|&v| (v - 0.5).abs() < 1e-4));
+    }
+
+    #[test]
+    fn test_stack_blur_unit_length_axes() {
+        // ndarray keeps an arbitrary stride on a length-1 axis: 0 for a one-row
+        // slice, even after `to_owned`. Each must match the same values laid
+        // out with default strides.
+        let base = texture(8, 9, 3).mapv(f32::from);
+        let fresh3 = |v: ArrayView3<f32>| {
+            Array3::from_shape_vec(v.raw_dim(), v.iter().copied().collect()).unwrap()
+        };
+        let fresh2 = |v: ArrayView2<f32>| {
+            Array2::from_shape_vec(v.raw_dim(), v.iter().copied().collect()).unwrap()
+        };
+        for view in [
+            base.slice(s![3..4, .., ..]),
+            base.slice(s![.., 4..5, ..]),
+            base.slice(s![2..3, 5..6, ..]),
+        ] {
+            let expected = fresh3(view).stack_blur((5, 3)).unwrap();
+            assert_eq!(
+                view.stack_blur((5, 3)).unwrap(),
+                expected,
+                "{:?}",
+                view.strides()
+            );
+            assert_eq!(view.to_owned().stack_blur((5, 3)).unwrap(), expected);
+        }
+        let plane = base.slice(s![.., .., 0]).to_owned();
+        let row = plane.slice(s![3..4, ..]);
+        let expected = fresh2(row).stack_blur((5, 3)).unwrap();
+        assert_eq!(row.stack_blur((5, 3)).unwrap(), expected);
+        assert_eq!(
+            plane
+                .row(3)
+                .insert_axis(Axis(0))
+                .stack_blur((5, 3))
+                .unwrap(),
+            expected
         );
     }
 }

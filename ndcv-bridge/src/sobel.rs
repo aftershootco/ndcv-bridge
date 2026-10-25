@@ -56,11 +56,11 @@ pub(crate) mod seal {
     impl Sealed for f64 {}
 
     /// An output depth `Self` that OpenCV accepts for input of depth `T` and
-    /// that keeps the sign of the derivative. Left out on purpose: `u8` output,
-    /// which zeroes every negative slope, and `i16` output for any input wider
-    /// than `u8`, which saturates; OpenCV accepts both. Narrower-than-input
-    /// floats (`f64` to `f32`) are rejected by OpenCV at run time, so they do
-    /// not type-check here either.
+    /// that keeps the sign of the derivative. OpenCV accepts more pairings than
+    /// these, but each one it adds writes unsigned output, which zeroes every
+    /// negative slope, or `i16` from an input wider than `u8`, which saturates.
+    /// Narrower-than-input floats (`f64` to `f32`) are rejected by OpenCV at
+    /// run time, so they do not type-check here either.
     pub trait SobelOutput<T>: Copy + bytemuck::Pod + num::Zero + crate::types::CvType {}
     impl SobelOutput<u8> for i16 {}
     impl SobelOutput<u8> for f32 {}
@@ -90,7 +90,8 @@ pub(crate) mod seal {
 /// ```
 ///
 /// `u8` into `i16` still saturates at a strong edge under
-/// [`SobelKernel::Size7`], whose gain on a unit step is 640. An unsupported
+/// [`SobelKernel::Size7`], whose gain on a unit step is 640, and under any
+/// kernel once `scale` or `delta` push the result past `i16`. An unsupported
 /// derivative order for the kernel, or `dx == dy == 0`, comes back as a
 /// [`SobelError::OpenCvError`] rather than panicking.
 pub trait NdCvSobel<T: bytemuck::Pod + seal::Sealed + crate::types::CvType, D: ndarray::Dimension>:

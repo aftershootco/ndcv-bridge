@@ -66,6 +66,8 @@ pub mod resize;
 #[cfg(feature = "opencv")]
 pub mod sobel;
 #[cfg(feature = "opencv")]
+pub mod stack_blur;
+#[cfg(feature = "opencv")]
 pub mod types;
 
 // pub mod codec;
@@ -113,6 +115,8 @@ pub use pyr_down::{NdCvPyrDown, PyrDownError};
 pub use resize::{Interpolation, NdCvResize};
 #[cfg(feature = "opencv")]
 pub use sobel::{NdCvSobel, SobelError, SobelKernel};
+#[cfg(feature = "opencv")]
+pub use stack_blur::{NdCvStackBlur, StackBlurError};
 
 pub(crate) mod prelude_ {
     pub use crate::errors::NdCvError;

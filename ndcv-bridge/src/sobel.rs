@@ -2,6 +2,7 @@
 use crate::conversions::*;
 use crate::gaussian::BorderType;
 use ndarray::*;
+use opencv::core::MatTraitConst;
 
 #[derive(Debug, thiserror::Error)]
 pub enum SobelError {
@@ -9,6 +10,8 @@ pub enum SobelError {
     ConversionError(#[from] crate::conversions::ConversionError),
     #[error("OpenCV error: {0}")]
     OpenCvError(#[from] opencv::Error),
+    #[error("OpenCV wrote to a buffer of its own instead of the output array")]
+    OutputReallocated,
 }
 
 /// The derivative kernel, OpenCV's `ksize`.
@@ -21,8 +24,8 @@ pub enum SobelKernel {
     /// [`SobelKernel::Size3`]. Only for a first derivative along one axis,
     /// `dx + dy == 1`.
     Scharr,
-    /// `[-1 0 1]` with no smoothing across it. Only for first or second
-    /// derivatives along one axis.
+    /// `[-1 0 1]`, or `[1 -2 1]` for a second derivative, with no smoothing
+    /// across it.
     Size1,
     /// The usual 3x3 Sobel kernel, cv2's default.
     Size3,
@@ -52,25 +55,44 @@ pub(crate) mod seal {
     impl Sealed for f32 {}
     impl Sealed for f64 {}
 
-    /// The output depths that hold a signed derivative. OpenCV would also
-    /// write `u8` for `u8` input, but that saturates every negative slope to
-    /// zero, so it is left out.
-    pub trait SobelOutput: Copy + bytemuck::Pod + num::Zero + crate::types::CvType {}
-    impl SobelOutput for i16 {}
-    impl SobelOutput for f32 {}
-    impl SobelOutput for f64 {}
+    /// An output depth `Self` that OpenCV accepts for input of depth `T` and
+    /// that keeps the sign of the derivative. Left out on purpose: `u8` output,
+    /// which zeroes every negative slope, and `i16` output for any input wider
+    /// than `u8`, which saturates; OpenCV accepts both. Narrower-than-input
+    /// floats (`f64` to `f32`) are rejected by OpenCV at run time, so they do
+    /// not type-check here either.
+    pub trait SobelOutput<T>: Copy + bytemuck::Pod + num::Zero + crate::types::CvType {}
+    impl SobelOutput<u8> for i16 {}
+    impl SobelOutput<u8> for f32 {}
+    impl SobelOutput<u8> for f64 {}
+    impl SobelOutput<u16> for f32 {}
+    impl SobelOutput<u16> for f64 {}
+    impl SobelOutput<i16> for f32 {}
+    impl SobelOutput<i16> for f64 {}
+    impl SobelOutput<f32> for f32 {}
+    impl SobelOutput<f32> for f64 {}
+    impl SobelOutput<f64> for f64 {}
 }
 
 /// The image derivative `d^(dx + dy) / dx^dx dy^dy`, by a separable Sobel or
 /// Scharr kernel that also smooths across the derivative. Channels are filtered
 /// independently, and the output has the input's shape.
 ///
-/// The output depth `O` is a type parameter, OpenCV's `ddepth`. OpenCV accepts
-/// `u8` input with `i16`, `f32` or `f64` output, `u16` and `i16` input with
-/// `f32` or `f64` (and `i16` for `i16`), `f32` with `f32` or `f64`, and `f64`
-/// with `f64`. A pairing it rejects, an unsupported derivative order for the
-/// kernel, or `dx == dy == 0`, comes back as a [`SobelError::OpenCvError`]
-/// rather than panicking.
+/// The output depth `O` is a type parameter, OpenCV's `ddepth`, restricted to
+/// the pairings that keep a signed derivative: `u8` input into `i16`, `f32` or
+/// `f64`; `u16` or `i16` into `f32` or `f64`; `f32` into `f32` or `f64`; and
+/// `f64` into `f64`. Any other pairing does not compile:
+///
+/// ```compile_fail
+/// use ndcv_bridge::NdCvSobel;
+/// let narrowing = ndarray::Array2::<f64>::zeros((4, 4));
+/// let _ = narrowing.sobel_def::<f32>(1, 0);
+/// ```
+///
+/// `u8` into `i16` still saturates at a strong edge under
+/// [`SobelKernel::Size7`], whose gain on a unit step is 640. An unsupported
+/// derivative order for the kernel, or `dx == dy == 0`, comes back as a
+/// [`SobelError::OpenCvError`] rather than panicking.
 pub trait NdCvSobel<T: bytemuck::Pod + seal::Sealed + crate::types::CvType, D: ndarray::Dimension>:
     crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
@@ -79,8 +101,9 @@ pub trait NdCvSobel<T: bytemuck::Pod + seal::Sealed + crate::types::CvType, D: n
     ///   gives it, which for [`SobelKernel::Size3`] is 8 times the slope.
     /// - `delta`: added after scaling.
     /// - `border_type`: how the kernel reads past the edge.
-    ///   [`BorderType::BorderWrap`] is not supported.
-    fn sobel<O: seal::SobelOutput>(
+    ///   [`BorderType::BorderWrap`] and [`BorderType::BorderTransparent`] are
+    ///   not supported.
+    fn sobel<O: seal::SobelOutput<T>>(
         &self,
         dx: u8,
         dy: u8,
@@ -94,7 +117,7 @@ pub trait NdCvSobel<T: bytemuck::Pod + seal::Sealed + crate::types::CvType, D: n
 
     /// `cv2.Sobel` defaults: a [`SobelKernel::Size3`] kernel, no scale or
     /// delta, and a `borderType` of [`BorderType::BorderDefault`].
-    fn sobel_def<O: seal::SobelOutput>(
+    fn sobel_def<O: seal::SobelOutput<T>>(
         &self,
         dx: u8,
         dy: u8,
@@ -120,9 +143,9 @@ impl<
 > NdCvSobel<T, D> for ArrayBase<S, D>
 where
     ndarray::ArrayBase<S, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>,
-    for<'a> ndarray::CowArray<'a, T, D>: crate::conversions::NdAsImage<T, D>,
+    for<'a> ndarray::ArrayView<'a, T, D>: crate::conversions::NdAsImage<T, D>,
 {
-    fn sobel<O: seal::SobelOutput>(
+    fn sobel<O: seal::SobelOutput<T>>(
         &self,
         dx: u8,
         dy: u8,
@@ -135,16 +158,24 @@ where
         ndarray::Array<O, D>: crate::conversions::NdAsImageMut<O, D>,
     {
         let mut dst = ndarray::Array::<O, D>::zeros(self.raw_dim());
-        // OpenCV writes the first output pixel unconditionally, which for an
-        // empty array is ndarray's dangling pointer.
+        // OpenCV rejects empty input; an empty image has an empty derivative.
         if self.is_empty() {
             return Ok(dst);
         }
-        // The Mat conversion keeps only the outer stride, so a view that is not
-        // in standard layout would be read as if it were. A no-op borrow when
-        // the input already is.
+        // The Mat conversion keeps only the outer stride, so input that is not
+        // in standard layout is copied first. Contiguous input is borrowed, but
+        // ndarray leaves the stride of a length-1 axis arbitrary (0 for a
+        // one-row slice), which OpenCV rejects; a view over the same slice has
+        // the default strides, without a copy.
         let src = self.as_standard_layout();
+        let src = match src.as_slice() {
+            Some(data) => {
+                ArrayView::from_shape(self.raw_dim(), data).map_err(ConversionError::from)?
+            }
+            None => src.view(),
+        };
         let cv_src = src.as_image_mat()?;
+        let dst_data = dst.as_ptr().cast::<u8>();
         let mut cv_dst = dst.as_image_mat_mut()?;
         opencv::imgproc::sobel(
             &*cv_src,
@@ -159,6 +190,12 @@ where
             // own constant; there is no `From` impl for it.
             border_type as i32,
         )?;
+        // Had OpenCV wanted a different size or type it would have written into
+        // a new buffer and left `dst` all zeros. Not expected, but an error is
+        // better than a black result.
+        if cv_dst.data() != dst_data {
+            return Err(SobelError::OutputReallocated);
+        }
         Ok(dst)
     }
 }
@@ -347,9 +384,6 @@ mod tests {
                 "{name}: {res:?}"
             );
         }
-        // A narrower output than the input.
-        let res: Result<Array2<f32>, SobelError> = ramp.mapv(f64::from).sobel_def(1, 0);
-        assert!(matches!(res, Err(SobelError::OpenCvError(_))), "{res:?}");
     }
 
     #[test]
@@ -381,5 +415,37 @@ mod tests {
         let a: Array2<f32> = transposed.sobel_def(0, 1).unwrap();
         let b: Array2<f32> = transposed.to_owned().sobel_def(0, 1).unwrap();
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn test_sobel_unit_length_axes() {
+        // ndarray keeps an arbitrary stride on a length-1 axis: 0 for a one-row
+        // slice, even after `to_owned`, which OpenCV used to reject here. Each
+        // must match the same values laid out with default strides.
+        let base = texture(8, 9, 3);
+        let fresh3 = |v: ArrayView3<f32>| {
+            Array3::from_shape_vec(v.raw_dim(), v.iter().copied().collect()).unwrap()
+        };
+        let fresh2 = |v: ArrayView2<f32>| {
+            Array2::from_shape_vec(v.raw_dim(), v.iter().copied().collect()).unwrap()
+        };
+        for view in [
+            base.slice(s![3..4, .., ..]),
+            base.slice(s![.., 4..5, ..]),
+            base.slice(s![2..3, 5..6, ..]),
+        ] {
+            let expected: Array3<f32> = fresh3(view).sobel_def(1, 0).unwrap();
+            let a: Array3<f32> = view.sobel_def(1, 0).unwrap();
+            let b: Array3<f32> = view.to_owned().sobel_def(1, 0).unwrap();
+            assert_eq!(a, expected, "{:?}", view.strides());
+            assert_eq!(b, expected, "{:?}", view.strides());
+        }
+        let plane = base.slice(s![.., .., 0]).to_owned();
+        let row = plane.slice(s![3..4, ..]);
+        let expected: Array2<f32> = fresh2(row).sobel_def(1, 0).unwrap();
+        let a: Array2<f32> = row.sobel_def(1, 0).unwrap();
+        let b: Array2<f32> = plane.row(3).insert_axis(Axis(0)).sobel_def(1, 0).unwrap();
+        assert_eq!(a, expected);
+        assert_eq!(b, expected);
     }
 }

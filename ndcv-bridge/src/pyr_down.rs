@@ -2,6 +2,7 @@
 use crate::conversions::*;
 use crate::gaussian::BorderType;
 use ndarray::*;
+use opencv::core::MatTraitConst;
 
 #[derive(Debug, thiserror::Error)]
 pub enum PyrDownError {
@@ -9,6 +10,8 @@ pub enum PyrDownError {
     ConversionError(#[from] crate::conversions::ConversionError),
     #[error("OpenCV error: {0}")]
     OpenCvError(#[from] opencv::Error),
+    #[error("OpenCV wrote to a buffer of its own instead of the output array")]
+    OutputReallocated,
 }
 
 mod seal {
@@ -51,7 +54,7 @@ impl<
 > NdCvPyrDown<T, D> for ArrayBase<S, D>
 where
     ndarray::ArrayBase<S, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>,
-    for<'a> ndarray::CowArray<'a, T, D>: crate::conversions::NdAsImage<T, D>,
+    for<'a> ndarray::ArrayView<'a, T, D>: crate::conversions::NdAsImage<T, D>,
     ndarray::Array<T, D>: crate::conversions::NdAsImageMut<T, D>,
 {
     fn pyr_down(&self, border_type: BorderType) -> Result<ndarray::Array<T, D>, PyrDownError> {
@@ -62,16 +65,24 @@ where
             .take(2)
             .for_each(|n| *n = n.div_ceil(2));
         let mut dst = ndarray::Array::zeros(dim);
-        // OpenCV writes the first output pixel unconditionally, which for an
-        // empty array is ndarray's dangling pointer.
+        // OpenCV rejects empty input; an empty image has an empty half.
         if self.is_empty() {
             return Ok(dst);
         }
-        // The Mat conversion keeps only the outer stride, so a view that is not
-        // in standard layout would be read as if it were. A no-op borrow when
-        // the input already is.
+        // The Mat conversion keeps only the outer stride, so input that is not
+        // in standard layout is copied first. Contiguous input is borrowed, but
+        // ndarray leaves the stride of a length-1 axis arbitrary (0 for a
+        // one-row slice), which OpenCV rejects; a view over the same slice has
+        // the default strides, without a copy.
         let src = self.as_standard_layout();
+        let src = match src.as_slice() {
+            Some(data) => {
+                ArrayView::from_shape(self.raw_dim(), data).map_err(ConversionError::from)?
+            }
+            None => src.view(),
+        };
         let cv_src = src.as_image_mat()?;
+        let dst_data = dst.as_ptr().cast::<u8>();
         let mut cv_dst = dst.as_image_mat_mut()?;
         opencv::imgproc::pyr_down(
             &*cv_src,
@@ -84,6 +95,12 @@ where
             // own constant; there is no `From` impl for it.
             border_type as i32,
         )?;
+        // Had OpenCV wanted a different size or type it would have written into
+        // a new buffer and left `dst` all zeros. Not expected, but an error is
+        // better than a black result.
+        if cv_dst.data() != dst_data {
+            return Err(PyrDownError::OutputReallocated);
+        }
         Ok(dst)
     }
 }
@@ -216,6 +233,47 @@ mod tests {
         assert_eq!(
             transposed.pyr_down_def().unwrap(),
             transposed.to_owned().pyr_down_def().unwrap()
+        );
+    }
+
+    #[test]
+    fn test_pyr_down_unit_length_axes() {
+        // ndarray keeps an arbitrary stride on a length-1 axis: 0 for a one-row
+        // slice, even after `to_owned`. Each must match the same values laid
+        // out with default strides.
+        let base = ramp(8, 9, 3).mapv(f32::from);
+        let fresh3 = |v: ArrayView3<f32>| {
+            Array3::from_shape_vec(v.raw_dim(), v.iter().copied().collect()).unwrap()
+        };
+        let fresh2 = |v: ArrayView2<f32>| {
+            Array2::from_shape_vec(v.raw_dim(), v.iter().copied().collect()).unwrap()
+        };
+        for view in [
+            base.slice(s![3..4, .., ..]),
+            base.slice(s![.., 4..5, ..]),
+            base.slice(s![2..3, 5..6, ..]),
+        ] {
+            assert_eq!(
+                view.pyr_down_def().unwrap(),
+                fresh3(view).pyr_down_def().unwrap(),
+                "{:?}",
+                view.strides()
+            );
+            assert_eq!(
+                view.to_owned().pyr_down_def().unwrap(),
+                fresh3(view).pyr_down_def().unwrap()
+            );
+        }
+        let plane = base.slice(s![.., .., 0]).to_owned();
+        let row = plane.slice(s![3..4, ..]);
+        assert_eq!(
+            row.pyr_down_def().unwrap(),
+            fresh2(row).pyr_down_def().unwrap()
+        );
+        let inserted = plane.row(3).insert_axis(Axis(0));
+        assert_eq!(
+            inserted.pyr_down_def().unwrap(),
+            fresh2(row).pyr_down_def().unwrap()
         );
     }
 }

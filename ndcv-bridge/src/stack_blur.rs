@@ -11,7 +11,7 @@ pub enum StackBlurError {
     #[error("OpenCV error: {0}")]
     OpenCvError(#[from] opencv::Error),
     #[error(
-        "kernel {width}x{height} is wider than {max}, where OpenCV's sums overflow for this type"
+        "kernel {width}x{height} is wider than {max}, past which OpenCV's integer arithmetic overflows for this type"
     )]
     KernelTooLarge { width: u16, height: u16, max: u16 },
     #[error("OpenCV wrote to a buffer of its own instead of the output array")]
@@ -27,9 +27,13 @@ mod seal {
     // them at any kernel past 3: a flat 65535 `u16` image blurs to 43775 at
     // size 5, and a flat 30000 `i16` one to 20963. They are left out.
     impl Sealed for u8 {
-        // OpenCV sums `255 * (r + 1)^2` in an `int`, which overflows past
-        // radius 2900: a flat 255 image comes back black from size 5803 up.
-        const MAX_KERNEL: u16 = 5801;
+        // Two overflows in OpenCV's u8 path, the same on 4.12 and 5.0. The
+        // vectorised column pass multiplies each column sum by a fixed-point
+        // reciprocal in a signed 32-bit lane, which overflows for kernel
+        // heights 363 to 509: every value of 128 or more comes back as 255.
+        // And the sums themselves, `255 * (r + 1)^2` in an `int`, overflow past
+        // size 5801. 361 is below both, on either axis.
+        const MAX_KERNEL: u16 = 361;
     }
     impl Sealed for f32 {
         const MAX_KERNEL: u16 = u16::MAX;
@@ -64,8 +68,9 @@ pub trait NdCvStackBlur<
     /// `kernel_size` is `(width, height)`, as in [`crate::NdCvBlur::blur`].
     /// Both must be odd and positive; anything else comes back as a
     /// [`StackBlurError::OpenCvError`] rather than panicking. For `u8` a size
-    /// above 5801 is a [`StackBlurError::KernelTooLarge`]. A size of 1 on an
-    /// axis leaves that axis unfiltered.
+    /// above 361 on either axis is a [`StackBlurError::KernelTooLarge`]; larger
+    /// sizes overflow inside OpenCV. A size of 1 on an axis leaves that axis
+    /// unfiltered.
     fn stack_blur(
         &self,
         kernel_size: impl Into<U16Vec2>,
@@ -277,19 +282,21 @@ mod tests {
 
     #[test]
     fn test_stack_blur_u8_kernel_limit() {
-        // The widest u8 kernel still sums without overflow, and one size wider
-        // is an error rather than a black image.
-        let flat = Array2::<u8>::from_elem((40, 40), 255);
-        assert!(
-            flat.stack_blur((5801, 5801))
-                .unwrap()
-                .iter()
-                .all(|&v| v == 255)
-        );
-        for size in [(5803, 3), (3, 5803)] {
+        // Large enough for OpenCV's vectorised column pass, where heights 363 to
+        // 509 overflow, and a value above 127, which is what they turn white.
+        let flat = Array3::<u8>::from_elem((600, 600, 3), 200);
+        for size in [(1, 361), (361, 1), (361, 361)] {
+            let res = flat.stack_blur(size).unwrap();
+            assert!(
+                res.iter().all(|&v| v.abs_diff(200) <= 2),
+                "{size:?}: {:?}",
+                res.iter().max()
+            );
+        }
+        for size in [(1, 363), (363, 1), (509, 509), (5803, 3)] {
             let err = flat.stack_blur(size).unwrap_err();
             assert!(
-                matches!(err, StackBlurError::KernelTooLarge { max: 5801, .. }),
+                matches!(err, StackBlurError::KernelTooLarge { max: 361, .. }),
                 "{size:?}: {err}"
             );
         }

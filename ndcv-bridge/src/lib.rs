@@ -60,6 +60,8 @@ pub mod morphology;
 #[cfg(feature = "opencv")]
 pub mod normalize;
 #[cfg(feature = "opencv")]
+pub mod pyr_down;
+#[cfg(feature = "opencv")]
 pub mod resize;
 #[cfg(feature = "opencv")]
 pub mod types;
@@ -103,6 +105,8 @@ pub use conversions::{MatAsNd, NdAsImage, NdAsImageMut, NdAsMat, NdAsMatMut};
 pub use morphology::{MorphType, NdCvMorphologyEx};
 #[cfg(feature = "opencv")]
 pub use normalize::{NdCvNormalize, NormType};
+#[cfg(feature = "opencv")]
+pub use pyr_down::{NdCvPyrDown, PyrDownError};
 #[cfg(feature = "opencv")]
 pub use resize::{Interpolation, NdCvResize};
 

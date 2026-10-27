@@ -64,6 +64,8 @@ pub mod pyr_down;
 #[cfg(feature = "opencv")]
 pub mod resize;
 #[cfg(feature = "opencv")]
+pub mod sobel;
+#[cfg(feature = "opencv")]
 pub mod types;
 
 // pub mod codec;
@@ -109,6 +111,8 @@ pub use normalize::{NdCvNormalize, NormType};
 pub use pyr_down::{NdCvPyrDown, PyrDownError};
 #[cfg(feature = "opencv")]
 pub use resize::{Interpolation, NdCvResize};
+#[cfg(feature = "opencv")]
+pub use sobel::{NdCvSobel, SobelError, SobelKernel};
 
 pub(crate) mod prelude_ {
     pub use crate::errors::NdCvError;

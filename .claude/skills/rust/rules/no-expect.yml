@@ -1,0 +1,17 @@
+id: no-expect
+message: Do not use expect - propagate the error instead
+severity: error
+language: Rust
+# Guideline 15. Same hazard as `no-unwrap`: a message makes the panic easier to read but does
+# not stop it aborting the caller's process. A caller that can handle the case
+# never gets the chance. Where the invariant really is unbreakable, say why in a
+# comment and leave the `expect` - the message is the right place for it.
+rule:
+  pattern: $ITEM.expect($MSG)
+  not:
+    inside:
+      stopBy: end
+      matches: is-test
+ignores:
+  - '**/tests/**'
+  - '**/benches/**'

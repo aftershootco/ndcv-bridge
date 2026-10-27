@@ -1,0 +1,20 @@
+id: no-as-cast
+message: "`as` cast - use `From`/`TryFrom` so a lossy conversion is a compile or runtime error, not a silent wrap"
+severity: warning
+language: Rust
+# Guideline 16. `as` between integers truncates, wraps and flips sign in silence, and
+# `f64 as u32` saturates - the bug surfaces far from the cast. `From` for the
+# widening direction and `TryFrom` for the narrowing one make the loss explicit.
+# Warning rather than error because pointer casts and `as _` in FFI have no
+# trait equivalent - justify those in a comment and silence the rule there.
+rule:
+  pattern: $EXPR as $TYPE
+  not:
+    inside:
+      stopBy: end
+      any:
+        - matches: is-test
+        - matches: in-test-module
+ignores:
+  - '**/tests/**'
+  - '**/benches/**'

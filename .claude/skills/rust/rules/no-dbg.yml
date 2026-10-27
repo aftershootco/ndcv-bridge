@@ -1,0 +1,11 @@
+id: no-dbg
+message: Remove `dbg!` — it is a debugging leftover, not for committed code
+severity: warning
+language: Rust
+rule:
+  kind: macro_invocation
+  any:
+    - pattern: dbg!($$$ITEMS)
+    - pattern: dbg!()
+# No autofix: `dbg!(x)` returns `x` but `dbg!(a, b)` returns a tuple, so a blind
+# unwrap to `$$$ITEMS` produces invalid code for the multi-arg case. Delete by hand.

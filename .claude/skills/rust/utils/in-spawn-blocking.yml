@@ -1,0 +1,16 @@
+id: in-spawn-blocking
+language: Rust
+
+# Matches the closure handed to `spawn_blocking` / `block_in_place`, which is
+# exactly where a blocking call belongs. `no-blocking-in-async` excludes it via
+# `not: inside: { stopBy: end, matches: in-spawn-blocking }`.
+rule:
+  kind: closure_expression
+  inside:
+    stopBy: end
+    any:
+      - pattern: spawn_blocking($$$ARGS)
+      - pattern: tokio::task::spawn_blocking($$$ARGS)
+      - pattern: $RUNTIME.spawn_blocking($$$ARGS)
+      - pattern: block_in_place($$$ARGS)
+      - pattern: tokio::task::block_in_place($$$ARGS)

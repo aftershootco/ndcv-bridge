@@ -1,0 +1,16 @@
+id: no-unwrap
+message: Do not use unwrap
+severity: error
+language: Rust
+rule:
+  pattern: $ITEM.unwrap()
+  not:
+    inside:
+      stopBy: end
+      matches: is-test
+# Integration tests and benches are wholly test/bench code where unwrap is
+# idiomatic; unit-test modules inside src/ are handled by the is-test util
+# (#[cfg(test)] mods) instead.
+ignores:
+  - '**/tests/**'
+  - '**/benches/**'

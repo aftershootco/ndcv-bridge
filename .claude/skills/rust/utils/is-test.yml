@@ -1,0 +1,36 @@
+id: is-test
+language: Rust
+
+# Matches a function that is test code, so production-only lints (no-unwrap,
+# no-println) can exclude it via `not: inside: matches: is-test`. Two shapes:
+#   1. a `#[test]` / `#[tokio::test]` function, and
+#   2. any function inside a `#[cfg(test)] mod { … }` (unit-test modules and
+#      their non-`#[test]` helpers).
+rule:
+  kind: function_item
+  any:
+    - follows:
+        stopBy:
+          kind: function_item
+        matches: test-token
+    - inside:
+        stopBy: end
+        kind: mod_item
+        follows:
+          stopBy: end
+          matches: cfg-test-token
+
+utils:
+  test-token:
+    kind: attribute_item
+    has:
+      kind: attribute
+      has:
+        any:
+          - pattern: test
+          - pattern: tokio::test
+  cfg-test-token:
+    kind: attribute_item
+    has:
+      kind: attribute
+      regex: '^cfg\(test\)$'

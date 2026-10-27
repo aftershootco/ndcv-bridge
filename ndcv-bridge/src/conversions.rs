@@ -648,3 +648,111 @@ fn test_3d_2x1_with_3_channels() {
     //     assert_eq!(x, 200u8);
     // });
 }
+
+#[cfg(test)]
+mod layout_tests {
+    use super::*;
+    use crate::NdCvGaussianBlur;
+    use ndarray::s;
+
+    // f32 rather than u8: OpenCV's u8 Gaussian path never calls locateROI,
+    // so it hides the zero-step failure.
+    fn base3() -> ndarray::Array3<f32> {
+        ndarray::Array3::from_shape_fn((8, 6, 3), |(r, c, ch)| (r * 31 + c * 7 + ch * 3) as f32)
+    }
+
+    fn base2() -> ndarray::Array2<f32> {
+        ndarray::Array2::from_shape_fn((8, 6), |(r, c)| (r * 31 + c * 7) as f32)
+    }
+
+    /// The same elements in a freshly allocated standard-layout array, built
+    /// without `to_owned`, which keeps the source's strides.
+    fn standard<D: ndarray::Dimension>(view: ndarray::ArrayView<f32, D>) -> ndarray::Array<f32, D> {
+        ndarray::Array::from_shape_vec(view.raw_dim(), view.iter().copied().collect()).unwrap()
+    }
+
+    #[test]
+    fn single_row_slice_of_image_is_usable_by_opencv() {
+        // ndarray gives the length-1 row axis a stride of 0.
+        let base = base3();
+        let row = base.slice(s![3..4, .., ..]);
+        let got = row.gaussian_blur_def((3, 3), 1.0).unwrap();
+        assert_eq!(got, standard(row).gaussian_blur_def((3, 3), 1.0).unwrap());
+    }
+
+    #[test]
+    fn inserted_row_axis_is_usable_by_opencv() {
+        // insert_axis gives the new length-1 axis a stride of 1.
+        let base = base3();
+        let row = base.slice(s![3, .., ..]).insert_axis(ndarray::Axis(0));
+        let got = row.gaussian_blur_def((3, 3), 1.0).unwrap();
+        assert_eq!(got, standard(row).gaussian_blur_def((3, 3), 1.0).unwrap());
+    }
+
+    #[test]
+    fn single_row_slice_of_plane_is_usable_by_opencv() {
+        let base = base2();
+        // ndarray gives the length-1 row axis a stride of 0.
+        let row = base.slice(s![3..4, ..]);
+        let got = row.gaussian_blur_def((3, 3), 1.0).unwrap();
+        assert_eq!(got, standard(row).gaussian_blur_def((3, 3), 1.0).unwrap());
+    }
+
+    #[test]
+    fn single_column_slice_of_plane_is_usable_by_opencv() {
+        let base = base2();
+        // ndarray gives the length-1 column axis a stride of 0.
+        let col = base.slice(s![.., 2..3]);
+        let got = col.gaussian_blur_def((3, 3), 1.0).unwrap();
+        assert_eq!(got, standard(col).gaussian_blur_def((3, 3), 1.0).unwrap());
+    }
+
+    #[test]
+    fn column_cropped_image_converts_without_copy() {
+        let base = base3();
+        let crop = base.slice(s![.., 1..5, ..]);
+        let mat = crop.as_image_mat().unwrap();
+        let back: ndarray::ArrayView3<f32> = mat.as_ndarray().unwrap();
+        assert_eq!(back, crop);
+        assert_eq!(back.as_ptr(), crop.as_ptr());
+    }
+
+    #[test]
+    fn strided_columns_of_plane_are_rejected() {
+        let base = base2();
+        // A Mat has no stride for its innermost axis, so this used to be
+        // read as the first three columns.
+        let every_other = base.slice(s![.., ..;2]);
+        let err = every_other.as_image_mat().unwrap_err();
+        assert!(
+            matches!(err.kind, ConversionErrorKind::NonContiguousData),
+            "unexpected error kind: {:?}",
+            err.kind
+        );
+    }
+
+    #[test]
+    fn reversed_rows_are_rejected() {
+        let base = base2();
+        // A Mat step is unsigned; the negative stride used to wrap around.
+        let flipped = base.slice(s![..;-1, ..]);
+        let err = flipped.as_image_mat().unwrap_err();
+        assert!(
+            matches!(err.kind, ConversionErrorKind::NonContiguousData),
+            "unexpected error kind: {:?}",
+            err.kind
+        );
+    }
+
+    #[test]
+    fn strided_channels_of_image_are_rejected() {
+        let base = ndarray::Array3::<f32>::zeros((4, 4, 6));
+        let every_other = base.slice(s![.., .., ..;2]);
+        let err = every_other.as_image_mat().unwrap_err();
+        assert!(
+            matches!(err.kind, ConversionErrorKind::NonContiguousData),
+            "unexpected error kind: {:?}",
+            err.kind
+        );
+    }
+}

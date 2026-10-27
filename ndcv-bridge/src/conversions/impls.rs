@@ -19,27 +19,35 @@ fn mat_steps<T>(
     dense: usize,
 ) -> Result<Vec<usize>, ConversionError> {
     let stepped = shape.len().saturating_sub(dense);
-    // Element stride a contiguous layout would have at the current axis
-    let mut contiguous = 1;
-    let mut steps = Vec::with_capacity(stepped);
-    for (axis, (&len, &stride)) in shape.iter().zip(strides).enumerate().rev() {
-        let stride = if len <= 1 {
-            contiguous
-        } else {
-            let stride =
-                usize::try_from(stride).map_err(|_| ConversionErrorKind::NonContiguousData)?;
-            if axis >= stepped && stride != contiguous {
-                Err(ConversionErrorKind::NonContiguousData)?;
+    let innermost_first = shape
+        .iter()
+        .zip(strides)
+        .enumerate()
+        .rev()
+        // The state is the element stride a contiguous layout would have at
+        // the current axis
+        .scan(1, |contiguous, (axis, (&len, &stride))| {
+            let stride = if len <= 1 {
+                Ok(*contiguous)
+            } else {
+                usize::try_from(stride)
+                    .ok()
+                    .filter(|&stride| axis < stepped || stride == *contiguous)
+                    .ok_or(ConversionErrorKind::NonContiguousData)
+            };
+            if let Ok(stride) = stride {
+                *contiguous = stride * len.max(1);
             }
+            Some((axis, stride))
+        })
+        // Dense axes still go through the checks above but yield no step
+        .filter_map(|(axis, stride)| {
             stride
-        };
-        if axis < stepped {
-            steps.push(stride * core::mem::size_of::<T>());
-        }
-        contiguous = stride * len.max(1);
-    }
-    steps.reverse();
-    Ok(steps)
+                .map(|stride| (axis < stepped).then_some(stride * core::mem::size_of::<T>()))
+                .transpose()
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(innermost_first.into_iter().rev().collect())
 }
 
 pub(crate) unsafe fn ndarray_to_mat_regular<

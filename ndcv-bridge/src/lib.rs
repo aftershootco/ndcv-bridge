@@ -60,7 +60,11 @@ pub mod morphology;
 #[cfg(feature = "opencv")]
 pub mod normalize;
 #[cfg(feature = "opencv")]
+pub mod pyr_down;
+#[cfg(feature = "opencv")]
 pub mod resize;
+#[cfg(feature = "opencv")]
+pub mod sobel;
 #[cfg(feature = "opencv")]
 pub mod stack_blur;
 #[cfg(feature = "opencv")]
@@ -106,7 +110,11 @@ pub use morphology::{MorphType, NdCvMorphologyEx};
 #[cfg(feature = "opencv")]
 pub use normalize::{NdCvNormalize, NormType};
 #[cfg(feature = "opencv")]
+pub use pyr_down::{NdCvPyrDown, PyrDownError};
+#[cfg(feature = "opencv")]
 pub use resize::{Interpolation, NdCvResize};
+#[cfg(feature = "opencv")]
+pub use sobel::{NdCvSobel, SobelError, SobelKernel};
 #[cfg(feature = "opencv")]
 pub use stack_blur::{NdCvStackBlur, StackBlurError};
 

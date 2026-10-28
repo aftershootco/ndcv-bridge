@@ -84,7 +84,7 @@ pub use distance_transform::{
 };
 pub use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 pub use fir::NdFir;
-pub use gaussian::{BorderType, NdCvGaussianBlur, NdCvGaussianBlurInPlace};
+pub use gaussian::{BorderType, NdCvGaussianBlur, NdCvGaussianBlurInPlace, NdCvParGaussianBlur};
 pub use image::NdImage;
 pub use roi::{NdRoiZeroPadded, Roi as NdRoi, RoiMut as NdRoiMut};
 

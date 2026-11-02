@@ -379,6 +379,32 @@ pub fn test_non_continuous_3d() {
 }
 
 #[test]
+pub fn test_single_column_slice_with_zero_column_stride_converts() {
+    // Slicing an axis down to length 1 makes ndarray set its stride to 0.
+    // The column stride is never used with one column, so this must not be
+    // rejected as non-contiguous.
+    let array =
+        ndarray::Array3::<u8>::from_shape_fn((4, 4, 3), |(i, j, k)| (i * 16 + j * 4 + k) as u8);
+    let slice = array.slice(ndarray::s![.., 1..2, ..]);
+    assert_eq!(slice.strides()[1], 0);
+    let mat = unsafe { impls::ndarray_to_mat_consolidated(&slice) }.unwrap();
+    let arr = unsafe { impls::mat_to_ndarray::<u8, Ix3>(&mat).unwrap() };
+    assert_eq!(slice, arr);
+}
+
+#[test]
+pub fn test_single_pixel_slice_with_zero_strides_converts() {
+    // 1x1 slice: both spatial strides are 0.
+    let array =
+        ndarray::Array3::<u8>::from_shape_fn((4, 4, 3), |(i, j, k)| (i * 16 + j * 4 + k) as u8);
+    let slice = array.slice(ndarray::s![2..3, 1..2, ..]);
+    assert_eq!(&slice.strides()[..2], &[0, 0]);
+    let mat = unsafe { impls::ndarray_to_mat_consolidated(&slice) }.unwrap();
+    let arr = unsafe { impls::mat_to_ndarray::<u8, Ix3>(&mat).unwrap() };
+    assert_eq!(slice, arr);
+}
+
+#[test]
 pub fn test_5d_array() {
     let array = ndarray::Array5::<f32>::ones((1, 2, 3, 4, 5));
     let mat = unsafe { impls::ndarray_to_mat_consolidated(&array) }.unwrap();

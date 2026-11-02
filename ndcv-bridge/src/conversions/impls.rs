@@ -79,7 +79,12 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
         // Basically the second last stride is used to jump from one column to next
         // But opencv only keeps ndims - 1 strides so we can't have the column stride as that
         // will be lost
-        if shape.last() != strides.get(strides.len() - 2).map(|x| *x as usize).as_ref() {
+        // With at most one column that stride is never used to reach a pixel, and
+        // ndarray sets it to 0 when slicing an axis down to length 1, so skip the check.
+        let columns = shape[shape.len() - 2];
+        if columns > 1
+            && shape.last() != strides.get(strides.len() - 2).map(|x| *x as usize).as_ref()
+        {
             Err(ConversionErrorKind::NonContiguousData)?;
         }
     } else if shape.len() == 1 {

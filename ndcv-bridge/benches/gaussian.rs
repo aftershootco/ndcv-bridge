@@ -263,3 +263,35 @@ mod realistic {
             .unwrap();
     }
 }
+
+/// One OpenCV call against `par_gaussian_blur` on a 12 MP float image.
+#[divan::bench_group]
+mod parallel {
+    use super::*;
+
+    #[divan::bench(args = [2.0, 10.0])]
+    fn single_4000x3000_f32x3(bencher: divan::Bencher, sigma: f64) {
+        let x = Array3::<f32>::from_shape_fn((3000, 4000, 3), |(i, j, c)| {
+            ((i * 31 + j * 17 + c * 7) % 255) as f32 / 255.0
+        });
+        bencher.bench_local(|| {
+            black_box(
+                x.gaussian_blur((0, 0), (sigma, sigma), BorderType::BorderDefault)
+                    .unwrap(),
+            )
+        });
+    }
+
+    #[divan::bench(args = [2.0, 10.0])]
+    fn par_4000x3000_f32x3(bencher: divan::Bencher, sigma: f64) {
+        let x = Array3::<f32>::from_shape_fn((3000, 4000, 3), |(i, j, c)| {
+            ((i * 31 + j * 17 + c * 7) % 255) as f32 / 255.0
+        });
+        bencher.bench_local(|| {
+            black_box(
+                x.par_gaussian_blur((0, 0), (sigma, sigma), BorderType::BorderDefault)
+                    .unwrap(),
+            )
+        });
+    }
+}

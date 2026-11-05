@@ -1,0 +1,25 @@
+id: no-panic-macros
+message: "Panic macro - return a `Result` or handle the case explicitly"
+severity: error
+language: Rust
+# Guideline 15. `panic!` aborts a caller that could have handled the error; `todo!` and
+# `unimplemented!` are placeholders that compile, so they reach production
+# looking finished. `unreachable!` is deliberately not matched: it asserts an
+# invariant the type system cannot express, which is a claim about the code
+# rather than a missing branch.
+rule:
+  kind: macro_invocation
+  any:
+    - pattern: panic!($$$ITEMS)
+    - pattern: panic!()
+    - pattern: todo!($$$ITEMS)
+    - pattern: todo!()
+    - pattern: unimplemented!($$$ITEMS)
+    - pattern: unimplemented!()
+  not:
+    inside:
+      stopBy: end
+      matches: is-test
+ignores:
+  - '**/tests/**'
+  - '**/benches/**'

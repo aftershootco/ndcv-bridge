@@ -1,0 +1,8 @@
+id: no-static-mut
+message: "`static mut` is global mutable state — inject the value as a dependency instead"
+severity: error
+language: Rust
+# Guideline 7. Every read or write is `unsafe`, and the mutation is invisible at
+# the call site, so tests can no longer be run in any order.
+rule:
+  pattern: "static mut $NAME: $TYPE = $INIT;"

@@ -1,0 +1,20 @@
+id: no-println
+message: Do not use println! use `tracing::info`/`tracing::trace`/`tracing::debug` instead
+severity: warning
+language: Rust
+rule:
+  kind: macro_invocation
+  pattern: println!($$$ITEMS)
+  not:
+    inside:
+      stopBy: end
+      matches: is-test
+
+fix: tracing::info!($$$ITEMS)
+# build.rs emits `cargo:` directives via println! (required); examples are CLIs
+# whose stdout is the intended output. Neither is application logging.
+ignores:
+  - '**/build.rs'
+  - '**/examples/**'
+  - '**/tests/**'
+  - '**/benches/**'

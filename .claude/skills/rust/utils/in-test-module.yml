@@ -1,0 +1,15 @@
+id: in-test-module
+language: Rust
+
+# Matches a `#[cfg(test)] mod { … }`, so production-only lints can exclude
+# everything declared in it — including items that are not inside a function
+# and therefore invisible to the `is-test` util (statics, consts, helper
+# structs). Use as `not: inside: { stopBy: end, matches: in-test-module }`.
+rule:
+  kind: mod_item
+  follows:
+    stopBy: end
+    kind: attribute_item
+    has:
+      kind: attribute
+      regex: '^cfg\(test\)$'

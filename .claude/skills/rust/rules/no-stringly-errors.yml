@@ -1,0 +1,20 @@
+id: no-stringly-errors
+message: "Error flattened to a `String` - keep it typed with a `thiserror` enum"
+severity: warning
+language: Rust
+# Guideline 15. `.to_string()` on an error throws away the source chain, the
+# variant and any structured context, so callers can only match on prose and
+# `error-stack` has nothing left to attach to. Wrap it in a variant of your own
+# error type instead - see `references/crates.md`.
+rule:
+  any:
+    - pattern: $EXPR.map_err(|$ERR| $ERR.to_string())
+    - pattern: $EXPR.map_err(|$ERR| format!($$$ITEMS))
+    - pattern: $EXPR.map_err(|$ERR| $ERR.to_string().into())
+  not:
+    inside:
+      stopBy: end
+      matches: is-test
+ignores:
+  - '**/tests/**'
+  - '**/benches/**'

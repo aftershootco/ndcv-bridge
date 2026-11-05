@@ -1,0 +1,12 @@
+# ast-grep config for the rules shipped with this skill. Point ast-grep at it
+# explicitly so the rules work in any project, whether or not that project has
+# an sgconfig.yml of its own. Resolve symlinks first: ast-grep's rule loader
+# does not follow them, and a symlinked skill dir loads zero rules and exits 0.
+#
+#   ast-grep scan -c "$(realpath <this skill dir>/sgconfig.yml)" src/
+#
+# See references/lints.md.
+ruleDirs:
+  - rules
+utilDirs:
+  - utils

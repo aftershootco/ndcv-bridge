@@ -73,6 +73,7 @@ define_color_space!(Bgr, 3, Ix3);
 define_color_space!(Rgba, 4, Ix3);
 define_color_space!(Lab, 3, Ix3);
 define_color_space!(Gray, 1, Ix2);
+define_color_space!(Hsv, 3, Ix3);
 
 pub trait ToColorSpace<T, U, Dst>: ColorSpace<T>
 where
@@ -230,6 +231,17 @@ impl_color_converter!(Rgba, Rgb, opencv::imgproc::COLOR_RGBA2RGB => u8,  u16, f3
 impl_color_converter!(Rgb, Rgba, opencv::imgproc::COLOR_RGB2RGBA => u8,  u16, f32,);
 impl_color_converter!(Rgb, Gray, opencv::imgproc::COLOR_RGB2GRAY => u8,  u16, f32,);
 impl_color_converter!(Gray, Rgb, opencv::imgproc::COLOR_GRAY2RGB => u8,  u16, f32,);
+impl_color_converter!(Bgr, Gray, opencv::imgproc::COLOR_BGR2GRAY => u8,  u16, f32,);
+impl_color_converter!(Gray, Bgr, opencv::imgproc::COLOR_GRAY2BGR => u8,  u16, f32,);
+// HSV follows cv2's non-`_FULL` codes, so `Hsv<u8>` is what
+// `cv2.cvtColor(img, cv2.COLOR_RGB2HSV)` gives on a `uint8` image: `H` halved
+// into `0..180` (red 0, green 60, blue 120), `S` and `V` in `0..=255`.
+// `Hsv<f32>` takes `Rgb<f32>` in `0..=1` and holds `H` in degrees, `0..360`,
+// with `S` and `V` in `0..=1`. OpenCV has no 16-bit HSV conversion.
+// `Hsv<u8>` is lossy: halving `H` costs up to 6 levels per channel on the
+// way back to `Rgb<u8>` (measured over all 2^24 colours, the same in cv2).
+impl_color_converter!(Rgb, Hsv, opencv::imgproc::COLOR_RGB2HSV => u8, f32,);
+impl_color_converter!(Hsv, Rgb, opencv::imgproc::COLOR_HSV2RGB => u8, f32,);
 // `Lab<f32>` is CIE Lab as written: `L` in `0..=100`, `a*`/`b*` roughly
 // `-127..=127`. `Lab<u8>` is OpenCV's 8-bit packing of the same values, with
 // `L` scaled by `255/100` and `a*`/`b*` offset by `+128`, so neutral sits at
@@ -1251,5 +1263,115 @@ mod tests {
         let rgb_white: CowArray<u8, Ix3> = gray_white.cvt::<Gray<u8>, Rgb<u8>>();
         assert_eq!(rgb_white.shape(), [8, 12, 3]);
         assert!(rgb_white.iter().all(|&v| v == 255));
+    }
+    #[test]
+    fn test_bgr_to_gray_matches_cv2() {
+        // Same pixels as cv2.cvtColor(px, cv2.COLOR_BGR2GRAY). Channel 0 is
+        // blue here, so swapping in the RGB weights would change every
+        // non-neutral value.
+        let px: [[u8; 3]; 7] = [
+            [200, 150, 100],
+            [255, 0, 0],
+            [0, 255, 0],
+            [0, 0, 255],
+            [30, 30, 30],
+            [255, 255, 255],
+            [10, 200, 90],
+        ];
+        let bgr = Array3::from_shape_fn((1, 7, 3), |(_, x, c)| px[x][c]);
+
+        let gray: CowArray<u8, Ix2> = bgr.cvt::<Bgr<u8>, Gray<u8>>();
+        assert_eq!(gray.row(0).to_vec(), vec![141, 29, 150, 76, 30, 255, 145]);
+
+        let bgr_f32 = bgr.mapv(f32::from);
+        let gray_f32: CowArray<f32, Ix2> = bgr_f32.cvt::<Bgr<f32>, Gray<f32>>();
+        let expected = [140.75, 29.07, 149.685, 76.245, 30.0, 255.0, 145.45];
+        for (got, want) in gray_f32.iter().zip(expected) {
+            assert!((got - want).abs() < 1e-3, "got {got}, want {want}");
+        }
+
+        let back: CowArray<u8, Ix3> = gray.cvt::<Gray<u8>, Bgr<u8>>();
+        assert_eq!(back.shape(), [1, 7, 3]);
+        assert_eq!(back[[0, 0, 0]], 141);
+        assert_eq!(back[[0, 0, 2]], 141);
+    }
+
+    #[test]
+    fn test_rgb_to_hsv_matches_cv2() {
+        // cv2.cvtColor(px, cv2.COLOR_RGB2HSV) on uint8 and on float32 / 255.
+        let px: [[u8; 3]; 7] = [
+            [200, 150, 100],
+            [255, 0, 0],
+            [0, 255, 0],
+            [0, 0, 255],
+            [30, 30, 30],
+            [255, 255, 255],
+            [10, 200, 90],
+        ];
+        let rgb = Array3::from_shape_fn((1, 7, 3), |(_, x, c)| px[x][c]);
+
+        let hsv: CowArray<u8, Ix3> = rgb.cvt::<Rgb<u8>, Hsv<u8>>();
+        let expected: [[u8; 3]; 7] = [
+            [15, 128, 200],
+            [0, 255, 255],
+            [60, 255, 255],
+            [120, 255, 255],
+            [0, 0, 30],
+            [0, 0, 255],
+            [73, 242, 200],
+        ];
+        for (x, want) in expected.iter().enumerate() {
+            assert_eq!(hsv.slice(s![0, x, ..]).to_vec(), want.to_vec(), "pixel {x}");
+        }
+
+        let rgb_f32 = rgb.mapv(|v| f32::from(v) / 255.0);
+        let hsv_f32: CowArray<f32, Ix3> = rgb_f32.cvt::<Rgb<f32>, Hsv<f32>>();
+        let expected_f32: [[f32; 3]; 7] = [
+            [30.0, 0.5, 0.784_313_7],
+            [0.0, 1.0, 1.0],
+            [120.0, 1.0, 1.0],
+            [240.0, 1.0, 1.0],
+            [0.0, 0.0, 0.117_647_06],
+            [0.0, 0.0, 1.0],
+            [145.263_15, 0.95, 0.784_313_7],
+        ];
+        for (x, want) in expected_f32.iter().enumerate() {
+            for (c, &w) in want.iter().enumerate() {
+                let got = hsv_f32[[0, x, c]];
+                assert!(
+                    (got - w).abs() < 1e-3,
+                    "pixel {x} channel {c}: got {got}, want {w}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_hsv_round_trips_to_rgb() {
+        let rgb = Array3::<u8>::from_shape_fn((16, 16, 3), |(y, x, c)| {
+            u8::try_from((y * 37 + x * 11 + c * 71 + (x * y) % 13) % 256).unwrap()
+        });
+        let hsv: CowArray<u8, Ix3> = rgb.cvt::<Rgb<u8>, Hsv<u8>>();
+        assert!(hsv.slice(s![.., .., 0]).iter().all(|&h| h < 180));
+
+        let back: CowArray<u8, Ix3> = hsv.cvt::<Hsv<u8>, Rgb<u8>>();
+        let worst = back
+            .iter()
+            .zip(rgb.iter())
+            .map(|(&a, &b)| (i16::from(a) - i16::from(b)).abs())
+            .max()
+            .unwrap();
+        // cv2 gives 4 on this texture and at most 6 over every u8 colour.
+        assert!(worst <= 6, "u8 HSV round trip off by {worst}");
+
+        let rgb_f32 = rgb.mapv(|v| f32::from(v) / 255.0);
+        let hsv_f32: CowArray<f32, Ix3> = rgb_f32.cvt::<Rgb<f32>, Hsv<f32>>();
+        let back_f32: CowArray<f32, Ix3> = hsv_f32.cvt::<Hsv<f32>, Rgb<f32>>();
+        let worst_f32 = back_f32
+            .iter()
+            .zip(rgb_f32.iter())
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0, f32::max);
+        assert!(worst_f32 < 1e-5, "f32 HSV round trip off by {worst_f32}");
     }
 }

@@ -187,6 +187,27 @@ impl<T: crate::types::CvType, S: ndarray::DataMut<Elem = T>, D: ndarray::Dimensi
     }
 }
 
+/// `arr` in standard layout with default strides, for handing to OpenCV.
+///
+/// The Mat conversion keeps only the outer stride, so input that is not in
+/// standard layout is copied. Contiguous input is borrowed, but ndarray leaves
+/// the stride of a length-1 axis arbitrary (0 for a one-row slice), which
+/// OpenCV can reject; a view over the same slice has the default strides,
+/// without a copy.
+pub(crate) fn standard_layout<A, S, D>(
+    arr: &ndarray::ArrayBase<S, D>,
+) -> Result<ndarray::CowArray<'_, A, D>, ConversionError>
+where
+    A: Clone,
+    S: ndarray::Data<Elem = A>,
+    D: ndarray::Dimension,
+{
+    match arr.as_slice() {
+        Some(data) => Ok(ndarray::ArrayView::from_shape(arr.raw_dim(), data)?.into()),
+        None => Ok(arr.as_standard_layout().into_owned().into()),
+    }
+}
+
 pub trait NdAsImage<T: crate::types::CvType, D: ndarray::Dimension> {
     fn as_image_mat(&self) -> Result<MatRef<'_>, ConversionError>;
 }

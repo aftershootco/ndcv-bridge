@@ -11,6 +11,10 @@ pub enum EdgePreservingFilterError {
     OpenCvError(#[from] opencv::Error),
     #[error("expected a 3-channel image, got {0} channels")]
     ChannelMismatch(usize),
+    #[error("sigma_s must be in (0, 200], got {0}")]
+    InvalidSigmaS(f32),
+    #[error("sigma_r must be in (0, 1], got {0}")]
+    InvalidSigmaR(f32),
     #[error("OpenCV wrote to a buffer of its own instead of the output array")]
     OutputReallocated,
 }
@@ -34,10 +38,16 @@ pub enum EdgePreservingFilterKind {
 /// not filtered independently: an edge is measured across all three at once.
 pub trait NdCvEdgePreservingFilter {
     /// - `kind`: [`EdgePreservingFilterKind`], cv2's `flags`.
-    /// - `sigma_s`: spatial extent, in pixels. OpenCV documents `0..=200`.
+    /// - `sigma_s`: spatial extent, in pixels, in `(0, 200]`.
     /// - `sigma_r`: how large a colour difference counts as an edge, on the
-    ///   image scaled to `[0, 1]`. OpenCV documents `0..=1`; smaller keeps
-    ///   more edges.
+    ///   image scaled to `[0, 1]`, in `(0, 1]`. Smaller keeps more edges.
+    ///
+    /// OpenCV documents `0..=200` and `0..=1` but checks neither. It divides
+    /// by `sigma_r`, so 0 (or NaN) comes back as `Ok` with arbitrary bytes (a
+    /// flat image turns black), and `sigma_s` 0 is not a no-op for
+    /// [`EdgePreservingFilterKind::NormalizedConvolution`]. Out-of-range or
+    /// non-finite values are [`EdgePreservingFilterError::InvalidSigmaS`] and
+    /// [`EdgePreservingFilterError::InvalidSigmaR`] here instead.
     ///
     /// An image without 3 channels is
     /// [`EdgePreservingFilterError::ChannelMismatch`].
@@ -61,6 +71,13 @@ impl<S: ndarray::Data<Elem = u8>> NdCvEdgePreservingFilter for ArrayBase<S, Ix3>
         sigma_s: f32,
         sigma_r: f32,
     ) -> Result<Array3<u8>, EdgePreservingFilterError> {
+        // NaN fails both comparisons, so it is rejected too.
+        if !(sigma_s > 0.0 && sigma_s <= 200.0) {
+            return Err(EdgePreservingFilterError::InvalidSigmaS(sigma_s));
+        }
+        if !(sigma_r > 0.0 && sigma_r <= 1.0) {
+            return Err(EdgePreservingFilterError::InvalidSigmaR(sigma_r));
+        }
         let channels = self.len_of(Axis(2));
         if channels != 3 {
             return Err(EdgePreservingFilterError::ChannelMismatch(channels));
@@ -70,18 +87,8 @@ impl<S: ndarray::Data<Elem = u8>> NdCvEdgePreservingFilter for ArrayBase<S, Ix3>
         if self.is_empty() {
             return Ok(dst);
         }
-        // The Mat conversion keeps only the outer stride, so input that is not
-        // in standard layout is copied first. Contiguous input is borrowed, but
-        // ndarray leaves the stride of a length-1 axis arbitrary (0 for a
-        // one-row slice), which OpenCV can reject; a view over the same slice
-        // has the default strides, without a copy.
-        let src = self.as_standard_layout();
-        let src = match src.as_slice() {
-            Some(data) => {
-                ArrayView3::from_shape(self.raw_dim(), data).map_err(ConversionError::from)?
-            }
-            None => src.view(),
-        };
+        let src = standard_layout(self)?;
+        let src = src.view();
         let cv_src = src.as_image_mat()?;
         let dst_data = dst.as_ptr();
         let mut cv_dst = dst.as_image_mat_mut()?;
@@ -214,6 +221,32 @@ mod tests {
                 Err(EdgePreservingFilterError::ChannelMismatch(n)) if n == c
             ));
         }
+    }
+
+    #[test]
+    fn test_edge_preserving_rejects_out_of_range_sigmas() {
+        use EdgePreservingFilterKind::Recursive;
+        let img = texture(8, 8, 3);
+        for sigma_s in [0.0, -1.0, 200.5, f32::NAN, f32::INFINITY] {
+            assert!(
+                matches!(
+                    img.edge_preserving_filter(Recursive, sigma_s, 0.4),
+                    Err(EdgePreservingFilterError::InvalidSigmaS(_))
+                ),
+                "sigma_s {sigma_s}"
+            );
+        }
+        for sigma_r in [0.0, -0.1, 1.01, f32::NAN, f32::INFINITY] {
+            assert!(
+                matches!(
+                    img.edge_preserving_filter(Recursive, 60.0, sigma_r),
+                    Err(EdgePreservingFilterError::InvalidSigmaR(_))
+                ),
+                "sigma_r {sigma_r}"
+            );
+        }
+        // The documented upper bounds are accepted.
+        img.edge_preserving_filter(Recursive, 200.0, 1.0).unwrap();
     }
 
     #[test]

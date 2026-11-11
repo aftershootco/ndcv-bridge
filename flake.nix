@@ -68,6 +68,9 @@
             inherit src;
             pname = name;
             doCheck = false;
+            # Build, lint and test the opt-in OpenCV module features too
+            # (nixpkgs' OpenCV ships contrib).
+            cargoExtraArgs = "--locked --all-features";
             LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
             nativeBuildInputs = with pkgs; [
               llvmPackages.libclang.lib

@@ -53,11 +53,11 @@ pub mod connected_components;
 pub mod contours;
 #[cfg(feature = "opencv")]
 pub mod conversions;
-#[cfg(feature = "opencv")]
+#[cfg(feature = "photo")]
 pub mod edge_preserving_filter;
 #[cfg(feature = "opencv")]
 pub mod gaussian;
-#[cfg(feature = "opencv")]
+#[cfg(feature = "ximgproc")]
 pub mod guided_filter;
 #[cfg(feature = "opencv")]
 pub mod morphology;
@@ -86,14 +86,14 @@ pub use distance_transform::{
     DistanceTransformError, DistanceTransformLabelType, DistanceTransformMask,
     DistanceTransformWithLabels, DistanceType, NdCvDistanceTransform,
 };
-#[cfg(feature = "opencv")]
+#[cfg(feature = "photo")]
 pub use edge_preserving_filter::{
     EdgePreservingFilterError, EdgePreservingFilterKind, NdCvEdgePreservingFilter,
 };
 pub use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 pub use fir::NdFir;
 pub use gaussian::{BorderType, NdCvGaussianBlur, NdCvGaussianBlurInPlace};
-#[cfg(feature = "opencv")]
+#[cfg(feature = "ximgproc")]
 pub use guided_filter::{GuidedFilterError, NdCvGuidedFilter};
 pub use image::NdImage;
 pub use roi::{NdRoiZeroPadded, Roi as NdRoi, RoiMut as NdRoiMut};

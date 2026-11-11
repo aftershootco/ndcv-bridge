@@ -1320,8 +1320,16 @@ mod tests {
             [0, 0, 255],
             [73, 242, 200],
         ];
+        // Allow one level: pixel 0's S is 100 / 200 * 255 = 127.5, a rounding
+        // tie that OpenCV 5.0 gives as 128 and 4.13 as 127.
         for (x, want) in expected.iter().enumerate() {
-            assert_eq!(hsv.slice(s![0, x, ..]).to_vec(), want.to_vec(), "pixel {x}");
+            for (c, &w) in want.iter().enumerate() {
+                let got = hsv[[0, x, c]];
+                assert!(
+                    got.abs_diff(w) <= 1,
+                    "pixel {x} channel {c}: got {got}, want {w}"
+                );
+            }
         }
 
         let rgb_f32 = rgb.mapv(|v| f32::from(v) / 255.0);

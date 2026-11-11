@@ -16,6 +16,8 @@ pub enum GuidedFilterError {
         .guide.x, .guide.y, .image.x, .image.y
     )]
     GuideSizeMismatch { guide: USizeVec2, image: USizeVec2 },
+    #[error("eps must be finite and greater than 0, got {0}")]
+    InvalidEps(f64),
     #[error("OpenCV wrote to a buffer of its own instead of the output array")]
     OutputReallocated,
 }
@@ -47,8 +49,20 @@ pub trait NdCvGuidedFilter<
     /// - `radius`: box radius in pixels. 0 is a 1x1 box, which returns the
     ///   image unchanged.
     /// - `eps`: regularisation, in squared units of the guide (so `200` on a
-    ///   `u8` guide is about `0.003` on the same guide scaled to `[0, 1]`).
-    ///   Larger smooths across stronger edges.
+    ///   `u8` guide is `200 / 255^2`, about `0.0031`, on the same guide
+    ///   scaled to `[0, 1]`). Larger smooths across stronger edges. It must be
+    ///   finite and above 0, or the call is a [`GuidedFilterError::InvalidEps`]:
+    ///   OpenCV divides by the guide's local variance plus `eps`, so 0 turns a
+    ///   flat patch of a 1-channel `f32` guide into NaN, and a negative or NaN
+    ///   `eps` corrupts the output without an error.
+    ///
+    ///   Positive is necessary but not sufficient. OpenCV computes that
+    ///   variance in `f32`, and for a 1-channel guide whose values span `R`, an
+    ///   `eps` below about `1e-7 * R^2` can still give NaN (f32) or wrong
+    ///   values (u8) on flat patches: under `1e-8` for `[0, 1]`, around
+    ///   `0.001` for a `u8` guide at 255. This is not checked, since the safe
+    ///   floor depends on the data. Typical values (`200` on `u8`, `0.003` on
+    ///   `[0, 1]`) are three orders of magnitude above it.
     ///
     /// The output has `self`'s shape and element type. `self` may have any
     /// number of channels; each is filtered against the same guide.
@@ -64,26 +78,6 @@ pub trait NdCvGuidedFilter<
         GD: ndarray::Dimension,
         ArrayBase<GS, GD>: crate::image::NdImage,
         for<'a> ArrayView<'a, G, GD>: NdAsImage<G, GD>;
-}
-
-/// The Mat conversion keeps only the outer stride, so input that is not in
-/// standard layout is copied first. Contiguous input is borrowed, but ndarray
-/// leaves the stride of a length-1 axis arbitrary (0 for a one-row slice),
-/// which OpenCV can reject; a view over the same slice has the default
-/// strides, without a copy.
-fn standard<'a, A, S, D>(
-    arr: &'a ArrayBase<S, D>,
-    owned: &'a mut Option<Array<A, D>>,
-) -> Result<ArrayView<'a, A, D>, ConversionError>
-where
-    A: Clone,
-    S: ndarray::Data<Elem = A>,
-    D: ndarray::Dimension,
-{
-    if let Some(data) = arr.as_slice() {
-        return Ok(ArrayView::from_shape(arr.raw_dim(), data)?);
-    }
-    Ok(owned.insert(arr.as_standard_layout().into_owned()).view())
 }
 
 impl<
@@ -110,6 +104,9 @@ where
         for<'a> ArrayView<'a, G, GD>: NdAsImage<G, GD>,
     {
         use crate::image::NdImage;
+        if !(eps.is_finite() && eps > 0.0) {
+            return Err(GuidedFilterError::InvalidEps(eps));
+        }
         let image_size = USizeVec2::new(self.width(), self.height());
         let guide_size = USizeVec2::new(guide.width(), guide.height());
         if guide_size != image_size {
@@ -124,15 +121,24 @@ where
             return Ok(dst);
         }
 
-        let (mut src_owned, mut guide_owned) = (None, None);
-        let src = standard(self, &mut src_owned)?;
-        let guide = standard(guide, &mut guide_owned)?;
+        let src = standard_layout(self)?;
+        let src = src.view();
         let cv_src = src.as_image_mat()?;
-        let cv_guide = guide.as_image_mat()?;
+        // The image as its own guide, the usual call, would otherwise convert
+        // (and, out of standard layout, copy) the same pixels twice. Equal
+        // element sizes mean equal types, since `u8` and `f32` differ.
+        let self_guided = self.as_ptr().cast::<u8>() == guide.as_ptr().cast::<u8>()
+            && self.shape() == guide.shape()
+            && self.strides() == guide.strides()
+            && size_of::<T>() == size_of::<G>();
+        let guide = (!self_guided).then(|| standard_layout(guide)).transpose()?;
+        let guide = guide.as_ref().map(CowArray::view);
+        let cv_guide = guide.as_ref().map(NdAsImage::as_image_mat).transpose()?;
+        let cv_guide = cv_guide.as_deref().unwrap_or(&*cv_src);
         let dst_data = dst.as_ptr().cast::<u8>();
         let mut cv_dst = dst.as_image_mat_mut()?;
         opencv::ximgproc::guided_filter(
-            &*cv_guide,
+            cv_guide,
             &*cv_src,
             &mut *cv_dst,
             radius.into(),
@@ -199,7 +205,8 @@ mod tests {
             ndarray::array![[6u8, 16, 27], [40, 51, 62], [74, 86, 99]]
         );
 
-        // f32 in [0, 1], eps scaled to match.
+        // f32 in [0, 1] with cv2's eps 0.01, on that scale. (The u8 calls'
+        // eps 200 would be 200 / 255^2 here; see the next test.)
         let f = t.mapv(|v| f32::from(v) / 255.0);
         let res = f.guided_filter(&f, 2, 0.01).unwrap();
         let want = [
@@ -212,6 +219,67 @@ mod tests {
                 assert!((got - w).abs() < 1e-4, "({y}, {x}): got {got}, want {w}");
             }
         }
+    }
+
+    #[test]
+    fn test_guided_filter_u8_and_f32_agree_once_eps_is_scaled() {
+        // The documented conversion: eps on a u8 guide is eps / 255^2 on the
+        // same guide in [0, 1]. The u8 path rounds, so allow one level.
+        let t = texture(30, 30, 3);
+        let res_u8 = t.guided_filter(&t, 4, 200.0).unwrap();
+        let f = t.mapv(|v| f32::from(v) / 255.0);
+        let res_f32 = f.guided_filter(&f, 4, 200.0 / (255.0 * 255.0)).unwrap();
+        let worst = res_u8
+            .iter()
+            .zip(res_f32.iter())
+            .map(|(&a, &b)| (f32::from(a) - b * 255.0).abs())
+            .fold(0.0, f32::max);
+        assert!(worst <= 1.0, "u8 and scaled f32 differ by {worst} levels");
+    }
+
+    #[test]
+    fn test_guided_filter_rejects_bad_eps() {
+        let t = texture(8, 8, 3);
+        for eps in [0.0, -0.0, -1e-4, f64::NAN, f64::INFINITY] {
+            assert!(
+                matches!(
+                    t.guided_filter(&t, 2, eps),
+                    Err(GuidedFilterError::InvalidEps(_))
+                ),
+                "eps {eps}"
+            );
+        }
+        // A positive eps alone is not enough: OpenCV computes the variance in
+        // f32, and on a flat 1-channel guide in [0, 1] an eps of 1e-8 or less
+        // still comes back as NaN. 1e-6 is clear of that.
+        let flat = Array2::<f32>::from_elem((8, 8), 0.4);
+        let res = flat.guided_filter(&flat, 2, 1e-6).unwrap();
+        assert!(res.iter().all(|&v| (v - 0.4).abs() < 1e-6), "{res:?}");
+    }
+
+    #[test]
+    fn test_guided_filter_self_guided_view_matches_separate_guide() {
+        // The self-guided shortcut must give what a distinct guide with the
+        // same pixels gives, in and out of standard layout.
+        let t = texture(10, 12, 3);
+        let other = t.clone();
+        assert_eq!(
+            t.guided_filter(&t, 2, 200.0).unwrap(),
+            t.guided_filter(&other, 2, 200.0).unwrap()
+        );
+        let flipped = t.slice(s![.., ..;-1, ..]);
+        let flipped_other = other.slice(s![.., ..;-1, ..]);
+        assert_eq!(
+            flipped.guided_filter(&flipped, 2, 200.0).unwrap(),
+            flipped.guided_filter(&flipped_other, 2, 200.0).unwrap()
+        );
+        // Same pointer, different shape: a one-channel view of the image is
+        // not the image.
+        let first = t.slice(s![.., .., 0..1]);
+        assert_eq!(
+            first.guided_filter(&t, 2, 200.0).unwrap(),
+            first.to_owned().guided_filter(&other, 2, 200.0).unwrap()
+        );
     }
 
     #[test]

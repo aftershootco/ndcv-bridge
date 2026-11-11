@@ -125,12 +125,14 @@ where
         let src = src.view();
         let cv_src = src.as_image_mat()?;
         // The image as its own guide, the usual call, would otherwise convert
-        // (and, out of standard layout, copy) the same pixels twice. Equal
-        // element sizes mean equal types, since `u8` and `f32` differ.
-        let self_guided = self.as_ptr().cast::<u8>() == guide.as_ptr().cast::<u8>()
+        // (and, out of standard layout, copy) the same pixels twice. The
+        // element types must match exactly, or a guide aliasing the image as a
+        // different type of the same width would be read as `T`. Both are
+        // `'static` through `Pod`.
+        let self_guided = core::any::TypeId::of::<T>() == core::any::TypeId::of::<G>()
+            && self.as_ptr().cast::<u8>() == guide.as_ptr().cast::<u8>()
             && self.shape() == guide.shape()
-            && self.strides() == guide.strides()
-            && size_of::<T>() == size_of::<G>();
+            && self.strides() == guide.strides();
         let guide = (!self_guided).then(|| standard_layout(guide)).transpose()?;
         let guide = guide.as_ref().map(CowArray::view);
         let cv_guide = guide.as_ref().map(NdAsImage::as_image_mat).transpose()?;

@@ -11,9 +11,9 @@ pub enum EdgePreservingFilterError {
     OpenCvError(#[from] opencv::Error),
     #[error("expected a 3-channel image, got {0} channels")]
     ChannelMismatch(usize),
-    #[error("sigma_s must be in (0, 200], got {0}")]
+    #[error("sigma_s must be finite and greater than 0, got {0}")]
     InvalidSigmaS(f32),
-    #[error("sigma_r must be in (0, 1], got {0}")]
+    #[error("sigma_r must be finite and greater than 0, got {0}")]
     InvalidSigmaR(f32),
     #[error("OpenCV wrote to a buffer of its own instead of the output array")]
     OutputReallocated,
@@ -38,15 +38,18 @@ pub enum EdgePreservingFilterKind {
 /// not filtered independently: an edge is measured across all three at once.
 pub trait NdCvEdgePreservingFilter {
     /// - `kind`: [`EdgePreservingFilterKind`], cv2's `flags`.
-    /// - `sigma_s`: spatial extent, in pixels, in `(0, 200]`.
+    /// - `sigma_s`: spatial extent, in pixels. OpenCV calls `0..=200` the
+    ///   typical range.
     /// - `sigma_r`: how large a colour difference counts as an edge, on the
-    ///   image scaled to `[0, 1]`, in `(0, 1]`. Smaller keeps more edges.
+    ///   image scaled to `[0, 1]`. OpenCV calls `0..=1` the typical range.
+    ///   Smaller keeps more edges.
     ///
-    /// OpenCV documents `0..=200` and `0..=1` but checks neither. It divides
-    /// by `sigma_r`, so 0 (or NaN) comes back as `Ok` with arbitrary bytes (a
-    /// flat image turns black), and `sigma_s` 0 is not a no-op for
-    /// [`EdgePreservingFilterKind::NormalizedConvolution`]. Out-of-range or
-    /// non-finite values are [`EdgePreservingFilterError::InvalidSigmaS`] and
+    /// Values past those ranges are accepted, as cv2 accepts them, and give
+    /// stronger smoothing. Zero, negative and non-finite values are not:
+    /// OpenCV divides by `sigma_r`, so 0 (or NaN) comes back from it as `Ok`
+    /// with arbitrary bytes (a flat image turns black), and `sigma_s` 0 is not
+    /// a no-op for [`EdgePreservingFilterKind::NormalizedConvolution`]. Those
+    /// are [`EdgePreservingFilterError::InvalidSigmaS`] and
     /// [`EdgePreservingFilterError::InvalidSigmaR`] here instead.
     ///
     /// An image without 3 channels is
@@ -71,11 +74,11 @@ impl<S: ndarray::Data<Elem = u8>> NdCvEdgePreservingFilter for ArrayBase<S, Ix3>
         sigma_s: f32,
         sigma_r: f32,
     ) -> Result<Array3<u8>, EdgePreservingFilterError> {
-        // NaN fails both comparisons, so it is rejected too.
-        if !(sigma_s > 0.0 && sigma_s <= 200.0) {
+        // NaN fails the comparison, so it is rejected too.
+        if !(sigma_s.is_finite() && sigma_s > 0.0) {
             return Err(EdgePreservingFilterError::InvalidSigmaS(sigma_s));
         }
-        if !(sigma_r > 0.0 && sigma_r <= 1.0) {
+        if !(sigma_r.is_finite() && sigma_r > 0.0) {
             return Err(EdgePreservingFilterError::InvalidSigmaR(sigma_r));
         }
         let channels = self.len_of(Axis(2));
@@ -224,10 +227,10 @@ mod tests {
     }
 
     #[test]
-    fn test_edge_preserving_rejects_out_of_range_sigmas() {
+    fn test_edge_preserving_rejects_non_positive_sigmas() {
         use EdgePreservingFilterKind::Recursive;
         let img = texture(8, 8, 3);
-        for sigma_s in [0.0, -1.0, 200.5, f32::NAN, f32::INFINITY] {
+        for sigma_s in [0.0, -0.0, -1.0, f32::NAN, f32::INFINITY] {
             assert!(
                 matches!(
                     img.edge_preserving_filter(Recursive, sigma_s, 0.4),
@@ -236,7 +239,7 @@ mod tests {
                 "sigma_s {sigma_s}"
             );
         }
-        for sigma_r in [0.0, -0.1, 1.01, f32::NAN, f32::INFINITY] {
+        for sigma_r in [0.0, -0.0, -0.1, f32::NAN, f32::INFINITY] {
             assert!(
                 matches!(
                     img.edge_preserving_filter(Recursive, 60.0, sigma_r),
@@ -245,8 +248,26 @@ mod tests {
                 "sigma_r {sigma_r}"
             );
         }
-        // The documented upper bounds are accepted.
-        img.edge_preserving_filter(Recursive, 200.0, 1.0).unwrap();
+    }
+
+    #[test]
+    fn test_edge_preserving_accepts_sigmas_past_the_typical_range() {
+        // cv2.edgePreservingFilter(t, flags=1, sigma_s=..., sigma_r=...) on
+        // OpenCV 5.0, with sigma_s above 200 and sigma_r above 1.
+        use EdgePreservingFilterKind::Recursive;
+        let t = texture(40, 40, 3);
+        let res = t.edge_preserving_filter(Recursive, 250.0, 0.5).unwrap();
+        assert_close(
+            &res,
+            593_634,
+            &[((20, 20), [212, 40, 103]), ((0, 0), [27, 98, 169])],
+        );
+        let res = t.edge_preserving_filter(Recursive, 60.0, 2.0).unwrap();
+        assert_close(
+            &res,
+            556_262,
+            &[((20, 20), [129, 112, 111]), ((0, 0), [75, 125, 147])],
+        );
     }
 
     #[test]

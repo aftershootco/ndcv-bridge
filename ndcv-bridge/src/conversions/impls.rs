@@ -4,6 +4,38 @@ use super::ConversionError;
 use super::ConversionErrorKind;
 use core::ffi::*;
 use opencv::core::prelude::*;
+/// Byte steps for every axis but the last, as `Mat::new_nd_with_data` wants.
+///
+/// ndarray leaves the stride of a length-1 axis arbitrary (0 for a one-row
+/// slice) since it is never used to reach an element, but OpenCV can reject
+/// such a step. Those axes get the default step (the size of everything inside
+/// them), so callers need not copy or re-view their input first.
+///
+/// That default assumes the last axis is contiguous, which a Mat needs anyway,
+/// so a last axis longer than 1 with any other stride is
+/// [`ConversionErrorKind::NonContiguousData`]. Without this check a reversed
+/// or stepped one-row slice, whose step-0 row OpenCV used to reject, would be
+/// read forward from its first element: wrong pixels, and past the end of the
+/// allocation on an image's last row.
+fn mat_steps<T>(shape: &[usize], strides: &[isize]) -> Result<Vec<usize>, ConversionError> {
+    let elem = core::mem::size_of::<T>();
+    if let (Some(&len), Some(&stride)) = (shape.last(), strides.last())
+        && len > 1
+        && stride != 1
+    {
+        Err(ConversionErrorKind::NonContiguousData)?;
+    }
+    Ok((0..strides.len().saturating_sub(1))
+        .map(|axis| {
+            if shape[axis] <= 1 {
+                shape[axis + 1..].iter().product::<usize>() * elem
+            } else {
+                strides[axis] as usize * elem
+            }
+        })
+        .collect())
+}
+
 pub(crate) unsafe fn ndarray_to_mat_regular<
     T: CvType,
     S: ndarray::Data<Elem = T>,
@@ -24,13 +56,7 @@ pub(crate) unsafe fn ndarray_to_mat_regular<
     // let size_len = shape.len();
     let size = shape.iter().copied().map(|f| f as i32).collect::<Vec<_>>();
     // Step len for ndarray is always 1 less than ndims
-    let step_len = strides.len() - 1;
-    let step = strides
-        .iter()
-        .take(step_len)
-        .copied()
-        .map(|f| f as usize * core::mem::size_of::<T>())
-        .collect::<Vec<_>>();
+    let step = mat_steps::<T>(shape, strides)?;
 
     let data_ptr = input.as_ptr() as *const c_void;
 
@@ -101,12 +127,7 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
         .map(|f| *f as i32)
         .collect::<Vec<_>>();
 
-    let step_len = strides.len() - 1;
-    let step = strides
-        .iter()
-        .take(step_len)
-        .map(|f| *f as usize * core::mem::size_of::<T>())
-        .collect::<Vec<_>>();
+    let step = mat_steps::<T>(shape, strides)?;
 
     let data_ptr = input.as_ptr() as *const c_void;
 

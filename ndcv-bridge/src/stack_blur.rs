@@ -104,18 +104,8 @@ where
         if self.is_empty() {
             return Ok(dst);
         }
-        // The Mat conversion keeps only the outer stride, so input that is not
-        // in standard layout is copied first. Contiguous input is borrowed, but
-        // ndarray leaves the stride of a length-1 axis arbitrary (0 for a
-        // one-row slice), which OpenCV can reject; a view over the same slice
-        // has the default strides, without a copy.
         let src = self.as_standard_layout();
-        let src = match src.as_slice() {
-            Some(data) => {
-                ArrayView::from_shape(self.raw_dim(), data).map_err(ConversionError::from)?
-            }
-            None => src.view(),
-        };
+        let src = src.view();
         let cv_src = src.as_image_mat()?;
         let dst_data = dst.as_ptr().cast::<u8>();
         let mut cv_dst = dst.as_image_mat_mut()?;

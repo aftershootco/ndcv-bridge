@@ -68,6 +68,7 @@
             inherit src;
             pname = name;
             doCheck = false;
+            cargoExtraArgs = "--locked";
             LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
             nativeBuildInputs = with pkgs; [
               llvmPackages.libclang.lib
@@ -87,6 +88,11 @@
             # BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.llvmPackages.libclang.lib}/lib/clang/18/include";
           });
         cargoArtifacts = craneLib.buildPackage commonArgs;
+        # The opt-in OpenCV module features (ximgproc, photo) are checked
+        # separately so the default feature set stays covered too. nixpkgs'
+        # OpenCV ships contrib, so they build here.
+        allFeaturesArgs = commonArgs // {cargoExtraArgs = "--locked --all-features";};
+        allFeaturesArtifacts = craneLib.buildDepsOnly allFeaturesArgs;
       in {
         checks =
           {
@@ -95,7 +101,12 @@
                 inherit cargoArtifacts;
                 cargoClippyExtraArgs = "--all-targets -- --deny warnings";
               });
-            "${name}-docs" = craneLib.cargoDoc (commonArgs // {inherit cargoArtifacts;});
+            "${name}-clippy-all-features" = craneLib.cargoClippy (allFeaturesArgs
+              // {
+                cargoArtifacts = allFeaturesArtifacts;
+                cargoClippyExtraArgs = "--all-targets -- --deny warnings";
+              });
+            "${name}-docs" = craneLib.cargoDoc (allFeaturesArgs // {cargoArtifacts = allFeaturesArtifacts;});
             "${name}-fmt" = craneLib.cargoFmt {inherit src;};
             "${name}-toml-fmt" = craneLib.taploFmt {
               src = pkgs.lib.sources.sourceFilesBySuffices src [".toml"];
@@ -115,9 +126,15 @@
                 partitions = 1;
                 partitionType = "count";
               });
+            "${name}-nextest-all-features" = craneLib.cargoNextest (allFeaturesArgs
+              // {
+                cargoArtifacts = allFeaturesArtifacts;
+                partitions = 1;
+                partitionType = "count";
+              });
           }
           // lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
-            "${name}-llvm-cov" = craneLibLLvmTools.cargoLlvmCov (commonArgs // {inherit cargoArtifacts;});
+            "${name}-llvm-cov" = craneLibLLvmTools.cargoLlvmCov (allFeaturesArgs // {cargoArtifacts = allFeaturesArtifacts;});
           };
 
         packages = let

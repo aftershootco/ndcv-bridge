@@ -674,3 +674,67 @@ fn test_3d_2x1_with_3_channels() {
     //     assert_eq!(x, 200u8);
     // });
 }
+
+#[test]
+fn test_length_one_axis_gets_default_step() {
+    use opencv::core::MatTraitConst;
+    // ndarray may give a length-1 axis any stride (0 for a one-row slice); the
+    // Mat gets the default step instead, so OpenCV sees a contiguous row.
+    let arr =
+        ndarray::Array3::<u8>::from_shape_fn((5, 4, 3), |(y, x, c)| (y * 12 + x * 3 + c) as u8);
+    let row = arr.slice(ndarray::s![3..4, .., ..]);
+    let mat = row.as_image_mat().unwrap();
+    assert_eq!(mat.mat_step().first(), Some(&(4 * 3)));
+    assert_eq!(
+        mat.at_2d::<opencv::core::Vec3b>(0, 1).unwrap().0,
+        [39, 40, 41]
+    );
+
+    let col = arr.slice(ndarray::s![.., 2..3, ..]);
+    let mat = col.as_image_mat().unwrap();
+    assert_eq!(
+        mat.at_2d::<opencv::core::Vec3b>(4, 0).unwrap().0,
+        [54, 55, 56]
+    );
+
+    // A one-row single-channel slice, through an op that never copied before.
+    let gray = ndarray::Array2::<u8>::from_shape_fn((5, 4), |(y, x)| (y * 4 + x) as u8);
+    let row = gray.slice(ndarray::s![2..3, ..]);
+    let mat = row.as_image_mat().unwrap();
+    assert_eq!(mat.mat_step().first(), Some(&4));
+    assert_eq!(*mat.at_2d::<u8>(0, 3).unwrap(), 11);
+}
+
+#[test]
+fn test_reversed_or_stepped_one_row_slices_are_rejected() {
+    // Giving a length-1 axis its default step must not let a row whose last
+    // axis is not contiguous through: OpenCV would read it forward from its
+    // first element, and past the allocation on the last row.
+    use crate::{NdCvBlur, NdCvGaussianBlur};
+    use ndarray::s;
+    let non_contiguous = |r: Result<MatRef<'_>, ConversionError>| {
+        matches!(
+            r.as_ref().map_err(|e| &e.kind),
+            Err(ConversionErrorKind::NonContiguousData)
+        )
+    };
+    let gray = ndarray::Array2::<u8>::from_shape_fn((10, 36), |(y, x)| (y * 36 + x) as u8);
+    let rgb = ndarray::Array3::<u8>::zeros((10, 36, 3));
+    for row in [
+        gray.slice(s![3..4, ..;-1]),
+        gray.slice(s![9..10, ..;-1]),
+        gray.slice(s![3..4, ..;2]),
+    ] {
+        assert!(non_contiguous(row.as_image_mat()));
+        assert!(row.blur_def((3, 3)).is_err());
+        assert!(row.gaussian_blur_def((3, 3), 1.0).is_err());
+    }
+    assert!(non_contiguous(
+        rgb.slice(s![9..10, .., ..;-1]).as_image_mat()
+    ));
+
+    // Length-1 axes, reversed or not, are still fine.
+    assert!(gray.slice(s![9..10, ..]).blur_def((3, 3)).is_ok());
+    assert!(gray.slice(s![9..10;-1, ..]).as_image_mat().is_ok());
+    assert!(rgb.slice(s![.., 4..5;-1, ..]).as_image_mat().is_ok());
+}

@@ -10,9 +10,22 @@ use opencv::core::prelude::*;
 /// slice) since it is never used to reach an element, but OpenCV can reject
 /// such a step. Those axes get the default step (the size of everything inside
 /// them), so callers need not copy or re-view their input first.
-fn mat_steps<T>(shape: &[usize], strides: &[isize]) -> Vec<usize> {
+///
+/// That default assumes the last axis is contiguous, which a Mat needs anyway,
+/// so a last axis longer than 1 with any other stride is
+/// [`ConversionErrorKind::NonContiguousData`]. Without this check a reversed
+/// or stepped one-row slice, whose step-0 row OpenCV used to reject, would be
+/// read forward from its first element: wrong pixels, and past the end of the
+/// allocation on an image's last row.
+fn mat_steps<T>(shape: &[usize], strides: &[isize]) -> Result<Vec<usize>, ConversionError> {
     let elem = core::mem::size_of::<T>();
-    (0..strides.len().saturating_sub(1))
+    if let (Some(&len), Some(&stride)) = (shape.last(), strides.last())
+        && len > 1
+        && stride != 1
+    {
+        Err(ConversionErrorKind::NonContiguousData)?;
+    }
+    Ok((0..strides.len().saturating_sub(1))
         .map(|axis| {
             if shape[axis] <= 1 {
                 shape[axis + 1..].iter().product::<usize>() * elem
@@ -20,7 +33,7 @@ fn mat_steps<T>(shape: &[usize], strides: &[isize]) -> Vec<usize> {
                 strides[axis] as usize * elem
             }
         })
-        .collect()
+        .collect())
 }
 
 pub(crate) unsafe fn ndarray_to_mat_regular<
@@ -43,7 +56,7 @@ pub(crate) unsafe fn ndarray_to_mat_regular<
     // let size_len = shape.len();
     let size = shape.iter().copied().map(|f| f as i32).collect::<Vec<_>>();
     // Step len for ndarray is always 1 less than ndims
-    let step = mat_steps::<T>(shape, strides);
+    let step = mat_steps::<T>(shape, strides)?;
 
     let data_ptr = input.as_ptr() as *const c_void;
 
@@ -114,7 +127,7 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
         .map(|f| *f as i32)
         .collect::<Vec<_>>();
 
-    let step = mat_steps::<T>(shape, strides);
+    let step = mat_steps::<T>(shape, strides)?;
 
     let data_ptr = input.as_ptr() as *const c_void;
 

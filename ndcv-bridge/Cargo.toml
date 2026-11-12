@@ -33,10 +33,14 @@ glam = ["dep:glam"]
 # nalgebra is a non-optional dependency (roi, contours and dilate use it
 # unconditionally); this feature only gates the SVector CvType impls.
 nalgebra = []
-# OpenCV modules that not every OpenCV build ships. opencv-rust only generates
-# bindings for modules present in the linked OpenCV, so these are opt-in:
-# `ximgproc` is in opencv_contrib (guided_filter), and `photo` can be left out
-# of minimal builds (edge_preserving_filter).
+# Operators on OpenCV modules that not every OpenCV build ships: `ximgproc` is
+# in opencv_contrib (guided_filter), and `photo` can be left out of minimal
+# builds (edge_preserving_filter). The gate is the `#[cfg]` on ndcv's own
+# modules: opencv-rust only generates bindings for modules the linked OpenCV
+# has, so leaving these off keeps ndcv building against such an OpenCV. The
+# `opencv/...` forwards are no-ops while the workspace keeps opencv's default
+# features (which enable every module); they matter only if that dependency
+# moves to `default-features = false`.
 ximgproc = ["opencv", "opencv/ximgproc"]
 photo = ["opencv", "opencv/photo"]
 default = ["opencv", "glam", "nalgebra"]

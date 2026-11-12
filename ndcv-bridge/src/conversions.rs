@@ -187,27 +187,6 @@ impl<T: crate::types::CvType, S: ndarray::DataMut<Elem = T>, D: ndarray::Dimensi
     }
 }
 
-/// `arr` in standard layout with default strides, for handing to OpenCV.
-///
-/// The Mat conversion keeps only the outer stride, so input that is not in
-/// standard layout is copied. Contiguous input is borrowed, but ndarray leaves
-/// the stride of a length-1 axis arbitrary (0 for a one-row slice), which
-/// OpenCV can reject; a view over the same slice has the default strides,
-/// without a copy.
-pub(crate) fn standard_layout<A, S, D>(
-    arr: &ndarray::ArrayBase<S, D>,
-) -> Result<ndarray::CowArray<'_, A, D>, ConversionError>
-where
-    A: Clone,
-    S: ndarray::Data<Elem = A>,
-    D: ndarray::Dimension,
-{
-    match arr.as_slice() {
-        Some(data) => Ok(ndarray::ArrayView::from_shape(arr.raw_dim(), data)?.into()),
-        None => Ok(arr.as_standard_layout().into_owned().into()),
-    }
-}
-
 pub trait NdAsImage<T: crate::types::CvType, D: ndarray::Dimension> {
     fn as_image_mat(&self) -> Result<MatRef<'_>, ConversionError>;
 }
@@ -694,4 +673,34 @@ fn test_3d_2x1_with_3_channels() {
     // array2.into_iter().for_each(|&x| {
     //     assert_eq!(x, 200u8);
     // });
+}
+
+#[test]
+fn test_length_one_axis_gets_default_step() {
+    use opencv::core::MatTraitConst;
+    // ndarray may give a length-1 axis any stride (0 for a one-row slice); the
+    // Mat gets the default step instead, so OpenCV sees a contiguous row.
+    let arr =
+        ndarray::Array3::<u8>::from_shape_fn((5, 4, 3), |(y, x, c)| (y * 12 + x * 3 + c) as u8);
+    let row = arr.slice(ndarray::s![3..4, .., ..]);
+    let mat = row.as_image_mat().unwrap();
+    assert_eq!(mat.mat_step().first(), Some(&(4 * 3)));
+    assert_eq!(
+        mat.at_2d::<opencv::core::Vec3b>(0, 1).unwrap().0,
+        [39, 40, 41]
+    );
+
+    let col = arr.slice(ndarray::s![.., 2..3, ..]);
+    let mat = col.as_image_mat().unwrap();
+    assert_eq!(
+        mat.at_2d::<opencv::core::Vec3b>(4, 0).unwrap().0,
+        [54, 55, 56]
+    );
+
+    // A one-row single-channel slice, through an op that never copied before.
+    let gray = ndarray::Array2::<u8>::from_shape_fn((5, 4), |(y, x)| (y * 4 + x) as u8);
+    let row = gray.slice(ndarray::s![2..3, ..]);
+    let mat = row.as_image_mat().unwrap();
+    assert_eq!(mat.mat_step().first(), Some(&4));
+    assert_eq!(*mat.at_2d::<u8>(0, 3).unwrap(), 11);
 }

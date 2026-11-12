@@ -163,7 +163,7 @@ where
         if self.is_empty() {
             return Ok(dst);
         }
-        let src = standard_layout(self)?;
+        let src = self.as_standard_layout();
         let src = src.view();
         let cv_src = src.as_image_mat()?;
         let dst_data = dst.as_ptr().cast::<u8>();

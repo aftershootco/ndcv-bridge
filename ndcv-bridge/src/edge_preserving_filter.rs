@@ -85,29 +85,36 @@ impl<S: ndarray::Data<Elem = u8>> NdCvEdgePreservingFilter for ArrayBase<S, Ix3>
         if channels != 3 {
             return Err(EdgePreservingFilterError::ChannelMismatch(channels));
         }
-        let mut dst = Array3::zeros(self.raw_dim());
         // OpenCV asserts on empty input; an empty image filters to itself.
         if self.is_empty() {
-            return Ok(dst);
+            return Ok(Array3::zeros(self.raw_dim()));
         }
-        let src = standard_layout(self)?;
+        let src = self.as_standard_layout();
         let src = src.view();
         let cv_src = src.as_image_mat()?;
-        let dst_data = dst.as_ptr();
-        let mut cv_dst = dst.as_image_mat_mut()?;
-        opencv::photo::edge_preserving_filter(
-            &*cv_src,
-            &mut *cv_dst,
-            kind as i32,
-            sigma_s,
-            sigma_r,
-        )?;
-        // Had OpenCV wanted a different size or type it would have written into
-        // a new buffer and left `dst` all zeros.
-        if cv_dst.data() != dst_data {
-            return Err(EdgePreservingFilterError::OutputReallocated);
+        // OpenCV overwrites every element, so skip zero-filling the output.
+        let mut dst = Array3::<u8>::uninit(self.raw_dim());
+        let dst_data = dst.as_ptr().cast::<u8>();
+        {
+            // SAFETY: the view is only handed to OpenCV as a write target; no
+            // element is read before OpenCV has written it.
+            let mut dst_view = unsafe { dst.raw_view_mut().cast::<u8>().deref_into_view_mut() };
+            let mut cv_dst = dst_view.as_image_mat_mut()?;
+            opencv::photo::edge_preserving_filter(
+                &*cv_src,
+                &mut *cv_dst,
+                kind as i32,
+                sigma_s,
+                sigma_r,
+            )?;
+            // Had OpenCV wanted a different size or type it would have written
+            // into a new buffer and left `dst` unwritten.
+            if cv_dst.data() != dst_data {
+                return Err(EdgePreservingFilterError::OutputReallocated);
+            }
         }
-        Ok(dst)
+        // SAFETY: OpenCV wrote every element of `dst` in place (checked above).
+        Ok(unsafe { dst.assume_init() })
     }
 }
 

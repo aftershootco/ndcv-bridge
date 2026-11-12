@@ -23,11 +23,18 @@ pub enum GuidedFilterError {
 }
 
 mod seal {
+    /// Image depths OpenCV's guided filter accepts (`filter()` asserts `src` is
+    /// `CV_8U` or `CV_32F`).
     pub trait Sealed {}
-    // OpenCV's guided filter rejects every other depth, for the guide and the
-    // image alike. The two may differ from each other.
     impl Sealed for u8 {}
     impl Sealed for f32 {}
+
+    /// Guide depths: `init()` also accepts `CV_16U`. The guide's type is
+    /// independent of the image's.
+    pub trait GuideSealed {}
+    impl GuideSealed for u8 {}
+    impl GuideSealed for u16 {}
+    impl GuideSealed for f32 {}
 }
 
 /// He et al.'s guided filter, from OpenCV's `ximgproc` contrib module: each
@@ -42,10 +49,10 @@ pub trait NdCvGuidedFilter<
     D: ndarray::Dimension,
 >: crate::image::NdImage + crate::conversions::NdAsImage<T, D>
 {
-    /// - `guide`: same height and width as `self`, 1 or 3 channels, `u8` or
-    ///   `f32` (independently of `self`). A size mismatch is a
-    ///   [`GuidedFilterError::GuideSizeMismatch`]; any other channel count is
-    ///   a [`GuidedFilterError::OpenCvError`].
+    /// - `guide`: same height and width as `self`, 1 to 3 channels, `u8`,
+    ///   `u16` or `f32` (independently of `self`). A size mismatch is a
+    ///   [`GuidedFilterError::GuideSizeMismatch`]; more than 3 channels is a
+    ///   [`GuidedFilterError::OpenCvError`].
     /// - `radius`: box radius in pixels. 0 is a 1x1 box, which returns the
     ///   image unchanged.
     /// - `eps`: regularisation, in squared units of the guide (so `200` on a
@@ -73,7 +80,7 @@ pub trait NdCvGuidedFilter<
         eps: f64,
     ) -> Result<ndarray::Array<T, D>, GuidedFilterError>
     where
-        G: bytemuck::Pod + seal::Sealed + crate::types::CvType,
+        G: bytemuck::Pod + seal::GuideSealed + crate::types::CvType,
         GS: ndarray::Data<Elem = G>,
         GD: ndarray::Dimension,
         ArrayBase<GS, GD>: crate::image::NdImage,
@@ -88,7 +95,7 @@ impl<
 where
     ndarray::ArrayBase<S, D>: crate::image::NdImage + crate::conversions::NdAsImage<T, D>,
     for<'a> ndarray::ArrayView<'a, T, D>: crate::conversions::NdAsImage<T, D>,
-    ndarray::Array<T, D>: crate::conversions::NdAsImageMut<T, D>,
+    for<'a> ndarray::ArrayViewMut<'a, T, D>: crate::conversions::NdAsImageMut<T, D>,
 {
     fn guided_filter<G, GS, GD>(
         &self,
@@ -97,7 +104,7 @@ where
         eps: f64,
     ) -> Result<ndarray::Array<T, D>, GuidedFilterError>
     where
-        G: bytemuck::Pod + seal::Sealed + crate::types::CvType,
+        G: bytemuck::Pod + seal::GuideSealed + crate::types::CvType,
         GS: ndarray::Data<Elem = G>,
         GD: ndarray::Dimension,
         ArrayBase<GS, GD>: crate::image::NdImage,
@@ -115,45 +122,42 @@ where
                 image: image_size,
             });
         }
-        let mut dst = ndarray::Array::zeros(self.raw_dim());
         // OpenCV asserts on empty input; an empty image filters to itself.
         if self.is_empty() {
-            return Ok(dst);
+            return Ok(ndarray::Array::zeros(self.raw_dim()));
         }
 
-        let src = standard_layout(self)?;
+        let src = self.as_standard_layout();
         let src = src.view();
         let cv_src = src.as_image_mat()?;
-        // The image as its own guide, the usual call, would otherwise convert
-        // (and, out of standard layout, copy) the same pixels twice. The
-        // element types must match exactly, or a guide aliasing the image as a
-        // different type of the same width would be read as `T`. Both are
-        // `'static` through `Pod`.
-        let self_guided = core::any::TypeId::of::<T>() == core::any::TypeId::of::<G>()
-            && self.as_ptr().cast::<u8>() == guide.as_ptr().cast::<u8>()
-            && self.shape() == guide.shape()
-            && self.strides() == guide.strides();
-        let guide = (!self_guided).then(|| standard_layout(guide)).transpose()?;
-        let guide = guide.as_ref().map(CowArray::view);
-        let cv_guide = guide.as_ref().map(NdAsImage::as_image_mat).transpose()?;
-        let cv_guide = cv_guide.as_deref().unwrap_or(&*cv_src);
+        let guide = guide.as_standard_layout();
+        let guide = guide.view();
+        let cv_guide = guide.as_image_mat()?;
+        // OpenCV overwrites every element, so skip zero-filling the output.
+        let mut dst = ndarray::Array::<T, D>::uninit(self.raw_dim());
         let dst_data = dst.as_ptr().cast::<u8>();
-        let mut cv_dst = dst.as_image_mat_mut()?;
-        opencv::ximgproc::guided_filter(
-            cv_guide,
-            &*cv_src,
-            &mut *cv_dst,
-            radius.into(),
-            eps,
-            -1,
-            1.0,
-        )?;
-        // Had OpenCV wanted a different size or type it would have written into
-        // a new buffer and left `dst` all zeros.
-        if cv_dst.data() != dst_data {
-            return Err(GuidedFilterError::OutputReallocated);
+        {
+            // SAFETY: the view is only handed to OpenCV as a write target; no
+            // element is read before OpenCV has written it.
+            let mut dst_view = unsafe { dst.raw_view_mut().cast::<T>().deref_into_view_mut() };
+            let mut cv_dst = dst_view.as_image_mat_mut()?;
+            opencv::ximgproc::guided_filter(
+                &*cv_guide,
+                &*cv_src,
+                &mut *cv_dst,
+                radius.into(),
+                eps,
+                -1,
+                1.0,
+            )?;
+            // Had OpenCV wanted a different size or type it would have written
+            // into a new buffer and left `dst` unwritten.
+            if cv_dst.data() != dst_data {
+                return Err(GuidedFilterError::OutputReallocated);
+            }
         }
-        Ok(dst)
+        // SAFETY: OpenCV wrote every element of `dst` in place (checked above).
+        Ok(unsafe { dst.assume_init() })
     }
 }
 
@@ -261,8 +265,8 @@ mod tests {
 
     #[test]
     fn test_guided_filter_self_guided_view_matches_separate_guide() {
-        // The self-guided shortcut must give what a distinct guide with the
-        // same pixels gives, in and out of standard layout.
+        // The image as its own guide gives what a distinct guide with the same
+        // pixels gives, in and out of standard layout.
         let t = texture(10, 12, 3);
         let other = t.clone();
         assert_eq!(
@@ -324,7 +328,25 @@ mod tests {
         let t = texture(10, 10, 3);
         let guide = t.mapv(f32::from);
         let res = t.guided_filter(&guide, 3, 200.0).unwrap();
-        assert_eq!(res, t.guided_filter(&t, 3, 200.0).unwrap());
+        let want = t.guided_filter(&t, 3, 200.0).unwrap();
+        assert_eq!(res, want);
+
+        // A u16 guide works too (only the image is limited to u8/f32). Scaling
+        // the guide by 257 scales eps by 257^2.
+        let guide16 = t.mapv(|v| u16::from(v) * 257);
+        let res = t.guided_filter(&guide16, 3, 200.0 * 257.0 * 257.0).unwrap();
+        for (got, want) in res.iter().zip(want.iter()) {
+            assert!(got.abs_diff(*want) <= 1, "got {got}, want {want}");
+        }
+    }
+
+    #[test]
+    fn test_guided_filter_two_channel_guide() {
+        // OpenCV takes 1 to 3 guide channels, not only 1 or 3.
+        let t = texture(10, 10, 3);
+        let guide = texture(10, 10, 2);
+        let res = t.guided_filter(&guide, 2, 200.0).unwrap();
+        assert_eq!(res.shape(), &[10, 10, 3]);
     }
 
     #[test]

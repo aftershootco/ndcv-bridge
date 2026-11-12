@@ -6,17 +6,18 @@ use core::ffi::*;
 use opencv::core::prelude::*;
 /// Byte steps for every axis but the last, as `Mat::new_nd_with_data` wants.
 ///
-/// ndarray leaves the stride of a length-1 axis arbitrary (0 for a one-row
-/// slice) since it is never used to reach an element, but OpenCV can reject
-/// such a step. Those axes get the default step (the size of everything inside
-/// them), so callers need not copy or re-view their input first.
+/// A Mat can only describe a layout whose last axis is contiguous and whose
+/// other axes step forward through memory, so anything else is rejected as
+/// [`ConversionErrorKind::NonContiguousData`] and the caller has to copy it
+/// (`as_standard_layout`). Handing OpenCV such a layout makes it read the
+/// wrong pixels, or past the end of the allocation: a reversed axis has a
+/// negative stride, a broadcast axis a zero one, and a transposed or stepped
+/// last axis a stride other than 1.
 ///
-/// That default assumes the last axis is contiguous, which a Mat needs anyway,
-/// so a last axis longer than 1 with any other stride is
-/// [`ConversionErrorKind::NonContiguousData`]. Without this check a reversed
-/// or stepped one-row slice, whose step-0 row OpenCV used to reject, would be
-/// read forward from its first element: wrong pixels, and past the end of the
-/// allocation on an image's last row.
+/// Axes of length 0 or 1 are exempt, since their stride never reaches an
+/// element. ndarray leaves such a stride arbitrary (0 for a one-row slice),
+/// which OpenCV can reject, so they get the default step (the size of
+/// everything inside them) instead.
 fn mat_steps<T>(shape: &[usize], strides: &[isize]) -> Result<Vec<usize>, ConversionError> {
     let elem = core::mem::size_of::<T>();
     if let (Some(&len), Some(&stride)) = (shape.last(), strides.last())
@@ -25,15 +26,13 @@ fn mat_steps<T>(shape: &[usize], strides: &[isize]) -> Result<Vec<usize>, Conver
     {
         Err(ConversionErrorKind::NonContiguousData)?;
     }
-    Ok((0..strides.len().saturating_sub(1))
-        .map(|axis| {
-            if shape[axis] <= 1 {
-                shape[axis + 1..].iter().product::<usize>() * elem
-            } else {
-                strides[axis] as usize * elem
-            }
+    (0..strides.len().saturating_sub(1))
+        .map(|axis| match (shape[axis], usize::try_from(strides[axis])) {
+            (0 | 1, _) => Ok(shape[axis + 1..].iter().product::<usize>() * elem),
+            (_, Ok(stride)) if stride > 0 => Ok(stride * elem),
+            _ => Err(ConversionErrorKind::NonContiguousData.into()),
         })
-        .collect())
+        .collect()
 }
 
 pub(crate) unsafe fn ndarray_to_mat_regular<
@@ -94,7 +93,9 @@ pub(crate) unsafe fn ndarray_to_mat_consolidated<
     let strides = input.strides();
 
     let channels = shape.last().copied().unwrap_or(1);
-    if channels > opencv::core::CV_CN_MAX as usize {
+    // 0 channels is not a Mat type: CV_MAKETYPE(depth, 0) wraps to a
+    // 512-channel type and the Mat would claim memory the array does not have.
+    if channels == 0 || channels > opencv::core::CV_CN_MAX as usize {
         Err(ConversionErrorKind::InvalidNumberOfChannels {
             max: opencv::core::CV_CN_MAX as usize,
             found: channels,

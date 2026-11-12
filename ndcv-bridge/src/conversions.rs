@@ -738,3 +738,97 @@ fn test_reversed_or_stepped_one_row_slices_are_rejected() {
     assert!(gray.slice(s![9..10;-1, ..]).as_image_mat().is_ok());
     assert!(rgb.slice(s![.., 4..5;-1, ..]).as_image_mat().is_ok());
 }
+
+#[test]
+fn test_layouts_a_mat_cannot_describe_are_rejected() {
+    use ndarray::s;
+    let is_non_contiguous = |r: Result<MatRef<'_>, ConversionError>| {
+        matches!(
+            r.as_ref().map_err(|e| &e.kind),
+            Err(ConversionErrorKind::NonContiguousData)
+        )
+    };
+    let gray = ndarray::Array2::<u8>::zeros((9, 11));
+    let gray_f = ndarray::Array2::<f32>::zeros((9, 11));
+    let rgb = ndarray::Array3::<u8>::zeros((9, 11, 3));
+    let pixels = ndarray::Array2::<glam::Vec3>::from_elem((4, 5), glam::Vec3::ZERO);
+
+    // A reversed or stepped last axis, including on a one-row slice whose row
+    // step used to be 0 (and so rejected by OpenCV) before length-1 axes got
+    // their default step.
+    assert!(is_non_contiguous(
+        gray.slice(s![3..4, ..;-1]).as_image_mat()
+    ));
+    assert!(is_non_contiguous(
+        gray.slice(s![8..9, ..;-1]).as_image_mat()
+    ));
+    assert!(is_non_contiguous(gray.slice(s![3..4, ..;2]).as_image_mat()));
+    assert!(is_non_contiguous(gray.slice(s![.., ..;-1]).as_image_mat()));
+    assert!(is_non_contiguous(gray.t().as_image_mat()));
+    assert!(is_non_contiguous(
+        rgb.slice(s![.., .., ..;-1]).as_image_mat()
+    ));
+    assert!(is_non_contiguous(
+        rgb.slice(s![.., .., ..;2]).as_image_mat()
+    ));
+    // A reversed outer axis: a negative step, which used to overflow.
+    assert!(is_non_contiguous(
+        gray_f.slice(s![..;-1, ..]).as_image_mat()
+    ));
+    assert!(is_non_contiguous(
+        rgb.slice(s![..;-1, .., ..]).as_image_mat()
+    ));
+    assert!(is_non_contiguous(
+        pixels.slice(s![..;-1, ..]).as_image_mat()
+    ));
+    // Broadcast axes: stride 0.
+    let row = ndarray::Array2::<u8>::zeros((1, 11));
+    assert!(is_non_contiguous(
+        row.broadcast((9, 11)).unwrap().as_image_mat()
+    ));
+    let col = ndarray::Array2::<u8>::zeros((9, 1));
+    assert!(is_non_contiguous(
+        col.broadcast((9, 11)).unwrap().as_image_mat()
+    ));
+    let one = ndarray::Array3::<u8>::zeros((9, 11, 1));
+    assert!(is_non_contiguous(
+        one.broadcast((9, 11, 3)).unwrap().as_image_mat()
+    ));
+
+    // No channels is not a Mat type.
+    let none = ndarray::Array3::<u8>::zeros((10, 12, 0));
+    assert!(matches!(
+        none.as_image_mat().as_ref().map_err(|e| &e.kind),
+        Err(ConversionErrorKind::InvalidNumberOfChannels { found: 0, .. })
+    ));
+
+    // Still fine: reversed or stepped axes of length 1, and a stepped outer axis.
+    assert!(gray.slice(s![3..4, ..]).as_image_mat().is_ok());
+    assert!(gray.slice(s![3..4;-1, ..]).as_image_mat().is_ok());
+    assert!(gray.slice(s![..;2, ..]).as_image_mat().is_ok());
+    assert!(rgb.slice(s![.., 4..5;-1, ..]).as_image_mat().is_ok());
+    assert!(rgb.slice(s![.., .., 1..2]).as_image_mat().is_err()); // column stride != channels
+}
+
+#[test]
+fn test_ops_reject_rather_than_misread_non_contiguous_rows() {
+    // These views used to reach OpenCV with a valid-looking step over a
+    // reversed row, reading forward past the row's end (and past the
+    // allocation on the last row).
+    use crate::{NdCvBlur, NdCvGaussianBlur};
+    use ndarray::s;
+    let img = ndarray::Array2::<u8>::from_shape_fn((10, 36), |(y, x)| (y * 36 + x) as u8);
+    let last = img.slice(s![9..10, ..;-1]);
+    assert!(last.blur_def((3, 3)).is_err());
+    assert!(last.gaussian_blur_def((3, 3), 1.0).is_err());
+    // A standard-layout copy works and is what the caller should pass.
+    // `to_owned` is not one: it keeps the reversed stride of a view that is
+    // contiguous in memory.
+    assert!(last.to_owned().blur_def((3, 3)).is_err());
+    let copy = last.as_standard_layout();
+    let flipped: Vec<u8> = (0..36).rev().map(|x| (9 * 36 + x) as u8).collect();
+    assert_eq!(copy.as_slice().unwrap(), flipped.as_slice());
+    copy.blur_def((3, 3)).unwrap();
+    let none = ndarray::Array3::<u8>::zeros((10, 12, 0));
+    assert!(none.gaussian_blur_def((3, 3), 1.0).is_err());
+}
